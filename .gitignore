@@ -25,3 +25,7 @@ Thumbs.db
 
 # Tauri
 src-tauri/target/
+package-lock.json
+package-lock.json
+*.json
+package.json
