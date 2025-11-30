@@ -1,0 +1,285 @@
+<script lang="ts">
+  import type { Task, Priority } from '$lib/types';
+  import { PRIORITY_CONFIG } from '$lib/types';
+  import TaskCard from './TaskCard.svelte';
+  import TaskInput from './TaskInput.svelte';
+  import { getUIStore, setDropTarget, clearDragState } from '$lib/stores/ui.svelte';
+  import { changePriority, getTasksStore } from '$lib/stores/tasks.svelte';
+  import { countActiveByPriority } from '$lib/utils/quota';
+
+  interface Props {
+    priority: Priority;
+    tasks: Task[];
+    showAddSlot?: boolean;
+  }
+
+  let { priority, tasks, showAddSlot = true }: Props = $props();
+
+  const config = PRIORITY_CONFIG[priority];
+  const ui = getUIStore();
+  const tasksStore = getTasksStore();
+
+  let isDropTarget = $derived(ui.dropTargetPriority === priority);
+  let showInput = $state(false);
+
+  const counts = $derived(countActiveByPriority(tasksStore.tasks));
+  const remaining = $derived(config.quota === Infinity ? Infinity : config.quota - counts[priority]);
+  const isFull = $derived(priority !== 'E' && remaining <= 0);
+
+  function handleDragOver(e: DragEvent) {
+    e.preventDefault();
+    e.dataTransfer!.dropEffect = 'move';
+    setDropTarget(priority);
+  }
+
+  function handleDragLeave() {
+    clearDragState();
+  }
+
+  function handleDrop(e: DragEvent) {
+    e.preventDefault();
+    const taskId = e.dataTransfer!.getData('text/plain');
+
+    if (taskId && taskId !== ui.draggedTaskId) {
+      changePriority(taskId, priority);
+    }
+
+    clearDragState();
+  }
+
+  function toggleInput() {
+    showInput = !showInput;
+  }
+
+  function handleTaskAdded() {
+    showInput = false;
+  }
+</script>
+
+<div
+  class="zone-container"
+  class:drop-target={isDropTarget}
+  class:is-priority-a={priority === 'A'}
+  style:--zone-color={config.color}
+  style:--zone-bg={config.bgColor}
+  style:--zone-border={config.borderColor}
+  ondragover={handleDragOver}
+  ondragleave={handleDragLeave}
+  ondrop={handleDrop}
+  role="region"
+  aria-label="{config.name}区域"
+>
+  <div class="zone-header">
+    <div class="zone-title">
+      {#if priority === 'A'}
+        <span class="zone-icon">🎯</span>
+      {:else if priority === 'B'}
+        <span class="zone-icon">⚡</span>
+      {:else if priority === 'C'}
+        <span class="zone-icon">📋</span>
+      {:else if priority === 'D'}
+        <span class="zone-icon">⏱️</span>
+      {:else}
+        <span class="zone-icon">📥</span>
+      {/if}
+      <span class="zone-name">{config.name}</span>
+      <span class="zone-priority">({priority})</span>
+    </div>
+
+    <div class="zone-quota">
+      {#if priority !== 'E'}
+        <span class="quota-dots">
+          {#each Array(config.quota) as _, i}
+            <span class="quota-dot" class:filled={i < counts[priority]}></span>
+          {/each}
+        </span>
+        <span class="quota-text">{counts[priority]}/{config.quota}</span>
+      {:else}
+        <span class="quota-text">∞</span>
+      {/if}
+    </div>
+
+    {#if priority === 'A' && tasks.some(t => !t.completed)}
+      <span class="breathing-light"></span>
+    {/if}
+  </div>
+
+  <div class="zone-tasks">
+    {#each tasks as task (task.id)}
+      <TaskCard {task} compact={priority === 'D'} />
+    {/each}
+
+    {#if showInput}
+      <TaskInput
+        defaultPriority={priority}
+        onSubmit={handleTaskAdded}
+        onCancel={() => showInput = false}
+        autoFocus
+      />
+    {:else if showAddSlot && !isFull}
+      <button class="add-task-slot" onclick={toggleInput}>
+        <span class="add-icon">+</span>
+        <span class="add-text">空位 - 可添加{remaining === Infinity ? '' : remaining}个</span>
+      </button>
+    {:else if isFull}
+      <div class="quota-full-hint">
+        已满 - 完成现有任务后可添加
+      </div>
+    {/if}
+  </div>
+</div>
+
+<style>
+  .zone-container {
+    background: var(--zone-bg);
+    border: 1px solid var(--zone-border);
+    border-radius: 12px;
+    padding: 16px;
+    transition: all 0.2s ease;
+  }
+
+  .zone-container.drop-target {
+    border-color: var(--zone-color);
+    box-shadow: 0 0 0 2px var(--zone-color);
+    background: rgba(var(--zone-color-rgb), 0.1);
+  }
+
+  .zone-container.is-priority-a {
+    background: var(--zone-bg);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .zone-container.is-priority-a::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(88, 28, 135, 0.3), rgba(124, 58, 237, 0.1));
+    pointer-events: none;
+  }
+
+  .zone-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+    position: relative;
+  }
+
+  .zone-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+  }
+
+  .zone-icon {
+    font-size: 18px;
+  }
+
+  .zone-name {
+    font-weight: 600;
+    font-size: 15px;
+    color: var(--text-primary);
+  }
+
+  .zone-priority {
+    font-size: 13px;
+    color: var(--zone-color);
+    font-weight: 500;
+  }
+
+  .zone-quota {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .quota-dots {
+    display: flex;
+    gap: 4px;
+  }
+
+  .quota-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--border-color);
+    transition: background 0.2s ease;
+  }
+
+  .quota-dot.filled {
+    background: var(--zone-color);
+  }
+
+  .quota-text {
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+
+  .breathing-light {
+    position: absolute;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--zone-color);
+    animation: breathe 2s ease-in-out infinite;
+  }
+
+  .zone-tasks {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .add-task-slot {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 16px;
+    border: 2px dashed var(--border-color);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .add-task-slot:hover {
+    border-color: var(--zone-color);
+    color: var(--zone-color);
+    background: rgba(var(--zone-color-rgb), 0.05);
+  }
+
+  .add-icon {
+    font-size: 20px;
+    font-weight: 300;
+  }
+
+  .add-text {
+    font-size: 13px;
+  }
+
+  .quota-full-hint {
+    text-align: center;
+    padding: 12px;
+    font-size: 12px;
+    color: var(--text-muted);
+    font-style: italic;
+  }
+
+  @keyframes breathe {
+    0%, 100% {
+      opacity: 0.4;
+      box-shadow: 0 0 5px var(--zone-color);
+    }
+    50% {
+      opacity: 1;
+      box-shadow: 0 0 15px var(--zone-color), 0 0 30px var(--zone-color);
+    }
+  }
+</style>
