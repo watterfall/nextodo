@@ -211,6 +211,12 @@ export default {
     empty: '暂无任务',
   },
 
+  // View modes
+  view: {
+    zones: '区块视图',
+    kanban: '看板视图',
+  },
+
   // Actions
   action: {
     save: '保存',

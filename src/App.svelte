@@ -2,6 +2,7 @@
   import { onMount, onDestroy } from 'svelte';
   import Sidebar from '$lib/components/Sidebar.svelte';
   import ZoneContainer from '$lib/components/ZoneContainer.svelte';
+  import KanbanView from '$lib/components/KanbanView.svelte';
   import TaskForm from '$lib/components/TaskForm.svelte';
   import InboxPanel from '$lib/components/InboxPanel.svelte';
   import PomodoroTimer from '$lib/components/PomodoroTimer.svelte';
@@ -42,7 +43,7 @@
   import { saveAppData, setupFileWatcher } from '$lib/utils/storage';
   import { initI18n, t } from '$lib/i18n';
 
-  import type { Priority } from '$lib/types';
+  import type { Priority, ViewMode } from '$lib/types';
 
   const tasks = getTasksStore();
   const ui = getUIStore();
@@ -55,6 +56,7 @@
   let unlistenFileWatcher: (() => void) | null = null;
   let isSettingsOpen = $state(false);
   let isReviewOpen = $state(false);
+  let viewMode = $state<ViewMode>('zones');
 
   onMount(async () => {
     // Initialize i18n first
@@ -194,6 +196,35 @@
       <div class="header-right">
         <QuotaMeter />
 
+        <!-- View Toggle -->
+        <div class="view-toggle">
+          <button
+            class="view-btn"
+            class:active={viewMode === 'zones'}
+            onclick={() => viewMode = 'zones'}
+            title={t('view.zones')}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="7" height="7"></rect>
+              <rect x="14" y="3" width="7" height="7"></rect>
+              <rect x="3" y="14" width="7" height="7"></rect>
+              <rect x="14" y="14" width="7" height="7"></rect>
+            </svg>
+          </button>
+          <button
+            class="view-btn"
+            class:active={viewMode === 'list'}
+            onclick={() => viewMode = 'list'}
+            title={t('view.kanban')}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="5" height="18" rx="1"></rect>
+              <rect x="10" y="3" width="5" height="18" rx="1"></rect>
+              <rect x="17" y="3" width="5" height="18" rx="1"></rect>
+            </svg>
+          </button>
+        </div>
+
         <!-- Theme Toggle -->
         <button class="theme-toggle" onclick={toggleTheme} title={t('settings.theme')}>
           {#if getThemeIcon() === 'dark'}
@@ -228,30 +259,43 @@
       <TaskForm />
     </div>
 
-    <!-- Main Layout: Zones + Inbox -->
-    <div class="content-layout">
-      <!-- Left: Priority Zones (A-D) -->
-      <div class="zones-panel">
-        <div class="zones-grid">
-          {#each mainPriorities as priority}
-            <ZoneContainer
-              {priority}
-              tasks={tasks.tasksByPriority[priority]}
-            />
-          {/each}
+    <!-- Main Layout: Zones or Kanban -->
+    {#if viewMode === 'zones'}
+      <div class="content-layout">
+        <!-- Left: Priority Zones (A-D) -->
+        <div class="zones-panel">
+          <div class="zones-grid">
+            {#each mainPriorities as priority}
+              <ZoneContainer
+                {priority}
+                tasks={tasks.tasksByPriority[priority]}
+              />
+            {/each}
+          </div>
+
+          <!-- Pomodoro Timer at Bottom -->
+          <div class="timer-section">
+            <PomodoroTimer onEnterImmersive={handleImmersiveMode} />
+          </div>
         </div>
 
-        <!-- Pomodoro Timer at Bottom -->
-        <div class="timer-section">
+        <!-- Right: Inbox Panel -->
+        <div class="inbox-section">
+          <InboxPanel />
+        </div>
+      </div>
+    {:else}
+      <div class="content-layout kanban-layout">
+        <div class="kanban-panel">
+          <KanbanView />
+        </div>
+
+        <!-- Pomodoro Timer -->
+        <div class="timer-section-kanban">
           <PomodoroTimer onEnterImmersive={handleImmersiveMode} />
         </div>
       </div>
-
-      <!-- Right: Inbox Panel -->
-      <div class="inbox-section">
-        <InboxPanel />
-      </div>
-    </div>
+    {/if}
   </main>
 
   <!-- Search Overlay -->
@@ -505,6 +549,61 @@
     width: 320px;
     flex-shrink: 0;
     overflow: hidden;
+  }
+
+  /* Kanban layout */
+  .content-layout.kanban-layout {
+    flex-direction: column;
+  }
+
+  .kanban-panel {
+    flex: 1;
+    overflow: hidden;
+  }
+
+  .timer-section-kanban {
+    flex-shrink: 0;
+    padding-top: 16px;
+    border-top: 1px solid var(--border-subtle);
+    margin-top: 16px;
+  }
+
+  /* View toggle */
+  .view-toggle {
+    display: flex;
+    background: var(--action-btn-bg);
+    border-radius: var(--radius-md);
+    padding: 2px;
+    gap: 2px;
+  }
+
+  .view-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+  }
+
+  .view-btn:hover {
+    color: var(--text-secondary);
+  }
+
+  .view-btn.active {
+    background: var(--bg-primary);
+    color: var(--primary);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .view-btn svg {
+    width: 16px;
+    height: 16px;
   }
 
   /* Theme toggle in header */

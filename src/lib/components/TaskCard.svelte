@@ -21,6 +21,8 @@
   let isEditing = $derived(ui.editingTaskId === task.id);
   let isActive = $derived(pomodoro.activeTaskId === task.id);
   let isDragging = $derived(ui.draggedTaskId === task.id);
+  let isFocusMode = $derived(pomodoro.state === 'work' && pomodoro.activeTaskId !== null);
+  let isFocusDimmed = $derived(isFocusMode && !isActive);
   let editContent = $state(task.content);
 
   function handleCheck() {
@@ -98,10 +100,11 @@
   class:dragging={isDragging}
   class:overdue={isTaskOverdue && !task.completed}
   class:dormant={isDormant}
+  class:focus-dimmed={isFocusDimmed}
   style:--priority-color={config.color}
   style:--priority-bg={config.bgColor}
   style:--priority-border={config.borderColor}
-  draggable="true"
+  draggable={!isFocusDimmed}
   ondragstart={handleDragStart}
   ondragend={handleDragEnd}
   role="listitem"
@@ -219,11 +222,11 @@
   .task-card {
     display: flex;
     flex-direction: column;
-    padding: 14px 16px;
+    padding: 10px 12px;
     background: var(--card-bg);
     border: 1px solid var(--border-subtle);
-    border-left: 3px solid var(--priority-color);
-    border-radius: var(--radius-md);
+    border-left: 2px solid var(--priority-color);
+    border-radius: var(--radius-sm);
     transition: all var(--transition-normal);
     cursor: grab;
     position: relative;
@@ -232,8 +235,6 @@
   .task-card:hover {
     background: var(--card-hover-bg);
     border-color: var(--border-color);
-    transform: translateY(-1px);
-    box-shadow: var(--shadow-sm);
   }
 
   .task-card:focus-within {
@@ -262,6 +263,15 @@
     opacity: 0.4;
     cursor: grabbing;
     transform: scale(0.98);
+  }
+
+  /* Focus mode dimming */
+  .task-card.focus-dimmed {
+    opacity: 0.3;
+    filter: grayscale(0.4);
+    pointer-events: none;
+    transform: scale(0.98);
+    transition: all 0.4s ease;
   }
 
   .task-card.overdue {
@@ -300,7 +310,7 @@
   }
 
   .task-card.compact {
-    padding: 10px 14px;
+    padding: 8px 10px;
   }
 
   .task-main {

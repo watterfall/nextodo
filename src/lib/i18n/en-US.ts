@@ -211,6 +211,12 @@ export default {
     empty: 'No tasks',
   },
 
+  // View modes
+  view: {
+    zones: 'Zone View',
+    kanban: 'Kanban View',
+  },
+
   // Actions
   action: {
     save: 'Save',
