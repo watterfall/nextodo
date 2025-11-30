@@ -107,7 +107,7 @@ async function persist(): Promise<void> {
 }
 
 // Task operations
-export function addTask(input: string): { success: boolean; error?: string } {
+export async function addTask(input: string): Promise<{ success: boolean; error?: string }> {
   const task = createTaskFromInput(input);
 
   // Validate quota
@@ -122,12 +122,12 @@ export function addTask(input: string): { success: boolean; error?: string } {
   }
 
   appData.tasks = [...appData.tasks, task];
-  persist();
+  await persist();
 
   return { success: true };
 }
 
-export function addTaskDirect(task: Task): { success: boolean; error?: string } {
+export async function addTaskDirect(task: Task): Promise<{ success: boolean; error?: string }> {
   const quotaError = validateQuota(appData.tasks, task.priority);
   if (quotaError) {
     return { success: false, error: quotaError };
@@ -138,12 +138,12 @@ export function addTaskDirect(task: Task): { success: boolean; error?: string } 
   }
 
   appData.tasks = [...appData.tasks, task];
-  persist();
+  await persist();
 
   return { success: true };
 }
 
-export function updateTask(taskId: string, updates: Partial<Task>): void {
+export async function updateTask(taskId: string, updates: Partial<Task>): Promise<void> {
   appData.tasks = appData.tasks.map(task => {
     if (task.id === taskId) {
       const updated = { ...task, ...updates };
@@ -158,20 +158,22 @@ export function updateTask(taskId: string, updates: Partial<Task>): void {
     return task;
   });
 
-  persist();
+  await persist();
 }
 
-export function deleteTask(taskId: string): void {
+export async function deleteTask(taskId: string): Promise<void> {
   const task = appData.tasks.find(t => t.id === taskId);
   if (task) {
     // Move to trash
     appData.trash = [...appData.trash, { ...task, completedAt: new Date().toISOString() }];
     appData.tasks = appData.tasks.filter(t => t.id !== taskId);
-    persist();
+    await persist();
   }
 }
 
-export function completeTask(taskId: string): void {
+export async function completeTask(taskId: string): Promise<void> {
+  let nextRecurringTask: Task | null = null;
+
   appData.tasks = appData.tasks.map(task => {
     if (task.id === taskId && !task.completed) {
       const completed = {
@@ -180,15 +182,9 @@ export function completeTask(taskId: string): void {
         completedAt: new Date().toISOString()
       };
 
-      // Handle recurring task
+      // Handle recurring task - collect for later to avoid race condition
       if (task.recurrence?.pattern && task.dueDate) {
-        const nextTask = createNextOccurrence(task);
-        if (nextTask) {
-          // Add next occurrence
-          setTimeout(() => {
-            addTaskDirect(nextTask);
-          }, 0);
-        }
+        nextRecurringTask = createNextOccurrence(task);
       }
 
       return completed;
@@ -196,10 +192,21 @@ export function completeTask(taskId: string): void {
     return task;
   });
 
-  persist();
+  // Add next recurring task synchronously before persisting
+  if (nextRecurringTask) {
+    const quotaError = validateQuota(appData.tasks, nextRecurringTask.priority);
+    if (!quotaError) {
+      if (nextRecurringTask.priority === 'A') {
+        appData.tasks = applyHighlanderRule(appData.tasks, nextRecurringTask);
+      }
+      appData.tasks = [...appData.tasks, nextRecurringTask];
+    }
+  }
+
+  await persist();
 }
 
-export function uncompleteTask(taskId: string): void {
+export async function uncompleteTask(taskId: string): Promise<void> {
   appData.tasks = appData.tasks.map(task => {
     if (task.id === taskId && task.completed) {
       return {
@@ -211,31 +218,31 @@ export function uncompleteTask(taskId: string): void {
     return task;
   });
 
-  persist();
+  await persist();
 }
 
-export function archiveCompleted(): void {
+export async function archiveCompleted(): Promise<void> {
   const completed = appData.tasks.filter(t => t.completed);
   appData.archive = [...appData.archive, ...completed];
   appData.tasks = appData.tasks.filter(t => !t.completed);
-  persist();
+  await persist();
 }
 
-export function restoreFromTrash(taskId: string): void {
+export async function restoreFromTrash(taskId: string): Promise<void> {
   const task = appData.trash.find(t => t.id === taskId);
   if (task) {
     appData.tasks = [...appData.tasks, { ...task, completed: false, completedAt: null }];
     appData.trash = appData.trash.filter(t => t.id !== taskId);
-    persist();
+    await persist();
   }
 }
 
-export function emptyTrash(): void {
+export async function emptyTrash(): Promise<void> {
   appData.trash = [];
-  persist();
+  await persist();
 }
 
-export function changePriority(taskId: string, newPriority: Priority): { success: boolean; error?: string } {
+export async function changePriority(taskId: string, newPriority: Priority): Promise<{ success: boolean; error?: string }> {
   const task = appData.tasks.find(t => t.id === taskId);
   if (!task) {
     return { success: false, error: 'Task not found' };
@@ -247,11 +254,11 @@ export function changePriority(taskId: string, newPriority: Priority): { success
     return { success: false, error: `${newPriority} 类已达配额上限` };
   }
 
-  updateTask(taskId, { priority: newPriority });
+  await updateTask(taskId, { priority: newPriority });
   return { success: true };
 }
 
-export function incrementPomodoro(taskId: string): void {
+export async function incrementPomodoro(taskId: string): Promise<void> {
   appData.tasks = appData.tasks.map(task => {
     if (task.id === taskId) {
       return {
@@ -265,7 +272,7 @@ export function incrementPomodoro(taskId: string): void {
     return task;
   });
 
-  persist();
+  await persist();
 }
 
 // Filter operations

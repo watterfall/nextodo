@@ -16,12 +16,42 @@ const STORAGE_KEYS = {
   legacy: 'focusflow_data'
 };
 
-// Anti-deadlock: isSaving flag to prevent self-triggered file change events
-let isSaving = false;
+// Anti-deadlock: Use a counter instead of boolean to handle concurrent saves
+let saveOperationCount = 0;
+let lastSaveCompleteTime = 0;
+const SAVE_COOLDOWN_MS = 150; // Ignore file changes within this window after save
 
 // Debounce timeout for file watcher
 let fileWatcherDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 const FILE_WATCHER_DEBOUNCE_MS = 300;
+
+/**
+ * Mark that a save operation is starting
+ */
+function beginSave(): void {
+  saveOperationCount++;
+}
+
+/**
+ * Mark that a save operation has completed
+ */
+function endSave(): void {
+  saveOperationCount = Math.max(0, saveOperationCount - 1);
+  if (saveOperationCount === 0) {
+    lastSaveCompleteTime = Date.now();
+  }
+}
+
+/**
+ * Check if we're currently saving or recently finished saving
+ */
+function isSaving(): boolean {
+  if (saveOperationCount > 0) {
+    return true;
+  }
+  // Also return true if we just finished saving (within cooldown period)
+  return Date.now() - lastSaveCompleteTime < SAVE_COOLDOWN_MS;
+}
 
 /**
  * Check if running in Tauri environment
@@ -272,8 +302,8 @@ async function loadFromTauri(): Promise<AppData> {
  * Save to Tauri file system using atomic writes
  */
 async function saveToTauri(data: AppData): Promise<void> {
-  // Set isSaving flag to prevent file watcher from triggering reload
-  isSaving = true;
+  // Mark save operation as starting
+  beginSave();
 
   try {
     const { invoke } = await import('@tauri-apps/api/core');
@@ -320,10 +350,8 @@ async function saveToTauri(data: AppData): Promise<void> {
     console.error('Failed to save to Tauri:', error);
     throw error;
   } finally {
-    // Clear isSaving flag after a short delay to allow file watcher events to pass
-    setTimeout(() => {
-      isSaving = false;
-    }, 100);
+    // Mark save operation as complete (cooldown handled by isSaving())
+    endSave();
   }
 }
 
@@ -331,8 +359,8 @@ async function saveToTauri(data: AppData): Promise<void> {
  * Save a specific file to Tauri using atomic write
  */
 async function saveFileTauri(fileType: string, data: unknown): Promise<void> {
-  // Set isSaving flag to prevent file watcher from triggering reload
-  isSaving = true;
+  // Mark save operation as starting
+  beginSave();
 
   try {
     const { invoke } = await import('@tauri-apps/api/core');
@@ -341,10 +369,8 @@ async function saveFileTauri(fileType: string, data: unknown): Promise<void> {
       content: JSON.stringify(data, null, 2)
     });
   } finally {
-    // Clear isSaving flag after a short delay to allow file watcher events to pass
-    setTimeout(() => {
-      isSaving = false;
-    }, 100);
+    // Mark save operation as complete (cooldown handled by isSaving())
+    endSave();
   }
 }
 
@@ -413,7 +439,7 @@ function migrateData(data: AppData): AppData {
  * Check if currently saving (for external use)
  */
 export function isCurrentlySaving(): boolean {
-  return isSaving;
+  return isSaving();
 }
 
 /**
@@ -432,7 +458,7 @@ export async function setupFileWatcher(onFileChange: (fileType: string) => void)
     const fileType = event.payload;
 
     // Skip if we're currently saving (self-triggered event)
-    if (isSaving) {
+    if (isSaving()) {
       console.log('Ignoring file change (isSaving):', fileType);
       return;
     }
@@ -448,7 +474,7 @@ export async function setupFileWatcher(onFileChange: (fileType: string) => void)
     // Set new debounce timer
     fileWatcherDebounceTimer = setTimeout(() => {
       // Double-check isSaving after debounce
-      if (isSaving) {
+      if (isSaving()) {
         console.log('Ignoring debounced file changes (isSaving)');
         pendingChanges.clear();
         return;
