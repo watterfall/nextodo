@@ -3,10 +3,13 @@
   import { PRIORITY_CONFIG } from '$lib/types';
   import TaskCard from './TaskCard.svelte';
   import { getUIStore, setDropTarget, clearDragState } from '$lib/stores/ui.svelte';
-  import { changePriority, getTasksStore } from '$lib/stores/tasks.svelte';
+  import { changePriority, getTasksStore, reorderTask } from '$lib/stores/tasks.svelte';
   import { getPomodoroStore } from '$lib/stores/pomodoro.svelte';
   import { countActiveByPriority } from '$lib/utils/quota';
   import { t } from '$lib/i18n';
+  import { dndzone, TRIGGERS, SHADOW_ITEM_MARKER_PROPERTY_NAME } from 'svelte-dnd-action';
+  import { flip } from 'svelte/animate';
+  import { dndConfig } from '$lib/utils/motion';
 
   interface Props {
     priority: Priority;
@@ -23,6 +26,7 @@
 
   let isDropTarget = $derived(ui.dropTargetPriority === priority);
   let showCompleted = $state(false);
+  let isDndActive = $state(false);
 
   const counts = $derived(countActiveByPriority(tasksStore.tasks));
   const remaining = $derived(config.quota === Infinity ? Infinity : config.quota - counts[priority]);
@@ -36,9 +40,59 @@
   let activeTasks = $derived(tasks.filter(t => !t.completed));
   let completedTasks = $derived(tasks.filter(t => t.completed));
 
+  // DnD items - need to be reactive and include shadow marker handling
+  let dndItems = $state<Task[]>([]);
+
+  // Keep dndItems in sync with activeTasks
+  $effect(() => {
+    // Only update if not currently dragging to avoid conflicts
+    if (!isDndActive) {
+      dndItems = [...activeTasks];
+    }
+  });
+
   // Get tooltip text for priority
   const tooltipText = $derived(t(`priority.tooltip.${priority}`));
 
+  // Handle DnD events from svelte-dnd-action
+  function handleDndConsider(e: CustomEvent<{ items: Task[], info: { trigger: string } }>) {
+    const { items, info } = e.detail;
+    dndItems = items;
+
+    if (info.trigger === TRIGGERS.DRAG_STARTED) {
+      isDndActive = true;
+      setDropTarget(priority);
+    }
+  }
+
+  function handleDndFinalize(e: CustomEvent<{ items: Task[], info: { trigger: string, id: string, source: string } }>) {
+    const { items, info } = e.detail;
+
+    // Filter out shadow placeholders
+    const cleanItems = items.filter(item => !item[SHADOW_ITEM_MARKER_PROPERTY_NAME as keyof Task]);
+    dndItems = cleanItems;
+
+    if (info.trigger === TRIGGERS.DROPPED_INTO_ZONE) {
+      // Item was dropped into this zone
+      const droppedTask = cleanItems.find(t => t.id === info.id);
+      if (droppedTask && droppedTask.priority !== priority) {
+        // Change priority for items from other zones
+        changePriority(info.id, priority);
+      } else {
+        // Reorder within same zone
+        const newOrder = cleanItems.map(t => t.id);
+        reorderTask(priority, newOrder);
+      }
+    } else if (info.trigger === TRIGGERS.DROPPED_OUTSIDE_OF_ANY) {
+      // Reset if dropped outside
+      dndItems = [...activeTasks];
+    }
+
+    isDndActive = false;
+    clearDragState();
+  }
+
+  // Legacy drag handlers for fallback
   function handleDragOver(e: DragEvent) {
     e.preventDefault();
     e.dataTransfer!.dropEffect = 'move';
@@ -63,7 +117,7 @@
 
 <div
   class="zone-container zone-{priority.toLowerCase()}"
-  class:drop-target={isDropTarget}
+  class:drop-target={isDropTarget || isDndActive}
   class:is-priority-a={priority === 'A'}
   class:is-full={isFull}
   class:focus-dimmed={isFocusMode && !hasActiveTask}
@@ -76,7 +130,7 @@
   role="region"
   aria-label="{config.name}"
 >
-  <!-- Sleek-style Header -->
+  <!-- Sleek-style Header with hover reveal -->
   <div class="zone-header" title={tooltipText}>
     <div class="zone-badge" style:background={config.color}>
       {priority}
@@ -94,14 +148,28 @@
   </div>
 
   <div class="zone-tasks">
-    {#if activeTasks.length > 0}
-      <div class="tasks-grid" class:compact={priority === 'D'}>
-        {#each activeTasks as task (task.id)}
-          <TaskCard {task} compact={priority === 'D'} />
+    {#if dndItems.length > 0 || activeTasks.length > 0}
+      <div
+        class="tasks-grid"
+        class:compact={priority === 'D'}
+        use:dndzone={{
+          items: dndItems,
+          flipDurationMs: dndConfig.flipDurationMs,
+          dropTargetStyle: {},
+          dropTargetClasses: ['dnd-drop-target-active'],
+          dragDisabled: isFocusMode && !hasActiveTask
+        }}
+        onconsider={handleDndConsider}
+        onfinalize={handleDndFinalize}
+      >
+        {#each dndItems as task (task.id)}
+          <div animate:flip={{ duration: dndConfig.flipDurationMs }} class="task-item-wrapper">
+            <TaskCard {task} compact={priority === 'D'} />
+          </div>
         {/each}
       </div>
     {:else}
-      <div class="empty-zone">
+      <div class="empty-zone" class:very-subtle={!isDropTarget}>
         <span class="empty-text">
           {#if isFull}
             {t('zone.full')}
@@ -115,7 +183,7 @@
 
   {#if completedTasks.length > 0}
     <button
-      class="completed-toggle"
+      class="completed-toggle hover-reveal-parent"
       onclick={() => showCompleted = !showCompleted}
     >
       <svg class="toggle-icon" class:rotated={showCompleted} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -142,6 +210,9 @@
     padding: 16px;
     transition: all var(--transition-normal);
     min-height: 80px;
+    /* Glassmorphism */
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
   }
 
   .zone-container:hover {
@@ -152,16 +223,17 @@
     border-color: var(--zone-color);
     box-shadow: 0 0 0 2px var(--zone-color), var(--shadow-md);
     background: var(--zone-bg);
+    transform: scale(1.01);
   }
 
   .zone-container.is-full {
     opacity: 0.7;
   }
 
-  /* Focus mode dimming */
+  /* Focus mode dimming - now in global CSS but keeping local override */
   .zone-container.focus-dimmed {
-    opacity: 0.35;
-    filter: grayscale(0.3);
+    opacity: 0.3;
+    filter: grayscale(0.4) blur(0.5px);
     pointer-events: none;
     transition: all 0.4s ease;
   }
@@ -256,12 +328,18 @@
     display: flex;
     flex-direction: column;
     gap: 8px;
+    min-height: 20px;
   }
 
   .tasks-grid.compact {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
     gap: 8px;
+  }
+
+  .task-item-wrapper {
+    /* Required for FLIP animation */
+    transform-origin: center center;
   }
 
   .empty-zone {
@@ -272,7 +350,18 @@
     border: 1px dashed var(--border-color);
     border-radius: var(--radius-md);
     min-height: 50px;
-    opacity: 0.5;
+    transition: all var(--transition-normal);
+  }
+
+  /* Very subtle empty state until hovered */
+  .empty-zone.very-subtle {
+    opacity: 0.25;
+    border-color: transparent;
+  }
+
+  .zone-container:hover .empty-zone.very-subtle {
+    opacity: 0.6;
+    border-color: var(--border-color);
   }
 
   .empty-text {

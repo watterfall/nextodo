@@ -24,6 +24,7 @@
   let isFocusMode = $derived(pomodoro.state === 'work' && pomodoro.activeTaskId !== null);
   let isFocusDimmed = $derived(isFocusMode && !isActive);
   let editContent = $state(task.content);
+  let isHovered = $state(false);
 
   function handleCheck() {
     if (task.completed) {
@@ -101,14 +102,30 @@
   class:overdue={isTaskOverdue && !task.completed}
   class:dormant={isDormant}
   class:focus-dimmed={isFocusDimmed}
+  class:focus-spotlight={isActive && isFocusMode}
+  class:hovered={isHovered}
   style:--priority-color={config.color}
   style:--priority-bg={config.bgColor}
   style:--priority-border={config.borderColor}
   draggable={!isFocusDimmed}
   ondragstart={handleDragStart}
   ondragend={handleDragEnd}
+  onmouseenter={() => isHovered = true}
+  onmouseleave={() => isHovered = false}
   role="listitem"
 >
+  <!-- Drag Handle - visible on hover -->
+  <div class="drag-handle" aria-label="Drag to reorder">
+    <svg viewBox="0 0 24 24" fill="currentColor" width="12" height="12">
+      <circle cx="8" cy="6" r="1.5"></circle>
+      <circle cx="16" cy="6" r="1.5"></circle>
+      <circle cx="8" cy="12" r="1.5"></circle>
+      <circle cx="16" cy="12" r="1.5"></circle>
+      <circle cx="8" cy="18" r="1.5"></circle>
+      <circle cx="16" cy="18" r="1.5"></circle>
+    </svg>
+  </div>
+
   <div class="task-main">
     <button
       class="checkbox"
@@ -190,7 +207,8 @@
     </div>
   {/if}
 
-  <div class="task-actions">
+  <!-- Action buttons - hover reveal -->
+  <div class="task-actions" class:visible={isHovered}>
     {#if !task.completed && !compact}
       <button
         class="action-btn play"
@@ -203,6 +221,12 @@
         </svg>
       </button>
     {/if}
+    <button class="action-btn edit" onclick={handleEdit} title="编辑">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+      </svg>
+    </button>
     <button class="action-btn delete" onclick={handleDelete} title="删除">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <polyline points="3 6 5 6 21 6"></polyline>
@@ -223,6 +247,7 @@
     display: flex;
     flex-direction: column;
     padding: 10px 12px;
+    padding-left: 28px; /* Space for drag handle */
     background: var(--card-bg);
     border: 1px solid var(--border-subtle);
     border-left: 2px solid var(--priority-color);
@@ -249,6 +274,14 @@
     animation: subtlePulse 2.5s ease-in-out infinite;
   }
 
+  /* Focus spotlight glow for active task during focus mode */
+  .task-card.focus-spotlight {
+    box-shadow: 0 0 0 2px var(--priority-color),
+                0 0 30px var(--priority-bg),
+                var(--shadow-md);
+    z-index: 10;
+  }
+
   .task-card.completed {
     opacity: 0.55;
     border-left-color: var(--text-muted);
@@ -260,15 +293,16 @@
   }
 
   .task-card.dragging {
-    opacity: 0.4;
+    opacity: 0.5;
     cursor: grabbing;
-    transform: scale(0.98);
+    transform: scale(0.98) rotate(1deg);
+    box-shadow: var(--shadow-lg);
   }
 
   /* Focus mode dimming */
   .task-card.focus-dimmed {
-    opacity: 0.3;
-    filter: grayscale(0.4);
+    opacity: 0.25;
+    filter: grayscale(0.5) blur(0.5px);
     pointer-events: none;
     transform: scale(0.98);
     transition: all 0.4s ease;
@@ -311,6 +345,40 @@
 
   .task-card.compact {
     padding: 8px 10px;
+    padding-left: 26px;
+  }
+
+  /* Drag Handle */
+  .drag-handle {
+    position: absolute;
+    left: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 16px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    opacity: 0;
+    transition: opacity var(--transition-fast), color var(--transition-fast);
+    cursor: grab;
+    border-radius: var(--radius-sm);
+  }
+
+  .task-card:hover .drag-handle,
+  .task-card.hovered .drag-handle {
+    opacity: 0.5;
+  }
+
+  .drag-handle:hover {
+    opacity: 1 !important;
+    color: var(--text-secondary);
+    background: var(--hover-bg);
+  }
+
+  .drag-handle:active {
+    cursor: grabbing;
   }
 
   .task-main {
@@ -483,6 +551,7 @@
     font-size: 10px;
   }
 
+  /* Action buttons - progressive disclosure */
   .task-actions {
     position: absolute;
     right: 10px;
@@ -491,14 +560,18 @@
     display: flex;
     gap: 3px;
     opacity: 0;
-    transition: opacity var(--transition-fast);
+    transform: translateY(-50%) translateX(4px);
+    transition: opacity var(--transition-fast), transform var(--transition-fast);
     background: var(--card-bg);
     padding: 2px;
     border-radius: var(--radius-sm);
+    pointer-events: none;
   }
 
-  .task-card:hover .task-actions {
+  .task-actions.visible {
     opacity: 1;
+    transform: translateY(-50%) translateX(0);
+    pointer-events: auto;
   }
 
   .action-btn {
@@ -524,6 +597,11 @@
   .action-btn.play:hover {
     color: var(--success);
     background: var(--success-bg);
+  }
+
+  .action-btn.edit:hover {
+    color: var(--primary);
+    background: var(--primary-bg);
   }
 
   .action-btn.delete:hover {

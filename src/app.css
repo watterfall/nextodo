@@ -709,6 +709,201 @@ kbd {
   font-family: 'SF Mono', 'Monaco', 'Menlo', 'Consolas', monospace;
 }
 
+/* ===========================================
+   GLASSMORPHISM SYSTEM
+   =========================================== */
+
+/* Light glass effect for cards */
+.glass-light {
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Medium glass effect */
+.glass-medium {
+  background: rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Strong glass effect for modals/overlays */
+.glass-strong {
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+/* Light theme glass adjustments */
+[data-theme="light"] .glass-light {
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+[data-theme="light"] .glass-medium {
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="light"] .glass-strong {
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+/* ===========================================
+   DRAG AND DROP SYSTEM (svelte-dnd-action)
+   =========================================== */
+
+/* Dragging item - the item being dragged */
+.dnd-dragging {
+  opacity: 0.85 !important;
+  transform: scale(1.02) rotate(1deg) !important;
+  box-shadow: var(--shadow-lg), 0 0 20px rgba(151, 117, 250, 0.2) !important;
+  z-index: 1000 !important;
+  cursor: grabbing !important;
+}
+
+/* Drop shadow - placeholder where item will land */
+.dnd-drop-shadow {
+  opacity: 0.4;
+  border: 2px dashed var(--primary) !important;
+  background: var(--primary-bg) !important;
+}
+
+/* Drop target zone - container that can receive drops */
+.dnd-drop-target {
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.dnd-drop-target-active {
+  transform: scale(1.01);
+  border-color: var(--zone-color, var(--primary)) !important;
+  box-shadow: 0 0 0 2px var(--zone-color, var(--primary)), var(--shadow-md) !important;
+  background: var(--zone-bg, var(--primary-bg)) !important;
+}
+
+/* Drag handle styling */
+.drag-handle {
+  cursor: grab;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border-radius: var(--radius-sm);
+}
+
+.drag-handle:hover {
+  background: var(--hover-bg);
+  color: var(--text-secondary);
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+/* Show drag handle on parent hover */
+*:hover > .drag-handle,
+.drag-handle:focus-visible {
+  opacity: 1;
+}
+
+/* ===========================================
+   PROGRESSIVE DISCLOSURE / HOVER REVEAL
+   =========================================== */
+
+/* Hidden by default, revealed on hover */
+.hover-reveal {
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 0.15s cubic-bezier(0, 0, 0.2, 1),
+              transform 0.15s cubic-bezier(0, 0, 0.2, 1);
+  pointer-events: none;
+}
+
+/* Reveal on parent hover */
+*:hover > .hover-reveal,
+*:focus-within > .hover-reveal,
+.hover-reveal:focus-visible {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+/* Subtle elements - always visible but very muted */
+.subtle {
+  opacity: 0.25;
+  transition: opacity 0.2s ease;
+}
+
+*:hover > .subtle,
+.subtle:hover {
+  opacity: 0.7;
+}
+
+/* Very subtle - almost invisible until hover */
+.very-subtle {
+  opacity: 0.15;
+  transition: opacity 0.2s ease;
+}
+
+*:hover > .very-subtle,
+.very-subtle:hover {
+  opacity: 0.6;
+}
+
+/* ===========================================
+   ENHANCED FOCUS MODE
+   =========================================== */
+
+/* Dimmed state for non-active elements during focus mode */
+.focus-dimmed {
+  opacity: 0.3;
+  filter: grayscale(0.4) blur(0.5px);
+  transform: scale(0.98);
+  pointer-events: none;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Active/highlighted element during focus mode */
+.focus-active {
+  opacity: 1;
+  filter: none;
+  transform: scale(1);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 10;
+}
+
+/* Focus spotlight glow effect */
+.focus-spotlight {
+  box-shadow: 0 0 0 2px var(--primary),
+              0 0 30px rgba(151, 117, 250, 0.3),
+              var(--shadow-lg);
+}
+
+/* ===========================================
+   SVELTE FLIP ANIMATION SUPPORT
+   =========================================== */
+
+/* Ensure smooth FLIP animations */
+.flip-animate {
+  transform-origin: center center;
+}
+
+/* List container for FLIP animations */
+.flip-list {
+  position: relative;
+}
+
+.flip-list > * {
+  transform-origin: center center;
+}
+
 /* Future task indicator */
 .task-future {
   opacity: 0.6;

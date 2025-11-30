@@ -275,6 +275,26 @@ export async function incrementPomodoro(taskId: string): Promise<void> {
   await persist();
 }
 
+// Reorder tasks within a priority zone (for drag-and-drop)
+export async function reorderTask(priority: Priority, newOrder: string[]): Promise<void> {
+  // Get tasks in this priority
+  const priorityTasks = appData.tasks.filter(t => t.priority === priority && !t.completed);
+  const otherTasks = appData.tasks.filter(t => t.priority !== priority || t.completed);
+
+  // Create a map for quick lookup
+  const taskMap = new Map(priorityTasks.map(t => [t.id, t]));
+
+  // Reorder based on newOrder array
+  const reorderedPriorityTasks = newOrder
+    .map(id => taskMap.get(id))
+    .filter((t): t is Task => t !== undefined);
+
+  // Combine reordered priority tasks with other tasks
+  appData.tasks = [...reorderedPriorityTasks, ...otherTasks];
+
+  await persist();
+}
+
 // Filter operations
 export function setFilter(newFilter: Partial<FilterState>): void {
   filter = { ...filter, ...newFilter };
