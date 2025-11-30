@@ -150,41 +150,41 @@ export const PRIORITY_CONFIG: Record<Priority, PriorityConfig> = {
     name: '核心挑战',
     quota: 1,
     description: '深度工作，需 2+ 小时专注',
-    color: '#a855f7',
-    bgColor: 'linear-gradient(135deg, #581c87, #7c3aed)',
-    borderColor: '#a855f7'
+    color: 'var(--priority-a-color, #da77f2)',
+    bgColor: 'var(--priority-a-bg, rgba(218, 119, 242, 0.12))',
+    borderColor: 'var(--priority-a-border, rgba(218, 119, 242, 0.25))'
   },
   B: {
     name: '重要推进',
     quota: 2,
     description: '项目关键节点',
-    color: '#f97316',
-    bgColor: 'rgba(249, 115, 22, 0.1)',
-    borderColor: '#f97316'
+    color: 'var(--priority-b-color, #ff922b)',
+    bgColor: 'var(--priority-b-bg, rgba(255, 146, 43, 0.12))',
+    borderColor: 'var(--priority-b-border, rgba(255, 146, 43, 0.25))'
   },
   C: {
     name: '标准任务',
     quota: 3,
     description: '日常工作任务',
-    color: '#64748b',
-    bgColor: 'rgba(100, 116, 139, 0.1)',
-    borderColor: '#475569'
+    color: 'var(--priority-c-color, #74c0fc)',
+    bgColor: 'var(--priority-c-bg, rgba(116, 192, 252, 0.08))',
+    borderColor: 'var(--priority-c-border, rgba(116, 192, 252, 0.2))'
   },
   D: {
     name: '快速处理',
     quota: 5,
     description: '15分钟内可完成',
-    color: '#94a3b8',
-    bgColor: 'rgba(148, 163, 184, 0.05)',
-    borderColor: '#334155'
+    color: 'var(--priority-d-color, #868e96)',
+    bgColor: 'var(--priority-d-bg, rgba(134, 142, 150, 0.08))',
+    borderColor: 'var(--priority-d-border, rgba(134, 142, 150, 0.2))'
   },
   E: {
     name: '收集箱',
     quota: Infinity,
     description: '备忘、想法、无期限',
-    color: '#64748b',
-    bgColor: 'rgba(51, 65, 85, 0.3)',
-    borderColor: '#1e293b'
+    color: 'var(--priority-e-color, #5c636a)',
+    bgColor: 'var(--priority-e-bg, rgba(92, 99, 106, 0.08))',
+    borderColor: 'var(--priority-e-border, rgba(92, 99, 106, 0.2))'
   }
 };
 
