@@ -9,7 +9,7 @@
   import { t } from '$lib/i18n';
   import { dndzone, TRIGGERS, SHADOW_ITEM_MARKER_PROPERTY_NAME } from 'svelte-dnd-action';
   import { flip } from 'svelte/animate';
-  import { dndConfig } from '$lib/utils/motion';
+  import { dndConfig, areTaskArraysEqual, type DndConsiderEvent, type DndFinalizeEvent } from '$lib/utils/motion';
 
   interface Props {
     priority: Priority;
@@ -43,10 +43,10 @@
   // DnD items - need to be reactive and include shadow marker handling
   let dndItems = $state<Task[]>([]);
 
-  // Keep dndItems in sync with activeTasks
+  // Keep dndItems in sync with activeTasks (with shallow comparison to avoid unnecessary updates)
   $effect(() => {
-    // Only update if not currently dragging to avoid conflicts
-    if (!isDndActive) {
+    // Only update if not currently dragging and arrays are different
+    if (!isDndActive && !areTaskArraysEqual(dndItems, activeTasks)) {
       dndItems = [...activeTasks];
     }
   });
@@ -55,7 +55,7 @@
   const tooltipText = $derived(t(`priority.tooltip.${priority}`));
 
   // Handle DnD events from svelte-dnd-action
-  function handleDndConsider(e: CustomEvent<{ items: Task[], info: { trigger: string } }>) {
+  function handleDndConsider(e: DndConsiderEvent) {
     const { items, info } = e.detail;
     dndItems = items;
 
@@ -65,7 +65,7 @@
     }
   }
 
-  function handleDndFinalize(e: CustomEvent<{ items: Task[], info: { trigger: string, id: string, source: string } }>) {
+  function handleDndFinalize(e: DndFinalizeEvent) {
     const { items, info } = e.detail;
 
     // Filter out shadow placeholders

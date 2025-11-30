@@ -8,7 +8,7 @@
   import { t } from '$lib/i18n';
   import { dndzone, TRIGGERS, SHADOW_ITEM_MARKER_PROPERTY_NAME } from 'svelte-dnd-action';
   import { flip } from 'svelte/animate';
-  import { dndConfig } from '$lib/utils/motion';
+  import { dndConfig, areTaskArraysEqual, type DndConsiderEvent, type DndFinalizeEvent } from '$lib/utils/motion';
 
   const tasks = getTasksStore();
   const pomodoro = getPomodoroStore();
@@ -26,9 +26,9 @@
   let dndItems = $state<Task[]>([]);
   let isDndActive = $state(false);
 
-  // Keep dndItems in sync with inboxTasks
+  // Keep dndItems in sync with inboxTasks (with shallow comparison)
   $effect(() => {
-    if (!isDndActive) {
+    if (!isDndActive && !areTaskArraysEqual(dndItems, inboxTasks)) {
       dndItems = [...inboxTasks];
     }
   });
@@ -57,7 +57,7 @@
   }
 
   // DnD handlers for svelte-dnd-action
-  function handleDndConsider(e: CustomEvent<{ items: Task[], info: { trigger: string } }>) {
+  function handleDndConsider(e: DndConsiderEvent) {
     const { items, info } = e.detail;
     dndItems = items;
 
@@ -66,7 +66,7 @@
     }
   }
 
-  function handleDndFinalize(e: CustomEvent<{ items: Task[], info: { trigger: string, id: string } }>) {
+  function handleDndFinalize(e: DndFinalizeEvent) {
     const { items, info } = e.detail;
 
     // Filter out shadow placeholders
@@ -112,6 +112,8 @@
             ondragover={(e) => e.preventDefault()}
             ondrop={(e) => handleDrop(e, target.priority)}
             title={t(`priority.tooltip.${target.priority}`)}
+            role="button"
+            tabindex="0"
           >
             <span class="target-letter">{target.priority}</span>
             <span class="target-time">{target.time}</span>

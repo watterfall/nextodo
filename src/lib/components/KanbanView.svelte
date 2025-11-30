@@ -9,7 +9,7 @@
   import { t } from '$lib/i18n';
   import { dndzone, TRIGGERS, SHADOW_ITEM_MARKER_PROPERTY_NAME } from 'svelte-dnd-action';
   import { flip } from 'svelte/animate';
-  import { dndConfig } from '$lib/utils/motion';
+  import { dndConfig, areTaskArraysEqual, type DndConsiderEvent, type DndFinalizeEvent } from '$lib/utils/motion';
 
   const tasks = getTasksStore();
   const pomodoro = getPomodoroStore();
@@ -39,22 +39,33 @@
     return tasks.tasksByPriority[priority].some(t => t.id === pomodoro.activeTaskId);
   }
 
-  // Sync dndItems with actual tasks for each priority
+  // Sync dndItems with actual tasks for each priority (with shallow comparison)
   $effect(() => {
     if (!activeDndColumn) {
-      dndItemsByPriority = {
+      const newItems = {
         A: getTasksForPriority('A'),
         B: getTasksForPriority('B'),
         C: getTasksForPriority('C'),
         D: getTasksForPriority('D'),
         E: getTasksForPriority('E')
       };
+      // Only update if any priority's tasks changed
+      let needsUpdate = false;
+      for (const p of priorities) {
+        if (!areTaskArraysEqual(dndItemsByPriority[p], newItems[p])) {
+          needsUpdate = true;
+          break;
+        }
+      }
+      if (needsUpdate) {
+        dndItemsByPriority = newItems;
+      }
     }
   });
 
   // DnD handlers
   function handleDndConsider(priority: Priority) {
-    return (e: CustomEvent<{ items: Task[], info: { trigger: string } }>) => {
+    return (e: DndConsiderEvent) => {
       const { items, info } = e.detail;
       dndItemsByPriority[priority] = items;
 
@@ -66,7 +77,7 @@
   }
 
   function handleDndFinalize(priority: Priority) {
-    return (e: CustomEvent<{ items: Task[], info: { trigger: string, id: string } }>) => {
+    return (e: DndFinalizeEvent) => {
       const { items, info } = e.detail;
 
       // Filter out shadow placeholders
@@ -132,6 +143,8 @@
       ondragover={(e) => handleDragOver(e, priority)}
       ondragleave={handleDragLeave}
       ondrop={(e) => handleDrop(e, priority)}
+      role="region"
+      aria-label={t(`priority.${priority}`)}
     >
       <div class="column-header" title={config.description}>
         <span class="column-letter" style:background={config.color}>{priority}</span>

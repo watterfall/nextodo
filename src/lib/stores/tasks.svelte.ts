@@ -172,27 +172,28 @@ export async function deleteTask(taskId: string): Promise<void> {
 }
 
 export async function completeTask(taskId: string): Promise<void> {
+  // Find the task first to check for recurrence
+  const taskToComplete = appData.tasks.find(t => t.id === taskId && !t.completed);
   let nextRecurringTask: Task | null = null;
 
+  // Create next occurrence before modifying the task
+  if (taskToComplete?.recurrence?.pattern && taskToComplete.dueDate) {
+    nextRecurringTask = createNextOccurrence(taskToComplete);
+  }
+
+  // Mark task as completed
   appData.tasks = appData.tasks.map(task => {
     if (task.id === taskId && !task.completed) {
-      const completed = {
+      return {
         ...task,
         completed: true,
         completedAt: new Date().toISOString()
       };
-
-      // Handle recurring task - collect for later to avoid race condition
-      if (task.recurrence?.pattern && task.dueDate) {
-        nextRecurringTask = createNextOccurrence(task);
-      }
-
-      return completed;
     }
     return task;
   });
 
-  // Add next recurring task synchronously before persisting
+  // Add next recurring task
   if (nextRecurringTask) {
     const quotaError = validateQuota(appData.tasks, nextRecurringTask.priority);
     if (!quotaError) {

@@ -3,6 +3,30 @@
  * Provides shared spring configs, durations, and easing curves for consistent animations
  */
 
+import type { Task } from '$lib/types';
+
+// Type definitions for svelte-dnd-action events
+export interface DndConsiderDetail<T = Task> {
+  items: T[];
+  info: {
+    trigger: string;
+    id?: string;
+    source?: string;
+  };
+}
+
+export interface DndFinalizeDetail<T = Task> {
+  items: T[];
+  info: {
+    trigger: string;
+    id: string;
+    source: string;
+  };
+}
+
+export type DndConsiderEvent<T = Task> = CustomEvent<DndConsiderDetail<T>>;
+export type DndFinalizeEvent<T = Task> = CustomEvent<DndFinalizeDetail<T>>;
+
 // Spring configurations for different animation types
 export const springs = {
   // Snappy - for quick interactions like buttons
@@ -156,4 +180,13 @@ export function createTransition(
 // Helper to generate staggered delay for list items
 export function staggerDelay(index: number, baseDelay = 30): number {
   return index * baseDelay;
+}
+
+// Helper for shallow array comparison by ID (for DnD optimization)
+export function areTaskArraysEqual(a: Task[], b: Task[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i].id !== b[i].id) return false;
+  }
+  return true;
 }
