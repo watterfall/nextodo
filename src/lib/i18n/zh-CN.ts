@@ -9,43 +9,72 @@ export default {
   // Navigation
   nav: {
     today: '今日',
-    inbox: '收集箱',
+    inbox: '待处理',
     projects: '项目',
-    contexts: '上下文',
+    contexts: '场景',
     tags: '标签',
     calendar: '日历',
     archive: '归档',
     settings: '设置',
   },
 
-  // Priorities
+  // Priorities - With detailed tooltips
   priority: {
     A: '核心挑战',
     B: '重要推进',
     C: '标准任务',
     D: '快速处理',
-    E: '收集箱',
+    E: '待处理',
     description: {
       A: '深度工作，需 2+ 小时专注',
-      B: '项目关键节点',
-      C: '日常工作任务',
+      B: '项目关键节点，45-90分钟',
+      C: '日常工作任务，15-45分钟',
       D: '15分钟内可完成',
-      E: '备忘、想法、无期限',
+      E: '备忘、想法、待分类',
+    },
+    tooltip: {
+      A: '核心挑战 · 配额 1/周期 · 2+ 小时深度专注 · 高难度高价值',
+      B: '重要推进 · 配额 2/周期 · 45-90 分钟 · 中等难度',
+      C: '标准任务 · 配额 3/周期 · 15-45 分钟 · 日常工作',
+      D: '快速处理 · 配额 5/周期 · <15 分钟 · 低难度',
+      E: '待处理区 · 无配额限制 · 待分类整理',
+    },
+    quota: {
+      A: '1/周期',
+      B: '2/周期',
+      C: '3/周期',
+      D: '5/周期',
+      E: '无限',
+    },
+    difficulty: {
+      A: '高难度',
+      B: '中等难度',
+      C: '标准难度',
+      D: '低难度',
+      E: '待评估',
+    },
+    time: {
+      A: '2+ 小时',
+      B: '45-90 分钟',
+      C: '15-45 分钟',
+      D: '<15 分钟',
+      E: '待定',
     },
   },
 
   // Task Form
   taskForm: {
     placeholder: '输入任务内容...',
-    addToInbox: '添加到收集箱',
+    addToInbox: '添加到待处理',
     project: '项目',
     projectPlaceholder: '例如: 工作、学习',
-    context: '上下文',
+    context: '场景',
     contextPlaceholder: '例如: 办公室、家里',
     tags: '标签',
     tagsPlaceholder: '多个标签用逗号分隔',
     dueDate: '截止日期',
-    thresholdDate: '开始日期',
+    thresholdDate: '延后可见',
+    thresholdHint: '任务在此日期前隐藏',
     estimatedPomodoros: '预估番茄数',
     recurrence: '重复',
     noRecurrence: '不重复',
@@ -56,36 +85,43 @@ export default {
     biweekly: '每两周',
     monthly: '每月',
     keyboardHint: '按 Ctrl+Enter 快速添加',
+    syntaxHint: '支持语法: +项目 @场景 #标签 due:日期 t:延后日期 est:番茄数',
   },
 
   // Inbox Panel
   inbox: {
-    title: '收集箱',
-    hint: '拖拽或点击按钮将任务移到对应优先级',
+    title: '待处理',
+    subtitle: '收集想法，整理分类',
+    hint: '拖拽任务到左侧区域或点击快速分类按钮',
+    dragHint: '拖拽到 A/B/C/D 区域进行分类',
     moveTo: '移动到',
-    empty: '收集箱已清空',
-    emptyHint: '使用上方表单添加新任务',
+    empty: '待处理区已清空',
+    emptyHint: '输入框添加新任务，自动进入待处理区',
     completed: '已完成',
+    aging: '已停留 {days} 天',
+    agingWarning: '建议尽快分类处理',
   },
 
   // Task
   task: {
     add: '添加任务',
-    addPlaceholder: '快速添加任务 (+项目 @上下文 #标签 !A-E ~日期 🍅数量)',
+    addPlaceholder: '快速添加任务 (+项目 @场景 #标签 !A-E ~日期 🍅数量)',
     edit: '编辑任务',
     delete: '删除任务',
     complete: '完成任务',
     uncomplete: '取消完成',
     archive: '归档',
     restore: '恢复',
-    moveToTrash: '移至垃圾箱',
-    emptyTrash: '清空垃圾箱',
+    moveToTrash: '移至回收站',
+    emptyTrash: '清空回收站',
     noTasks: '暂无任务',
     dueToday: '今日截止',
     dueThisWeek: '本周截止',
     overdue: '已逾期',
-    futureTask: '未来任务',
-    thresholdNotReached: '未到开始日期',
+    futureTask: '延后任务',
+    thresholdNotReached: '延后可见',
+    startFocus: '开始专注',
+    pomodoroProgress: '{completed}/{estimated} 番茄',
   },
 
   // Pomodoro
@@ -115,6 +151,7 @@ export default {
     reviewDay: '复盘日',
     reflection: '本周回顾',
     nextFocus: '下周重点',
+    biDaily: '双日制',
     stats: {
       planned: '计划',
       completed: '完成',
@@ -135,6 +172,9 @@ export default {
     pomodorosTotal: '番茄总数',
     noReviews: '暂无复盘记录',
     noReviewsHint: '在每个周期结束时创建复盘，追踪你的进步',
+    redundancyNote: '完成率并非越高越好',
+    redundancyHint: '如果每次都100%完成，说明挑战不够，建议适当提高难度',
+    healthyRange: '健康完成率: 70-85%',
   },
 
   // Filter
@@ -145,7 +185,7 @@ export default {
     today: '今天',
     thisWeek: '本周',
     overdue: '逾期',
-    future: '未来',
+    future: '延后',
     search: '搜索任务...',
     searchResults: '搜索结果',
     noResults: '未找到匹配的任务',
@@ -180,17 +220,54 @@ export default {
     },
     autoArchive: '自动归档天数',
     autoArchiveDesc: '已完成任务在多少天后自动归档',
-    eZoneAging: '收集箱老化提醒',
-    eZoneAgingDesc: '收集箱任务超过多少天提示处理',
+    eZoneAging: '待处理区老化提醒',
+    eZoneAgingDesc: '待处理任务超过多少天提示处理',
     minutes: '分钟',
     days: '天',
+    methodology: {
+      title: '方法论说明',
+      subtitle: '1-2-3-5 双日周期模型',
+      description: '基于 Ivy Lee 方法和 GTD 理论的任务管理系统',
+      model: {
+        title: '配额模型',
+        total: '每周期总量: 11 个任务 (约 5.5/天)',
+        ivyLee: '符合常青藤李法则的每日 6 件事原则',
+        better: '优于传统 1-3-5 法则 (每天 9 个任务)',
+      },
+      priorities: {
+        title: '优先级说明',
+        A: 'A 级 (核心挑战): 每周期 1 个，需要 2+ 小时深度专注的高价值任务',
+        B: 'B 级 (重要推进): 每周期 2 个，项目关键节点，45-90 分钟',
+        C: 'C 级 (标准任务): 每周期 3 个，日常工作任务，15-45 分钟',
+        D: 'D 级 (快速处理): 每周期 5 个，15 分钟内可完成的小任务',
+        E: 'E 级 (待处理): 无限制，收集想法、待分类任务',
+      },
+      highlander: {
+        title: '高地人法则',
+        rule: '同一时间只能有一个 A 级任务',
+        reason: '确保最重要的任务获得足够的专注和资源',
+      },
+      biDaily: {
+        title: '双日周期',
+        pattern: '周日-周一、周二-周三、周四-周五为工作单元',
+        review: '周六为复盘日',
+        benefit: '比日计划更灵活，比周计划更紧凑',
+      },
+      redundancy: {
+        title: '冗余与鲁棒性',
+        note: '100% 完成率并非最优目标',
+        reason: '如果总是完成所有任务，说明挑战设置过低',
+        target: '建议保持 70-85% 的完成率，留有弹性空间',
+      },
+    },
   },
 
   // Sidebar
   sidebar: {
     todayCompleted: '今日完成',
+    allTasks: '全部任务',
     projects: '项目',
-    contexts: '上下文',
+    contexts: '场景',
     tags: '标签',
     dueDates: '截止日期',
     recurring: '重复任务',
@@ -200,8 +277,9 @@ export default {
     dailyRecurring: '每日',
     weeklyRecurring: '每周',
     noProjects: '暂无项目',
-    noContexts: '暂无上下文',
+    noContexts: '暂无场景',
     collapse: '收起侧边栏',
+    showAll: '显示全部',
   },
 
   // Zone
@@ -209,12 +287,15 @@ export default {
     full: '配额已满',
     dropHere: '拖拽任务到这里',
     empty: '暂无任务',
+    quotaInfo: '{current}/{max}',
   },
 
   // View modes
   view: {
     zones: '区块视图',
     kanban: '看板视图',
+    list: '列表视图',
+    hybrid: '混合视图',
   },
 
   // Actions
@@ -227,6 +308,8 @@ export default {
     close: '关闭',
     add: '添加',
     done: '完成',
+    expand: '展开',
+    collapse: '收起',
   },
 
   // Messages
@@ -244,7 +327,8 @@ export default {
     dataExported: '数据已导出',
     dataImported: '数据已导入',
     backupCreated: '备份已创建',
-    taskAdded: '任务已添加到收集箱',
+    taskAdded: '任务已添加到待处理区',
+    taskMoved: '任务已移动到 {priority} 区',
   },
 
   // Date/Time
@@ -256,18 +340,20 @@ export default {
     lastWeek: '上周',
     nextWeek: '下周',
     format: 'YYYY-MM-DD',
+    daysAgo: '{n} 天前',
+    daysLater: '{n} 天后',
   },
 
   // Syntax hints
   syntax: {
     title: '输入语法',
     project: '+项目',
-    context: '@上下文',
+    context: '@场景',
     tag: '#标签',
     priority: '!A-E 优先级',
-    dueDate: '~日期 截止日',
-    threshold: 'thr:日期 开始日',
+    dueDate: 'due:日期 截止日',
+    threshold: 't:日期 延后可见',
     recurrence: 'rec:模式 重复',
-    pomodoro: '🍅数量 番茄数',
+    pomodoro: 'est:数量 番茄数',
   },
 };

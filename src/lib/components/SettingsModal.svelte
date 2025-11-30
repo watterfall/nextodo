@@ -2,6 +2,7 @@
   import { getSettingsStore, updateSettings, toggleTheme } from '$lib/stores/settings.svelte';
   import { t, availableLanguages, setLanguage, currentLanguage } from '$lib/i18n';
   import type { Language } from '$lib/types';
+  import { PRIORITY_CONFIG } from '$lib/types';
 
   interface Props {
     isOpen: boolean;
@@ -17,6 +18,7 @@
   let pomodoroLongBreak = $state(settings.pomodoroLongBreak);
   let autoArchiveDays = $state(settings.autoArchiveDays);
   let eZoneAgingDays = $state(settings.eZoneAgingDays);
+  let showMethodology = $state(false);
 
   // Sync state with settings when modal opens
   $effect(() => {
@@ -244,6 +246,127 @@
             </div>
           </div>
         </section>
+
+        <!-- Methodology Guide -->
+        <section class="settings-section methodology">
+          <button class="methodology-header" onclick={() => showMethodology = !showMethodology}>
+            <div class="methodology-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                <line x1="12" y1="17" x2="12.01" y2="17"></line>
+              </svg>
+              <span>{t('settings.methodology.title')}</span>
+            </div>
+            <svg class="toggle-icon" class:rotated={showMethodology} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="6 9 12 15 18 9"></polyline>
+            </svg>
+          </button>
+
+          {#if showMethodology}
+            <div class="methodology-content">
+              <div class="methodology-intro">
+                <h4>{t('settings.methodology.subtitle')}</h4>
+                <p>{t('settings.methodology.description')}</p>
+              </div>
+
+              <!-- Quota Model -->
+              <div class="methodology-card">
+                <h5>{t('settings.methodology.model.title')}</h5>
+                <div class="quota-visual">
+                  <div class="quota-bar">
+                    <div class="quota-segment a" style="flex: 1" title="A: 1">
+                      <span class="segment-letter">A</span>
+                      <span class="segment-count">1</span>
+                    </div>
+                    <div class="quota-segment b" style="flex: 2" title="B: 2">
+                      <span class="segment-letter">B</span>
+                      <span class="segment-count">2</span>
+                    </div>
+                    <div class="quota-segment c" style="flex: 3" title="C: 3">
+                      <span class="segment-letter">C</span>
+                      <span class="segment-count">3</span>
+                    </div>
+                    <div class="quota-segment d" style="flex: 5" title="D: 5">
+                      <span class="segment-letter">D</span>
+                      <span class="segment-count">5</span>
+                    </div>
+                  </div>
+                </div>
+                <ul class="model-points">
+                  <li>{t('settings.methodology.model.total')}</li>
+                  <li>{t('settings.methodology.model.ivyLee')}</li>
+                  <li>{t('settings.methodology.model.better')}</li>
+                </ul>
+              </div>
+
+              <!-- Priority Levels -->
+              <div class="methodology-card">
+                <h5>{t('settings.methodology.priorities.title')}</h5>
+                <div class="priority-list">
+                  <div class="priority-item">
+                    <span class="priority-badge" style:background={PRIORITY_CONFIG.A.color}>A</span>
+                    <span class="priority-desc">{t('settings.methodology.priorities.A')}</span>
+                  </div>
+                  <div class="priority-item">
+                    <span class="priority-badge" style:background={PRIORITY_CONFIG.B.color}>B</span>
+                    <span class="priority-desc">{t('settings.methodology.priorities.B')}</span>
+                  </div>
+                  <div class="priority-item">
+                    <span class="priority-badge" style:background={PRIORITY_CONFIG.C.color}>C</span>
+                    <span class="priority-desc">{t('settings.methodology.priorities.C')}</span>
+                  </div>
+                  <div class="priority-item">
+                    <span class="priority-badge" style:background={PRIORITY_CONFIG.D.color}>D</span>
+                    <span class="priority-desc">{t('settings.methodology.priorities.D')}</span>
+                  </div>
+                  <div class="priority-item">
+                    <span class="priority-badge" style:background={PRIORITY_CONFIG.E.color}>E</span>
+                    <span class="priority-desc">{t('settings.methodology.priorities.E')}</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Highlander Rule -->
+              <div class="methodology-card highlight">
+                <h5>{t('settings.methodology.highlander.title')}</h5>
+                <p class="rule-text">{t('settings.methodology.highlander.rule')}</p>
+                <p class="rule-reason">{t('settings.methodology.highlander.reason')}</p>
+              </div>
+
+              <!-- Bi-daily Cycle -->
+              <div class="methodology-card">
+                <h5>{t('settings.methodology.biDaily.title')}</h5>
+                <div class="cycle-visual">
+                  <div class="cycle-unit">
+                    <span class="cycle-days">Sun-Mon</span>
+                  </div>
+                  <div class="cycle-unit">
+                    <span class="cycle-days">Tue-Wed</span>
+                  </div>
+                  <div class="cycle-unit">
+                    <span class="cycle-days">Thu-Fri</span>
+                  </div>
+                  <div class="cycle-unit review">
+                    <span class="cycle-days">Sat</span>
+                    <span class="cycle-label">{t('unit.reviewDay')}</span>
+                  </div>
+                </div>
+                <p class="cycle-benefit">{t('settings.methodology.biDaily.benefit')}</p>
+              </div>
+
+              <!-- Redundancy Note -->
+              <div class="methodology-card warning">
+                <h5>{t('settings.methodology.redundancy.title')}</h5>
+                <p class="warning-note">{t('settings.methodology.redundancy.note')}</p>
+                <p class="warning-reason">{t('settings.methodology.redundancy.reason')}</p>
+                <div class="target-rate">
+                  <span class="rate-label">{t('settings.methodology.redundancy.target')}</span>
+                </div>
+              </div>
+            </div>
+          {/if}
+        </section>
       </div>
 
       <div class="modal-footer">
@@ -273,7 +396,7 @@
 
   .modal-content {
     width: 100%;
-    max-width: 520px;
+    max-width: 560px;
     max-height: 85vh;
     background: var(--card-bg);
     border: 1px solid var(--border-color);
@@ -451,6 +574,256 @@
   .input-suffix {
     font-size: 12px;
     color: var(--text-muted);
+  }
+
+  /* Methodology Section */
+  .settings-section.methodology {
+    background: var(--bg-secondary);
+    margin: 0 -24px;
+    padding: 0 24px;
+  }
+
+  .methodology-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 16px 0;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+  }
+
+  .methodology-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+
+  .methodology-title svg {
+    width: 18px;
+    height: 18px;
+    color: var(--primary);
+  }
+
+  .toggle-icon {
+    width: 18px;
+    height: 18px;
+    color: var(--text-muted);
+    transition: transform var(--transition-fast);
+  }
+
+  .toggle-icon.rotated {
+    transform: rotate(180deg);
+  }
+
+  .methodology-content {
+    padding-bottom: 20px;
+  }
+
+  .methodology-intro {
+    margin-bottom: 16px;
+  }
+
+  .methodology-intro h4 {
+    margin: 0 0 8px;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+
+  .methodology-intro p {
+    margin: 0;
+    font-size: 13px;
+    color: var(--text-secondary);
+  }
+
+  .methodology-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    padding: 14px;
+    margin-bottom: 12px;
+  }
+
+  .methodology-card:last-child {
+    margin-bottom: 0;
+  }
+
+  .methodology-card h5 {
+    margin: 0 0 10px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+
+  .methodology-card.highlight {
+    border-color: var(--priority-a-color, #da77f2);
+    background: var(--priority-a-bg, rgba(218, 119, 242, 0.08));
+  }
+
+  .methodology-card.warning {
+    border-color: var(--warning, #fab005);
+    background: rgba(250, 176, 5, 0.08);
+  }
+
+  /* Quota Visual */
+  .quota-visual {
+    margin-bottom: 12px;
+  }
+
+  .quota-bar {
+    display: flex;
+    height: 32px;
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    gap: 2px;
+  }
+
+  .quota-segment {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    color: white;
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  .quota-segment.a { background: var(--priority-a-color, #da77f2); }
+  .quota-segment.b { background: var(--priority-b-color, #ff922b); }
+  .quota-segment.c { background: var(--priority-c-color, #74c0fc); }
+  .quota-segment.d { background: var(--priority-d-color, #868e96); }
+
+  .segment-letter {
+    font-weight: 700;
+  }
+
+  .segment-count {
+    opacity: 0.8;
+  }
+
+  .model-points {
+    margin: 0;
+    padding-left: 18px;
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+
+  .model-points li {
+    margin-bottom: 4px;
+  }
+
+  /* Priority List */
+  .priority-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .priority-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .priority-badge {
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 11px;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+
+  .priority-desc {
+    font-size: 12px;
+    color: var(--text-secondary);
+    line-height: 1.4;
+  }
+
+  /* Highlander Rule */
+  .rule-text {
+    margin: 0 0 6px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+  }
+
+  .rule-reason {
+    margin: 0;
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+
+  /* Cycle Visual */
+  .cycle-visual {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+
+  .cycle-unit {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 8px;
+    background: var(--hover-bg);
+    border-radius: var(--radius-sm);
+    font-size: 11px;
+    color: var(--text-secondary);
+  }
+
+  .cycle-unit.review {
+    background: var(--primary-bg);
+    color: var(--primary);
+  }
+
+  .cycle-days {
+    font-weight: 600;
+  }
+
+  .cycle-label {
+    font-size: 10px;
+    opacity: 0.8;
+  }
+
+  .cycle-benefit {
+    margin: 0;
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+
+  /* Warning Card */
+  .warning-note {
+    margin: 0 0 6px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--warning, #fab005);
+  }
+
+  .warning-reason {
+    margin: 0 0 10px;
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+
+  .target-rate {
+    padding: 8px 12px;
+    background: var(--card-bg);
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-primary);
   }
 
   .modal-footer {

@@ -9,7 +9,7 @@ export default {
   // Navigation
   nav: {
     today: 'Today',
-    inbox: 'Inbox',
+    inbox: 'Pending',
     projects: 'Projects',
     contexts: 'Contexts',
     tags: 'Tags',
@@ -18,26 +18,54 @@ export default {
     settings: 'Settings',
   },
 
-  // Priorities
+  // Priorities - With detailed tooltips
   priority: {
     A: 'Core Challenge',
     B: 'Key Progress',
     C: 'Standard Task',
     D: 'Quick Action',
-    E: 'Inbox',
+    E: 'Pending',
     description: {
       A: 'Deep work, 2+ hours focus',
-      B: 'Project milestones',
-      C: 'Daily work tasks',
+      B: 'Project milestones, 45-90 min',
+      C: 'Daily work tasks, 15-45 min',
       D: 'Under 15 minutes',
-      E: 'Ideas, notes, no deadline',
+      E: 'Ideas, notes, to be sorted',
+    },
+    tooltip: {
+      A: 'Core Challenge · Quota 1/cycle · 2+ hours deep focus · High difficulty & value',
+      B: 'Key Progress · Quota 2/cycle · 45-90 min · Medium difficulty',
+      C: 'Standard Task · Quota 3/cycle · 15-45 min · Daily work',
+      D: 'Quick Action · Quota 5/cycle · <15 min · Low difficulty',
+      E: 'Pending · No quota limit · To be sorted',
+    },
+    quota: {
+      A: '1/cycle',
+      B: '2/cycle',
+      C: '3/cycle',
+      D: '5/cycle',
+      E: 'Unlimited',
+    },
+    difficulty: {
+      A: 'High',
+      B: 'Medium',
+      C: 'Standard',
+      D: 'Low',
+      E: 'TBD',
+    },
+    time: {
+      A: '2+ hours',
+      B: '45-90 min',
+      C: '15-45 min',
+      D: '<15 min',
+      E: 'TBD',
     },
   },
 
   // Task Form
   taskForm: {
     placeholder: 'Enter task content...',
-    addToInbox: 'Add to Inbox',
+    addToInbox: 'Add to Pending',
     project: 'Project',
     projectPlaceholder: 'e.g., Work, Study',
     context: 'Context',
@@ -45,7 +73,8 @@ export default {
     tags: 'Tags',
     tagsPlaceholder: 'Separate with commas',
     dueDate: 'Due Date',
-    thresholdDate: 'Start Date',
+    thresholdDate: 'Defer Until',
+    thresholdHint: 'Task hidden until this date',
     estimatedPomodoros: 'Estimated Pomodoros',
     recurrence: 'Recurrence',
     noRecurrence: 'No Recurrence',
@@ -56,22 +85,27 @@ export default {
     biweekly: 'Biweekly',
     monthly: 'Monthly',
     keyboardHint: 'Press Ctrl+Enter to add quickly',
+    syntaxHint: 'Syntax: +project @context #tag due:date t:defer est:count',
   },
 
   // Inbox Panel
   inbox: {
-    title: 'Inbox',
-    hint: 'Drag or click buttons to move tasks to priorities',
+    title: 'Pending',
+    subtitle: 'Capture ideas, sort later',
+    hint: 'Drag tasks to zones or click quick sort buttons',
+    dragHint: 'Drag to A/B/C/D zones to classify',
     moveTo: 'Move to',
-    empty: 'Inbox is empty',
-    emptyHint: 'Use the form above to add new tasks',
+    empty: 'Pending area is empty',
+    emptyHint: 'Add tasks using the input above',
     completed: 'Completed',
+    aging: 'Pending for {days} days',
+    agingWarning: 'Consider sorting soon',
   },
 
   // Task
   task: {
     add: 'Add Task',
-    addPlaceholder: 'Add task (+project @context #tag !A-E ~date 🍅count)',
+    addPlaceholder: 'Add task (+project @context #tag !A-E ~date)',
     edit: 'Edit Task',
     delete: 'Delete Task',
     complete: 'Complete',
@@ -84,8 +118,10 @@ export default {
     dueToday: 'Due Today',
     dueThisWeek: 'Due This Week',
     overdue: 'Overdue',
-    futureTask: 'Future Task',
-    thresholdNotReached: 'Not yet started',
+    futureTask: 'Deferred Task',
+    thresholdNotReached: 'Deferred',
+    startFocus: 'Start Focus',
+    pomodoroProgress: '{completed}/{estimated} pomodoros',
   },
 
   // Pomodoro
@@ -115,6 +151,7 @@ export default {
     reviewDay: 'Review Day',
     reflection: 'Weekly Review',
     nextFocus: 'Next Week Focus',
+    biDaily: 'Bi-daily',
     stats: {
       planned: 'Planned',
       completed: 'Completed',
@@ -135,6 +172,9 @@ export default {
     pomodorosTotal: 'Total Pomodoros',
     noReviews: 'No reviews yet',
     noReviewsHint: 'Create a review at the end of each period to track your progress',
+    redundancyNote: 'Higher is not always better',
+    redundancyHint: "100% completion rate indicates insufficient challenge - consider increasing difficulty",
+    healthyRange: 'Healthy range: 70-85%',
   },
 
   // Filter
@@ -145,7 +185,7 @@ export default {
     today: 'Today',
     thisWeek: 'This Week',
     overdue: 'Overdue',
-    future: 'Future',
+    future: 'Deferred',
     search: 'Search tasks...',
     searchResults: 'Search Results',
     noResults: 'No matching tasks found',
@@ -180,15 +220,52 @@ export default {
     },
     autoArchive: 'Auto Archive Days',
     autoArchiveDesc: 'Days until completed tasks are auto-archived',
-    eZoneAging: 'Inbox Aging Alert',
-    eZoneAgingDesc: 'Days until inbox tasks show aging warning',
+    eZoneAging: 'Pending Area Aging Alert',
+    eZoneAgingDesc: 'Days until pending tasks show aging warning',
     minutes: 'min',
     days: 'days',
+    methodology: {
+      title: 'Methodology Guide',
+      subtitle: '1-2-3-5 Bi-daily Cycle Model',
+      description: 'Task management system based on Ivy Lee Method and GTD theory',
+      model: {
+        title: 'Quota Model',
+        total: 'Per cycle total: 11 tasks (~5.5/day)',
+        ivyLee: 'Aligns with Ivy Lee Method of 6 tasks per day',
+        better: 'Better than traditional 1-3-5 rule (9 tasks/day)',
+      },
+      priorities: {
+        title: 'Priority Levels',
+        A: 'A (Core Challenge): 1 per cycle, 2+ hours deep focus, high-value tasks',
+        B: 'B (Key Progress): 2 per cycle, project milestones, 45-90 min',
+        C: 'C (Standard Task): 3 per cycle, daily work tasks, 15-45 min',
+        D: 'D (Quick Action): 5 per cycle, under 15 minutes',
+        E: 'E (Pending): Unlimited, ideas and tasks to be sorted',
+      },
+      highlander: {
+        title: 'Highlander Rule',
+        rule: 'Only one A-level task at a time',
+        reason: 'Ensures the most important task gets adequate focus and resources',
+      },
+      biDaily: {
+        title: 'Bi-daily Cycle',
+        pattern: 'Sun-Mon, Tue-Wed, Thu-Fri as work units',
+        review: 'Saturday as review day',
+        benefit: 'More flexible than daily, more compact than weekly planning',
+      },
+      redundancy: {
+        title: 'Redundancy & Robustness',
+        note: '100% completion is not the optimal goal',
+        reason: 'If you always complete everything, challenges are set too low',
+        target: 'Aim for 70-85% completion rate, leaving room for flexibility',
+      },
+    },
   },
 
   // Sidebar
   sidebar: {
     todayCompleted: 'Today Completed',
+    allTasks: 'All Tasks',
     projects: 'Projects',
     contexts: 'Contexts',
     tags: 'Tags',
@@ -202,6 +279,7 @@ export default {
     noProjects: 'No projects',
     noContexts: 'No contexts',
     collapse: 'Collapse sidebar',
+    showAll: 'Show all',
   },
 
   // Zone
@@ -209,12 +287,15 @@ export default {
     full: 'Quota full',
     dropHere: 'Drop tasks here',
     empty: 'No tasks',
+    quotaInfo: '{current}/{max}',
   },
 
   // View modes
   view: {
     zones: 'Zone View',
     kanban: 'Kanban View',
+    list: 'List View',
+    hybrid: 'Hybrid View',
   },
 
   // Actions
@@ -227,6 +308,8 @@ export default {
     close: 'Close',
     add: 'Add',
     done: 'Done',
+    expand: 'Expand',
+    collapse: 'Collapse',
   },
 
   // Messages
@@ -244,7 +327,8 @@ export default {
     dataExported: 'Data exported',
     dataImported: 'Data imported',
     backupCreated: 'Backup created',
-    taskAdded: 'Task added to inbox',
+    taskAdded: 'Task added to pending area',
+    taskMoved: 'Task moved to {priority} zone',
   },
 
   // Date/Time
@@ -256,6 +340,8 @@ export default {
     lastWeek: 'Last Week',
     nextWeek: 'Next Week',
     format: 'MM/DD/YYYY',
+    daysAgo: '{n} days ago',
+    daysLater: 'In {n} days',
   },
 
   // Syntax hints
@@ -265,9 +351,9 @@ export default {
     context: '@context',
     tag: '#tag',
     priority: '!A-E priority',
-    dueDate: '~date due',
-    threshold: 'thr:date start',
+    dueDate: 'due:date',
+    threshold: 't:date defer',
     recurrence: 'rec:pattern repeat',
-    pomodoro: '🍅count pomodoros',
+    pomodoro: 'est:count pomodoros',
   },
 };

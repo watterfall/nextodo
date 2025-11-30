@@ -2,7 +2,7 @@
   import { getTasksStore, setFilter, clearFilters } from '$lib/stores/tasks.svelte';
   import { getUIStore, toggleSidebar } from '$lib/stores/ui.svelte';
   import { getSettingsStore, toggleTheme } from '$lib/stores/settings.svelte';
-  import { t, availableLanguages, setLanguage, currentLanguage } from '$lib/i18n';
+  import { t, setLanguage, currentLanguage } from '$lib/i18n';
   import type { Language } from '$lib/types';
 
   interface Props {
@@ -15,6 +15,51 @@
   const tasks = getTasksStore();
   const ui = getUIStore();
   const settings = getSettingsStore();
+
+  // Extract unique projects, contexts, and tags from tasks
+  let allProjects = $derived([...new Set(tasks.tasks.flatMap(t => t.projects))].sort());
+  let allContexts = $derived([...new Set(tasks.tasks.flatMap(t => t.contexts))].sort());
+  let allTags = $derived([...new Set(tasks.tasks.flatMap(t => t.customTags))].sort());
+
+  // Count tasks per project/context/tag
+  function getProjectCount(project: string): number {
+    return tasks.tasks.filter(t => !t.completed && t.projects.includes(project)).length;
+  }
+  function getContextCount(context: string): number {
+    return tasks.tasks.filter(t => !t.completed && t.contexts.includes(context)).length;
+  }
+  function getTagCount(tag: string): number {
+    return tasks.tasks.filter(t => !t.completed && t.customTags.includes(tag)).length;
+  }
+
+  let projectsExpanded = $state(true);
+  let contextsExpanded = $state(true);
+  let tagsExpanded = $state(false);
+  let dueDatesExpanded = $state(false);
+
+  function handleProjectFilter(project: string) {
+    if (tasks.filter.project === project) {
+      setFilter({ project: null });
+    } else {
+      setFilter({ project });
+    }
+  }
+
+  function handleContextFilter(context: string) {
+    if (tasks.filter.context === context) {
+      setFilter({ context: null });
+    } else {
+      setFilter({ context });
+    }
+  }
+
+  function handleTagFilter(tag: string) {
+    if (tasks.filter.tag === tag) {
+      setFilter({ tag: null });
+    } else {
+      setFilter({ tag });
+    }
+  }
 
   function handleDueFilter(filter: 'today' | 'thisWeek' | 'overdue' | null) {
     if (tasks.filter.dueFilter === filter) {
@@ -33,6 +78,13 @@
   function getThemeIcon(): 'dark' | 'light' | 'system' {
     return settings.theme;
   }
+
+  const hasActiveFilter = $derived(
+    tasks.filter.project !== null ||
+    tasks.filter.context !== null ||
+    tasks.filter.tag !== null ||
+    tasks.filter.dueFilter !== null
+  );
 </script>
 
 <aside class="sidebar" class:collapsed={ui.sidebarCollapsed}>
@@ -65,42 +117,133 @@
         </div>
       </div>
 
-      <!-- Quick Filters -->
-      <div class="nav-section">
-        <div class="section-label">{t('sidebar.dueDates')}</div>
-        <div class="filter-buttons">
-          <button
-            class="filter-btn"
-            class:active={tasks.filter.dueFilter === 'today'}
-            class:has-items={tasks.dueTodayCount > 0}
-            onclick={() => handleDueFilter('today')}
-          >
-            <span class="filter-icon">📅</span>
-            <span class="filter-text">{t('sidebar.dueToday')}</span>
-            <span class="filter-count">{tasks.dueTodayCount}</span>
+      <!-- Projects Section -->
+      {#if allProjects.length > 0}
+        <div class="nav-section">
+          <button class="section-header" onclick={() => projectsExpanded = !projectsExpanded}>
+            <svg class="section-icon" class:rotated={projectsExpanded} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="9 18 15 12 9 6"></polyline>
+            </svg>
+            <span class="section-label">{t('sidebar.projects')}</span>
+            <span class="section-count">{allProjects.length}</span>
           </button>
-
-          <button
-            class="filter-btn"
-            class:active={tasks.filter.dueFilter === 'thisWeek'}
-            onclick={() => handleDueFilter('thisWeek')}
-          >
-            <span class="filter-icon">📆</span>
-            <span class="filter-text">{t('sidebar.dueThisWeek')}</span>
-            <span class="filter-count">{tasks.dueThisWeekCount}</span>
-          </button>
-
-          <button
-            class="filter-btn warning"
-            class:active={tasks.filter.dueFilter === 'overdue'}
-            class:has-items={tasks.overdueCount > 0}
-            onclick={() => handleDueFilter('overdue')}
-          >
-            <span class="filter-icon">⚠️</span>
-            <span class="filter-text">{t('sidebar.overdue')}</span>
-            <span class="filter-count">{tasks.overdueCount}</span>
-          </button>
+          {#if projectsExpanded}
+            <div class="filter-list">
+              {#each allProjects as project}
+                <button
+                  class="filter-item project"
+                  class:active={tasks.filter.project === project}
+                  onclick={() => handleProjectFilter(project)}
+                >
+                  <span class="item-icon">+</span>
+                  <span class="item-text">{project}</span>
+                  <span class="item-count">{getProjectCount(project)}</span>
+                </button>
+              {/each}
+            </div>
+          {/if}
         </div>
+      {/if}
+
+      <!-- Contexts Section -->
+      {#if allContexts.length > 0}
+        <div class="nav-section">
+          <button class="section-header" onclick={() => contextsExpanded = !contextsExpanded}>
+            <svg class="section-icon" class:rotated={contextsExpanded} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="9 18 15 12 9 6"></polyline>
+            </svg>
+            <span class="section-label">{t('sidebar.contexts')}</span>
+            <span class="section-count">{allContexts.length}</span>
+          </button>
+          {#if contextsExpanded}
+            <div class="filter-list">
+              {#each allContexts as context}
+                <button
+                  class="filter-item context"
+                  class:active={tasks.filter.context === context}
+                  onclick={() => handleContextFilter(context)}
+                >
+                  <span class="item-icon">@</span>
+                  <span class="item-text">{context}</span>
+                  <span class="item-count">{getContextCount(context)}</span>
+                </button>
+              {/each}
+            </div>
+          {/if}
+        </div>
+      {/if}
+
+      <!-- Tags Section -->
+      {#if allTags.length > 0}
+        <div class="nav-section">
+          <button class="section-header" onclick={() => tagsExpanded = !tagsExpanded}>
+            <svg class="section-icon" class:rotated={tagsExpanded} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="9 18 15 12 9 6"></polyline>
+            </svg>
+            <span class="section-label">{t('sidebar.tags')}</span>
+            <span class="section-count">{allTags.length}</span>
+          </button>
+          {#if tagsExpanded}
+            <div class="filter-list">
+              {#each allTags as tag}
+                <button
+                  class="filter-item tag"
+                  class:active={tasks.filter.tag === tag}
+                  onclick={() => handleTagFilter(tag)}
+                >
+                  <span class="item-icon">#</span>
+                  <span class="item-text">{tag}</span>
+                  <span class="item-count">{getTagCount(tag)}</span>
+                </button>
+              {/each}
+            </div>
+          {/if}
+        </div>
+      {/if}
+
+      <!-- Due Dates Section (de-emphasized) -->
+      <div class="nav-section muted">
+        <button class="section-header" onclick={() => dueDatesExpanded = !dueDatesExpanded}>
+          <svg class="section-icon" class:rotated={dueDatesExpanded} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="9 18 15 12 9 6"></polyline>
+          </svg>
+          <span class="section-label">{t('sidebar.dueDates')}</span>
+        </button>
+        {#if dueDatesExpanded}
+          <div class="filter-list">
+            <button
+              class="filter-item"
+              class:active={tasks.filter.dueFilter === 'today'}
+              onclick={() => handleDueFilter('today')}
+            >
+              <span class="item-icon">📅</span>
+              <span class="item-text">{t('sidebar.dueToday')}</span>
+              <span class="item-count">{tasks.dueTodayCount}</span>
+            </button>
+
+            <button
+              class="filter-item"
+              class:active={tasks.filter.dueFilter === 'thisWeek'}
+              onclick={() => handleDueFilter('thisWeek')}
+            >
+              <span class="item-icon">📆</span>
+              <span class="item-text">{t('sidebar.dueThisWeek')}</span>
+              <span class="item-count">{tasks.dueThisWeekCount}</span>
+            </button>
+
+            {#if tasks.overdueCount > 0}
+              <button
+                class="filter-item warning"
+                class:active={tasks.filter.dueFilter === 'overdue'}
+                onclick={() => handleDueFilter('overdue')}
+              >
+                <span class="item-icon">⚠️</span>
+                <span class="item-text">{t('sidebar.overdue')}</span>
+                <span class="item-count warning">{tasks.overdueCount}</span>
+              </button>
+            {/if}
+          </div>
+        {/if}
       </div>
 
       <!-- Review Button -->
@@ -110,13 +253,12 @@
           <polyline points="14 2 14 8 20 8"></polyline>
           <line x1="16" y1="13" x2="8" y2="13"></line>
           <line x1="16" y1="17" x2="8" y2="17"></line>
-          <polyline points="10 9 9 9 8 9"></polyline>
         </svg>
         <span>{t('review.title')}</span>
       </button>
 
       <!-- Clear Filter -->
-      {#if tasks.filter.project || tasks.filter.context || tasks.filter.tag || tasks.filter.dueFilter}
+      {#if hasActiveFilter}
         <button class="clear-btn" onclick={clearFilters}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -193,7 +335,7 @@
 
 <style>
   .sidebar {
-    width: 220px;
+    width: 240px;
     height: 100vh;
     background: var(--sidebar-bg);
     border-right: 1px solid var(--border-subtle);
@@ -298,76 +440,132 @@
     color: var(--success);
   }
 
+  /* Navigation Sections */
   .nav-section {
     display: flex;
     flex-direction: column;
+  }
+
+  .nav-section.muted {
+    opacity: 0.8;
+  }
+
+  .section-header {
+    display: flex;
+    align-items: center;
     gap: 8px;
+    padding: 8px 4px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    width: 100%;
+    text-align: left;
+  }
+
+  .section-header:hover {
+    color: var(--text-primary);
+  }
+
+  .section-icon {
+    width: 14px;
+    height: 14px;
+    transition: transform var(--transition-fast);
+    flex-shrink: 0;
+  }
+
+  .section-icon.rotated {
+    transform: rotate(90deg);
   }
 
   .section-label {
+    flex: 1;
     font-size: 11px;
     font-weight: 600;
-    color: var(--text-muted);
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    padding-left: 4px;
   }
 
-  .filter-buttons {
+  .section-count {
+    font-size: 10px;
+    color: var(--text-muted);
+    background: var(--hover-bg);
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+  }
+
+  .filter-list {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 2px;
+    padding-left: 6px;
   }
 
-  .filter-btn {
+  .filter-item {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     width: 100%;
-    padding: 10px 12px;
+    padding: 8px 10px;
     border: none;
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-sm);
     background: transparent;
     color: var(--text-secondary);
     cursor: pointer;
     text-align: left;
     transition: all var(--transition-fast);
+    font-size: 13px;
   }
 
-  .filter-btn:hover {
+  .filter-item:hover {
     background: var(--hover-bg);
     color: var(--text-primary);
   }
 
-  .filter-btn.active {
+  .filter-item.active {
     background: var(--primary-bg);
     color: var(--primary);
   }
 
-  .filter-btn.has-items .filter-count {
-    color: var(--primary);
-    font-weight: 600;
-  }
-
-  .filter-btn.warning.has-items .filter-count {
-    color: var(--error);
-  }
-
-  .filter-icon {
-    font-size: 14px;
-  }
-
-  .filter-text {
-    flex: 1;
-    font-size: 13px;
-    font-weight: 500;
-  }
-
-  .filter-count {
+  .item-icon {
     font-size: 12px;
+    font-weight: 600;
+    width: 16px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+
+  .filter-item.project .item-icon {
+    color: #b197fc;
+  }
+
+  .filter-item.context .item-icon {
+    color: #74c0fc;
+  }
+
+  .filter-item.tag .item-icon {
+    color: #63e6be;
+  }
+
+  .item-text {
+    flex: 1;
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .item-count {
+    font-size: 11px;
     color: var(--text-muted);
-    min-width: 20px;
+    min-width: 16px;
     text-align: right;
+  }
+
+  .item-count.warning {
+    color: var(--error);
+    font-weight: 600;
   }
 
   .action-btn {
@@ -410,7 +608,6 @@
     padding: 8px;
     border: none;
     border-radius: var(--radius-sm);
-    background: var(--error);
     background: rgba(var(--error-rgb, 255, 107, 107), 0.1);
     color: var(--error);
     cursor: pointer;
