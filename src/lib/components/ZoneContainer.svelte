@@ -133,36 +133,37 @@
   .zone-container {
     background: var(--zone-bg);
     border: 1px solid var(--zone-border);
-    border-radius: 12px;
-    padding: 16px;
-    transition: all 0.2s ease;
+    border-radius: var(--radius-lg);
+    padding: 14px 16px;
+    transition: all var(--transition-normal);
   }
 
   .zone-container.drop-target {
     border-color: var(--zone-color);
-    box-shadow: 0 0 0 2px var(--zone-color);
-    background: rgba(var(--zone-color-rgb), 0.1);
+    box-shadow: 0 0 0 2px var(--zone-color), var(--shadow-md);
+    background: rgba(var(--zone-color-rgb), 0.08);
   }
 
   .zone-container.is-priority-a {
     background: var(--zone-bg);
     position: relative;
     overflow: hidden;
+    border-color: var(--priority-a-border);
   }
 
   .zone-container.is-priority-a::before {
     content: '';
     position: absolute;
     inset: 0;
-    background: linear-gradient(135deg, rgba(88, 28, 135, 0.3), rgba(124, 58, 237, 0.1));
+    background: linear-gradient(135deg, rgba(218, 119, 242, 0.08), rgba(151, 117, 250, 0.03));
     pointer-events: none;
   }
 
   .zone-header {
     display: flex;
     align-items: center;
-    gap: 12px;
-    margin-bottom: 16px;
+    gap: 10px;
+    margin-bottom: 12px;
     position: relative;
   }
 
@@ -174,46 +175,50 @@
   }
 
   .zone-icon {
-    font-size: 18px;
+    font-size: 16px;
   }
 
   .zone-name {
     font-weight: 600;
-    font-size: 15px;
+    font-size: 14px;
     color: var(--text-primary);
+    letter-spacing: -0.01em;
   }
 
   .zone-priority {
-    font-size: 13px;
+    font-size: 12px;
     color: var(--zone-color);
-    font-weight: 500;
+    font-weight: 600;
+    opacity: 0.9;
   }
 
   .zone-quota {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
   }
 
   .quota-dots {
     display: flex;
-    gap: 4px;
+    gap: 3px;
   }
 
   .quota-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
+    width: 6px;
+    height: 6px;
+    border-radius: var(--radius-full);
     background: var(--border-color);
-    transition: background 0.2s ease;
+    transition: all var(--transition-fast);
   }
 
   .quota-dot.filled {
     background: var(--zone-color);
+    box-shadow: 0 0 4px var(--zone-color);
   }
 
   .quota-text {
-    font-size: 12px;
+    font-size: 11px;
+    font-weight: 500;
     color: var(--text-muted);
   }
 
@@ -222,64 +227,70 @@
     right: 0;
     top: 50%;
     transform: translateY(-50%);
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
+    width: 8px;
+    height: 8px;
+    border-radius: var(--radius-full);
     background: var(--zone-color);
-    animation: breathe 2s ease-in-out infinite;
+    animation: breathe 2.5s ease-in-out infinite;
   }
 
   .zone-tasks {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 6px;
   }
 
   .add-task-slot {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 8px;
-    padding: 16px;
-    border: 2px dashed var(--border-color);
-    border-radius: 8px;
+    gap: 6px;
+    padding: 12px;
+    border: 1px dashed var(--border-color);
+    border-radius: var(--radius-md);
     background: transparent;
     color: var(--text-muted);
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: all var(--transition-fast);
+    font-size: 12px;
   }
 
   .add-task-slot:hover {
     border-color: var(--zone-color);
     color: var(--zone-color);
-    background: rgba(var(--zone-color-rgb), 0.05);
+    background: rgba(var(--zone-color-rgb), 0.04);
   }
 
   .add-icon {
-    font-size: 20px;
-    font-weight: 300;
+    font-size: 16px;
+    font-weight: 400;
+    opacity: 0.7;
   }
 
   .add-text {
-    font-size: 13px;
+    font-size: 12px;
+    font-weight: 450;
   }
 
   .quota-full-hint {
     text-align: center;
-    padding: 12px;
-    font-size: 12px;
+    padding: 10px;
+    font-size: 11px;
     color: var(--text-muted);
     font-style: italic;
+    opacity: 0.8;
   }
 
   @keyframes breathe {
     0%, 100% {
-      opacity: 0.4;
-      box-shadow: 0 0 5px var(--zone-color);
+      opacity: 0.5;
+      transform: translateY(-50%) scale(1);
+      box-shadow: 0 0 4px var(--zone-color);
     }
     50% {
       opacity: 1;
-      box-shadow: 0 0 15px var(--zone-color), 0 0 30px var(--zone-color);
+      transform: translateY(-50%) scale(1.1);
+      box-shadow: 0 0 12px var(--zone-color), 0 0 20px var(--zone-color);
     }
   }
 </style>

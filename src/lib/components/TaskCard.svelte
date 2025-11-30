@@ -219,34 +219,37 @@
   .task-card {
     display: flex;
     flex-direction: column;
-    padding: 12px 16px;
+    padding: 14px 16px;
     background: var(--card-bg);
-    border: 1px solid var(--priority-border);
+    border: 1px solid var(--border-subtle);
     border-left: 3px solid var(--priority-color);
-    border-radius: 8px;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    border-radius: var(--radius-md);
+    transition: all var(--transition-normal);
     cursor: grab;
     position: relative;
   }
 
   .task-card:hover {
     background: var(--card-hover-bg);
-    transform: translateX(4px);
-    box-shadow: -4px 0 12px -2px var(--priority-bg);
+    border-color: var(--border-color);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-sm);
   }
 
   .task-card:focus-within {
-    outline: 2px solid var(--primary);
-    outline-offset: 2px;
+    outline: none;
+    box-shadow: 0 0 0 2px var(--primary-bg);
   }
 
   .task-card.active {
-    box-shadow: 0 0 0 2px var(--priority-color);
-    animation: pulse 2s infinite;
+    background: var(--priority-bg);
+    border-color: var(--priority-color);
+    box-shadow: 0 0 0 1px var(--priority-color);
+    animation: subtlePulse 2.5s ease-in-out infinite;
   }
 
   .task-card.completed {
-    opacity: 0.6;
+    opacity: 0.55;
     border-left-color: var(--text-muted);
   }
 
@@ -256,25 +259,35 @@
   }
 
   .task-card.dragging {
-    opacity: 0.5;
+    opacity: 0.4;
     cursor: grabbing;
+    transform: scale(0.98);
   }
 
   .task-card.overdue {
     border-left-color: var(--error);
   }
 
-  /* Dormant (threshold date not reached) - low contrast style */
+  .task-card.overdue::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: var(--error);
+    animation: overdueGlow 2s ease-in-out infinite;
+  }
+
+  /* Dormant (threshold date not reached) */
   .task-card.dormant {
-    opacity: 0.5;
+    opacity: 0.45;
     background: var(--bg-secondary);
     border-left-color: var(--text-muted);
-    filter: grayscale(30%);
   }
 
   .task-card.dormant:hover {
-    opacity: 0.7;
-    filter: grayscale(20%);
+    opacity: 0.65;
   }
 
   .task-card.dormant .task-text {
@@ -283,10 +296,11 @@
 
   .task-card.dormant .checkbox {
     border-color: var(--text-muted);
+    opacity: 0.7;
   }
 
   .task-card.compact {
-    padding: 8px 12px;
+    padding: 10px 14px;
   }
 
   .task-main {
@@ -297,43 +311,45 @@
 
   .checkbox {
     flex-shrink: 0;
-    width: 20px;
-    height: 20px;
+    width: 18px;
+    height: 18px;
+    margin-top: 2px;
     border: 2px solid var(--priority-color);
-    border-radius: 50%;
+    border-radius: var(--radius-full);
     background: transparent;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: all var(--transition-fast);
     padding: 0;
   }
 
   .checkbox:hover {
     background: var(--priority-bg);
-    transform: scale(1.1);
+    transform: scale(1.08);
   }
 
   .checkbox:active {
-    transform: scale(0.95);
+    transform: scale(0.92);
   }
 
   .checkbox.checked {
     background: var(--priority-color);
-    animation: checkmark 0.3s ease-out;
+    animation: checkComplete 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
   }
 
-  @keyframes checkmark {
+  @keyframes checkComplete {
     0% { transform: scale(0.8); }
-    50% { transform: scale(1.2); }
+    50% { transform: scale(1.15); }
     100% { transform: scale(1); }
   }
 
   .checkbox svg {
-    width: 12px;
-    height: 12px;
+    width: 10px;
+    height: 10px;
     color: white;
+    stroke-width: 3;
   }
 
   .task-content {
@@ -344,55 +360,61 @@
   .task-text {
     display: block;
     font-size: 14px;
+    font-weight: 450;
     color: var(--text-primary);
-    line-height: 1.4;
+    line-height: 1.5;
     word-break: break-word;
     cursor: text;
+    transition: color var(--transition-fast);
   }
 
   .edit-input {
     width: 100%;
-    padding: 4px 8px;
+    padding: 6px 10px;
     font-size: 14px;
     background: var(--input-bg);
     border: 1px solid var(--border-color);
-    border-radius: 4px;
+    border-radius: var(--radius-sm);
     color: var(--text-primary);
     outline: none;
+    transition: all var(--transition-fast);
   }
 
   .edit-input:focus {
     border-color: var(--primary);
+    box-shadow: 0 0 0 3px var(--primary-bg);
   }
 
   .task-meta {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
+    gap: 5px;
     margin-top: 8px;
   }
 
   .meta-tag {
     font-size: 11px;
-    padding: 2px 6px;
-    border-radius: 4px;
+    font-weight: 500;
+    padding: 2px 7px;
+    border-radius: var(--radius-sm);
     background: var(--tag-bg);
     color: var(--text-secondary);
+    transition: all var(--transition-fast);
   }
 
   .meta-tag.project {
-    background: rgba(139, 92, 246, 0.2);
-    color: #a78bfa;
+    background: rgba(177, 151, 252, 0.12);
+    color: #b197fc;
   }
 
   .meta-tag.context {
-    background: rgba(59, 130, 246, 0.2);
-    color: #60a5fa;
+    background: rgba(116, 192, 252, 0.12);
+    color: #74c0fc;
   }
 
   .meta-tag.custom {
-    background: rgba(16, 185, 129, 0.2);
-    color: #34d399;
+    background: rgba(99, 230, 190, 0.12);
+    color: #63e6be;
   }
 
   .pomodoro-indicator {
@@ -402,28 +424,37 @@
     gap: 4px;
     color: var(--text-muted);
     font-size: 12px;
+    font-weight: 500;
+    padding: 2px 6px;
+    background: var(--hover-bg);
+    border-radius: var(--radius-sm);
   }
 
   .pomodoro-count::before {
     content: '🍅';
-    margin-right: 2px;
+    margin-right: 3px;
+    font-size: 11px;
   }
 
   .task-footer {
     display: flex;
-    gap: 12px;
+    gap: 10px;
     margin-top: 8px;
-    padding-left: 32px;
-    font-size: 12px;
+    padding-left: 30px;
+    font-size: 11px;
   }
 
   .threshold-date {
     color: var(--text-muted);
     font-style: italic;
+    display: flex;
+    align-items: center;
+    gap: 3px;
   }
 
   .due-date {
     color: var(--text-muted);
+    font-weight: 500;
   }
 
   .due-date.overdue {
@@ -432,21 +463,28 @@
 
   .recurrence {
     color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 3px;
   }
 
   .recurrence::before {
-    content: '🔁 ';
+    content: '🔁';
+    font-size: 10px;
   }
 
   .task-actions {
     position: absolute;
-    right: 12px;
+    right: 10px;
     top: 50%;
     transform: translateY(-50%);
     display: flex;
-    gap: 4px;
+    gap: 3px;
     opacity: 0;
-    transition: opacity 0.2s ease;
+    transition: opacity var(--transition-fast);
+    background: var(--card-bg);
+    padding: 2px;
+    border-radius: var(--radius-sm);
   }
 
   .task-card:hover .task-actions {
@@ -454,65 +492,72 @@
   }
 
   .action-btn {
-    width: 28px;
-    height: 28px;
+    width: 26px;
+    height: 26px;
     border: none;
-    border-radius: 6px;
-    background: var(--action-btn-bg);
+    border-radius: var(--radius-sm);
+    background: transparent;
     color: var(--text-muted);
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 0.2s ease;
+    transition: all var(--transition-fast);
     padding: 0;
   }
 
   .action-btn:hover {
     color: var(--text-primary);
-    background: var(--action-btn-hover-bg);
+    background: var(--hover-bg);
   }
 
   .action-btn.play:hover {
     color: var(--success);
+    background: var(--success-bg);
   }
 
   .action-btn.delete:hover {
     color: var(--error);
+    background: var(--error-bg);
   }
 
   .action-btn:disabled {
-    opacity: 0.5;
+    opacity: 0.4;
     cursor: not-allowed;
   }
 
   .action-btn svg {
-    width: 14px;
-    height: 14px;
+    width: 13px;
+    height: 13px;
   }
 
   .priority-badge {
     position: absolute;
     top: 8px;
     right: 8px;
-    width: 20px;
-    height: 20px;
-    border-radius: 4px;
+    width: 18px;
+    height: 18px;
+    border-radius: var(--radius-sm);
     background: var(--priority-color);
     color: white;
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 600;
     display: flex;
     align-items: center;
     justify-content: center;
   }
 
-  @keyframes pulse {
+  @keyframes subtlePulse {
     0%, 100% {
-      box-shadow: 0 0 0 2px var(--priority-color);
+      box-shadow: 0 0 0 1px var(--priority-color);
     }
     50% {
-      box-shadow: 0 0 0 4px var(--priority-color), 0 0 20px var(--priority-color);
+      box-shadow: 0 0 0 2px var(--priority-color), 0 0 12px var(--priority-bg);
     }
+  }
+
+  @keyframes overdueGlow {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
   }
 </style>

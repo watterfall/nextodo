@@ -127,22 +127,23 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 16px;
-    padding: 24px;
+    gap: 14px;
+    padding: 20px;
     background: var(--card-bg);
-    border-radius: 16px;
-    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-subtle);
+    transition: all var(--transition-normal);
   }
 
   .pomodoro-timer.active {
     border-color: var(--primary);
-    box-shadow: 0 0 20px rgba(139, 92, 246, 0.1);
+    box-shadow: var(--shadow-glow);
   }
 
   .timer-display {
     position: relative;
-    width: 200px;
-    height: 200px;
+    width: 180px;
+    height: 180px;
   }
 
   .progress-ring {
@@ -151,7 +152,7 @@
   }
 
   .progress-bar {
-    transition: stroke-dashoffset 0.3s ease;
+    transition: stroke-dashoffset 0.35s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   .timer-content {
@@ -161,25 +162,26 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 4px;
+    gap: 3px;
   }
 
   .time {
-    font-size: 48px;
+    font-size: 42px;
     font-weight: 700;
     font-variant-numeric: tabular-nums;
     letter-spacing: -2px;
   }
 
   .state-label {
-    font-size: 14px;
+    font-size: 13px;
+    font-weight: 500;
     color: var(--text-secondary);
   }
 
   .active-task {
-    font-size: 12px;
+    font-size: 11px;
     color: var(--text-muted);
-    max-width: 150px;
+    max-width: 140px;
     text-align: center;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -188,25 +190,25 @@
 
   .timer-controls {
     display: flex;
-    gap: 12px;
-    min-height: 48px;
+    gap: 10px;
+    min-height: 44px;
   }
 
   .control-btn {
-    width: 48px;
-    height: 48px;
+    width: 44px;
+    height: 44px;
     border: none;
-    border-radius: 50%;
+    border-radius: var(--radius-full);
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 0.2s ease;
+    transition: all var(--transition-fast);
   }
 
   .control-btn svg {
-    width: 20px;
-    height: 20px;
+    width: 18px;
+    height: 18px;
   }
 
   .control-btn.play,
@@ -218,18 +220,20 @@
   .control-btn.play:hover,
   .control-btn.pause:hover {
     background: var(--primary-hover);
-    transform: scale(1.1);
+    transform: scale(1.08);
+    box-shadow: var(--shadow-glow);
   }
 
   .control-btn.skip {
-    background: var(--card-bg);
+    background: var(--hover-bg);
     color: var(--text-muted);
-    border: 1px solid var(--border-color);
+    border: 1px solid var(--border-subtle);
   }
 
   .control-btn.skip:hover {
-    background: var(--hover-bg);
+    background: var(--action-btn-hover-bg);
     color: var(--text-primary);
+    border-color: var(--border-color);
   }
 
   .control-btn.stop {
@@ -241,24 +245,26 @@
   .control-btn.stop:hover {
     background: var(--error);
     color: white;
+    transform: scale(1.05);
   }
 
   .session-count {
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 8px 16px;
-    background: var(--tag-bg);
-    border-radius: 20px;
+    padding: 8px 14px;
+    background: var(--hover-bg);
+    border-radius: var(--radius-full);
   }
 
   .count-label {
-    font-size: 12px;
+    font-size: 11px;
+    font-weight: 500;
     color: var(--text-muted);
   }
 
   .count-value {
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 600;
     color: var(--text-primary);
   }
@@ -267,16 +273,17 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 8px;
+    gap: 6px;
     width: 100%;
-    padding: 12px 16px;
+    padding: 10px 14px;
     border: 1px dashed var(--border-color);
-    border-radius: 8px;
+    border-radius: var(--radius-md);
     background: transparent;
     color: var(--text-secondary);
     cursor: pointer;
-    font-size: 13px;
-    transition: all 0.2s ease;
+    font-size: 12px;
+    font-weight: 500;
+    transition: all var(--transition-fast);
   }
 
   .immersive-btn:hover {
@@ -286,7 +293,7 @@
   }
 
   .immersive-btn svg {
-    width: 16px;
-    height: 16px;
+    width: 14px;
+    height: 14px;
   }
 </style>
