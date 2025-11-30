@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import Sidebar from '$lib/components/Sidebar.svelte';
   import ZoneContainer from '$lib/components/ZoneContainer.svelte';
   import TaskInput from '$lib/components/TaskInput.svelte';
@@ -8,18 +8,22 @@
   import UnitNav from '$lib/components/UnitNav.svelte';
   import ReviewPanel from '$lib/components/ReviewPanel.svelte';
   import Confetti from '$lib/components/Confetti.svelte';
+  import ImmersivePomodoro from '$lib/components/ImmersivePomodoro.svelte';
 
   import {
     initializeData,
     getTasksStore,
     setSearchQuery,
-    incrementPomodoro
+    incrementPomodoro,
+    reloadData
   } from '$lib/stores/tasks.svelte';
   import {
     getUIStore,
     initKeyboardShortcuts,
     hideToast,
-    closeSearch
+    closeSearch,
+    exitImmersiveMode,
+    enterImmersiveMode
   } from '$lib/stores/ui.svelte';
   import {
     initPomodoro,
@@ -27,12 +31,14 @@
   } from '$lib/stores/pomodoro.svelte';
   import {
     initSettings,
-    getSettingsStore
+    getSettingsStore,
+    toggleTheme
   } from '$lib/stores/settings.svelte';
   import { initReviews } from '$lib/stores/reviews.svelte';
-  import { saveAppData } from '$lib/utils/storage';
+  import { saveAppData, setupFileWatcher } from '$lib/utils/storage';
+  import { initI18n, t, availableLanguages, setLanguage } from '$lib/i18n';
 
-  import type { Priority } from '$lib/types';
+  import type { Priority, Language } from '$lib/types';
 
   const tasks = getTasksStore();
   const ui = getUIStore();
@@ -42,8 +48,12 @@
   let showConfetti = $state(false);
   let searchInput = $state('');
   let isInitialized = $state(false);
+  let unlistenFileWatcher: (() => void) | null = null;
 
   onMount(async () => {
+    // Initialize i18n first
+    initI18n();
+
     // Initialize data
     await initializeData();
 
@@ -69,6 +79,12 @@
     // Initialize keyboard shortcuts
     initKeyboardShortcuts();
 
+    // Setup file watcher for external changes
+    unlistenFileWatcher = await setupFileWatcher(async (fileType) => {
+      console.log('External file change detected:', fileType);
+      await reloadData(fileType);
+    });
+
     // Listen for pomodoro complete events
     window.addEventListener('pomodoro-complete', ((e: CustomEvent) => {
       incrementPomodoro(e.detail.taskId);
@@ -77,6 +93,12 @@
     }) as EventListener);
 
     isInitialized = true;
+  });
+
+  onDestroy(() => {
+    if (unlistenFileWatcher) {
+      unlistenFileWatcher();
+    }
   });
 
   function handleSearchInput(e: Event) {
@@ -93,11 +115,22 @@
     }
   }
 
+  function handleImmersiveMode() {
+    if (pomodoro.state !== 'idle') {
+      enterImmersiveMode();
+    }
+  }
+
+  function getThemeIcon(): string {
+    if (settings.theme === 'system') return 'system';
+    return settings.effectiveTheme;
+  }
+
   const priorities: Priority[] = ['A', 'B', 'C', 'D', 'E'];
 </script>
 
 <svelte:head>
-  <title>FocusFlow - 专注力优先的任务管理器</title>
+  <title>FocusFlow - {t('app.tagline')}</title>
 </svelte:head>
 
 {#if tasks.isLoading || !isInitialized}
@@ -105,7 +138,7 @@
     <div class="loading-content">
       <span class="loading-icon">🍅</span>
       <div class="loading-spinner"></div>
-      <span class="loading-text">加载中...</span>
+      <span class="loading-text">{t('app.loading')}</span>
     </div>
   </div>
 {:else}
@@ -124,13 +157,40 @@
             <circle cx="11" cy="11" r="8"></circle>
             <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
           </svg>
-          <span class="search-placeholder">搜索任务...</span>
+          <span class="search-placeholder">{t('filter.search')}</span>
           <kbd>⌘K</kbd>
         </button>
       </div>
 
       <div class="header-right">
         <QuotaMeter />
+
+        <!-- Theme Toggle -->
+        <button class="theme-toggle" onclick={toggleTheme} title="切换主题">
+          {#if getThemeIcon() === 'dark'}
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+            </svg>
+          {:else if getThemeIcon() === 'light'}
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="5"></circle>
+              <line x1="12" y1="1" x2="12" y2="3"></line>
+              <line x1="12" y1="21" x2="12" y2="23"></line>
+              <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+              <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+              <line x1="1" y1="12" x2="3" y2="12"></line>
+              <line x1="21" y1="12" x2="23" y2="12"></line>
+              <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+              <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+            </svg>
+          {:else}
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+              <line x1="8" y1="21" x2="16" y2="21"></line>
+              <line x1="12" y1="17" x2="12" y2="21"></line>
+            </svg>
+          {/if}
+        </button>
       </div>
     </header>
 
@@ -139,7 +199,7 @@
       <!-- Left: Task Zones -->
       <div class="zones-panel">
         <div class="main-input">
-          <TaskInput placeholder="快速添加任务 (+项目 @上下文 #标签 !A-E ~日期 🍅数量)" />
+          <TaskInput placeholder={t('task.addPlaceholder')} />
         </div>
 
         <div class="zones-grid">
@@ -154,7 +214,7 @@
 
       <!-- Right: Timer & Reviews -->
       <div class="side-panel">
-        <PomodoroTimer />
+        <PomodoroTimer onEnterImmersive={handleImmersiveMode} />
 
         {#if tasks.currentUnit.isReviewDay}
           <ReviewPanel />
@@ -175,7 +235,7 @@
           <input
             type="text"
             class="search-input"
-            placeholder="搜索任务、项目、标签..."
+            placeholder={t('filter.search')}
             value={searchInput}
             oninput={handleSearchInput}
             onkeydown={handleSearchKeydown}
@@ -194,7 +254,7 @@
             </div>
           {:else}
             <div class="search-empty">
-              {searchInput ? '未找到匹配的任务' : '输入关键词开始搜索'}
+              {searchInput ? t('filter.noResults') : t('filter.search')}
             </div>
           {/each}
         </div>
@@ -219,6 +279,11 @@
 
   <!-- Confetti -->
   <Confetti active={showConfetti} />
+
+  <!-- Immersive Pomodoro Mode -->
+  {#if ui.isImmersiveMode}
+    <ImmersivePomodoro onClose={exitImmersiveMode} />
+  {/if}
 {/if}
 
 <style>
@@ -286,6 +351,9 @@
 
   .header-right {
     flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
   }
 
   .search-trigger {
@@ -383,6 +451,29 @@
   .result-tag.project {
     background: rgba(139, 92, 246, 0.2);
     color: #a78bfa;
+  }
+
+  /* Theme toggle in header */
+  .theme-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    background: var(--action-btn-bg);
+    color: var(--text-secondary);
+    transition: all 0.15s ease;
+  }
+
+  .theme-toggle:hover {
+    background: var(--action-btn-hover-bg);
+    color: var(--text-primary);
+  }
+
+  .theme-toggle svg {
+    width: 18px;
+    height: 18px;
   }
 
   /* Responsive */

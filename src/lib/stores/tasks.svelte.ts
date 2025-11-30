@@ -1,6 +1,6 @@
-import type { Task, Priority, FilterState, UnitInfo, AppData } from '$lib/types';
-import { createEmptyTask, createDefaultAppData } from '$lib/types';
-import { loadAppData, saveAppData } from '$lib/utils/storage';
+import type { Task, Priority, FilterState, UnitInfo, AppData, ActiveData, ArchiveData, PomodoroHistoryData } from '$lib/types';
+import { createEmptyTask, createDefaultAppData, isThresholdPassed, calculateEZoneAge } from '$lib/types';
+import { loadAppData, saveAppData, reloadFile } from '$lib/utils/storage';
 import { applyHighlanderRule, canAddTask, validateQuota } from '$lib/utils/quota';
 import { createTaskFromInput } from '$lib/utils/parser';
 import { processRecurringTasks, createNextOccurrence } from '$lib/utils/recurrence';
@@ -20,7 +20,8 @@ let filter = $state<FilterState>({
   context: null,
   tag: null,
   showCompleted: false,
-  dueFilter: null
+  dueFilter: null,
+  showFutureTasks: false
 });
 
 // Search query
@@ -44,6 +45,54 @@ export async function initializeData(): Promise<void> {
     console.error('Failed to initialize data:', error);
   } finally {
     isLoading = false;
+  }
+}
+
+// Reload specific data file (called when file changes externally)
+export async function reloadData(fileType: string): Promise<void> {
+  try {
+    const data = await reloadFile(fileType);
+    if (!data) return;
+
+    switch (fileType) {
+      case 'active': {
+        const activeData = data as ActiveData;
+        appData = {
+          ...appData,
+          version: activeData.version,
+          lastModified: activeData.lastModified,
+          tasks: activeData.tasks || [],
+          trash: activeData.trash || [],
+          reviews: activeData.reviews || [],
+          customTagGroups: activeData.customTagGroups || appData.customTagGroups,
+          settings: activeData.settings || appData.settings
+        };
+        break;
+      }
+      case 'archive': {
+        const archiveData = data as ArchiveData;
+        appData = {
+          ...appData,
+          archive: archiveData.tasks || []
+        };
+        break;
+      }
+      case 'pomodoro_history': {
+        const pomodoroData = data as PomodoroHistoryData;
+        appData = {
+          ...appData,
+          pomodoroHistory: pomodoroData.sessions || []
+        };
+        break;
+      }
+      case 'legacy': {
+        // Full reload for legacy file
+        appData = await loadAppData();
+        break;
+      }
+    }
+  } catch (error) {
+    console.error('Failed to reload data:', error);
   }
 }
 
@@ -230,7 +279,8 @@ export function clearFilters(): void {
     context: null,
     tag: null,
     showCompleted: false,
-    dueFilter: null
+    dueFilter: null,
+    showFutureTasks: false
   };
 }
 
@@ -246,6 +296,14 @@ export function setCurrentUnit(unit: UnitInfo): void {
 // Derived values
 const filteredTasks = $derived.by(() => {
   let tasks = appData.tasks;
+
+  // Filter by threshold date (unless showing future tasks)
+  if (!filter.showFutureTasks) {
+    tasks = tasks.filter(t => isThresholdPassed(t));
+  } else {
+    // Show only future tasks
+    tasks = tasks.filter(t => !isThresholdPassed(t));
+  }
 
   // Apply search
   if (searchQuery) {
@@ -358,6 +416,10 @@ const overdueCount = $derived(
   appData.tasks.filter(t => !t.completed && isOverdue(t.dueDate)).length
 );
 
+const futureTasksCount = $derived(
+  appData.tasks.filter(t => !t.completed && !isThresholdPassed(t)).length
+);
+
 const dailyRecurringCount = $derived(
   appData.tasks.filter(t => !t.completed && t.recurrence?.pattern === '1d').length
 );
@@ -369,6 +431,15 @@ const weeklyRecurringCount = $derived(
 const completedTodayCount = $derived(
   appData.tasks.filter(t => t.completed && t.completedAt && isToday(t.completedAt)).length
 );
+
+// E zone aging tasks
+const agingEZoneTasks = $derived.by(() => {
+  const eZoneTasks = appData.tasks.filter(t => t.priority === 'E' && !t.completed);
+  return eZoneTasks.map(task => ({
+    ...task,
+    ageInUnits: calculateEZoneAge(task, 7)
+  }));
+});
 
 // Export store interface
 export function getTasksStore() {
@@ -391,9 +462,11 @@ export function getTasksStore() {
     get dueTodayCount() { return dueTodayCount; },
     get dueThisWeekCount() { return dueThisWeekCount; },
     get overdueCount() { return overdueCount; },
+    get futureTasksCount() { return futureTasksCount; },
     get dailyRecurringCount() { return dailyRecurringCount; },
     get weeklyRecurringCount() { return weeklyRecurringCount; },
     get completedTodayCount() { return completedTodayCount; },
+    get agingEZoneTasks() { return agingEZoneTasks; },
     get customTagGroups() { return appData.customTagGroups; },
     get settings() { return appData.settings; }
   };

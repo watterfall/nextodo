@@ -2,7 +2,6 @@ import type { ViewMode, Priority } from '$lib/types';
 
 // UI State
 let sidebarCollapsed = $state(false);
-let theme = $state<'dark' | 'light'>('dark');
 let viewMode = $state<ViewMode>('zones');
 let activeModal = $state<string | null>(null);
 let modalData = $state<unknown>(null);
@@ -12,6 +11,9 @@ let isSearchOpen = $state(false);
 let editingTaskId = $state<string | null>(null);
 let draggedTaskId = $state<string | null>(null);
 let dropTargetPriority = $state<Priority | null>(null);
+
+// Immersive mode
+let isImmersiveMode = $state(false);
 
 // Toast timeout
 let toastTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -23,20 +25,6 @@ export function toggleSidebar(): void {
 
 export function setSidebarCollapsed(collapsed: boolean): void {
   sidebarCollapsed = collapsed;
-}
-
-// Theme
-export function setTheme(newTheme: 'dark' | 'light'): void {
-  theme = newTheme;
-
-  // Apply to document
-  if (typeof document !== 'undefined') {
-    document.documentElement.setAttribute('data-theme', newTheme);
-  }
-}
-
-export function toggleTheme(): void {
-  setTheme(theme === 'dark' ? 'light' : 'dark');
 }
 
 // View mode
@@ -111,6 +99,19 @@ export function clearDragState(): void {
   dropTargetPriority = null;
 }
 
+// Immersive mode
+export function enterImmersiveMode(): void {
+  isImmersiveMode = true;
+}
+
+export function exitImmersiveMode(): void {
+  isImmersiveMode = false;
+}
+
+export function toggleImmersiveMode(): void {
+  isImmersiveMode = !isImmersiveMode;
+}
+
 // Keyboard shortcuts
 export function initKeyboardShortcuts(): void {
   if (typeof window === 'undefined') return;
@@ -122,9 +123,11 @@ export function initKeyboardShortcuts(): void {
       toggleSearch();
     }
 
-    // Escape to close modals/search
+    // Escape to close modals/search/immersive
     if (e.key === 'Escape') {
-      if (activeModal) {
+      if (isImmersiveMode) {
+        exitImmersiveMode();
+      } else if (activeModal) {
         closeModal();
       } else if (isSearchOpen) {
         closeSearch();
@@ -138,6 +141,12 @@ export function initKeyboardShortcuts(): void {
       e.preventDefault();
       toggleSidebar();
     }
+
+    // Cmd/Ctrl + Shift + F for immersive mode
+    if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'f') {
+      e.preventDefault();
+      toggleImmersiveMode();
+    }
   });
 }
 
@@ -145,15 +154,17 @@ export function initKeyboardShortcuts(): void {
 export function getUIStore() {
   return {
     get sidebarCollapsed() { return sidebarCollapsed; },
-    get theme() { return theme; },
+    set sidebarCollapsed(v: boolean) { sidebarCollapsed = v; },
     get viewMode() { return viewMode; },
     get activeModal() { return activeModal; },
     get modalData() { return modalData; },
     get toastMessage() { return toastMessage; },
     get toastType() { return toastType; },
     get isSearchOpen() { return isSearchOpen; },
+    set isSearchOpen(v: boolean) { isSearchOpen = v; },
     get editingTaskId() { return editingTaskId; },
     get draggedTaskId() { return draggedTaskId; },
-    get dropTargetPriority() { return dropTargetPriority; }
+    get dropTargetPriority() { return dropTargetPriority; },
+    get isImmersiveMode() { return isImmersiveMode; }
   };
 }

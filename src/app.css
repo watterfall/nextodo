@@ -15,6 +15,14 @@ html {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Theme transition for smooth switching */
+html.theme-transition,
+html.theme-transition *,
+html.theme-transition *::before,
+html.theme-transition *::after {
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease !important;
+}
+
 /* Theme Variables - Dark Mode (Default) */
 :root,
 [data-theme="dark"] {
@@ -514,4 +522,114 @@ kbd {
   .toast {
     width: 100%;
   }
+}
+
+/* Syntax Highlighting */
+.syntax-priority {
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.syntax-project {
+  color: #a78bfa;
+  background: rgba(167, 139, 250, 0.15);
+  padding: 0 4px;
+  border-radius: 3px;
+}
+
+.syntax-context {
+  color: #60a5fa;
+  background: rgba(96, 165, 250, 0.15);
+  padding: 0 4px;
+  border-radius: 3px;
+}
+
+.syntax-tag {
+  color: #34d399;
+  background: rgba(52, 211, 153, 0.15);
+  padding: 0 4px;
+  border-radius: 3px;
+}
+
+.syntax-due {
+  color: #f59e0b;
+  font-weight: 500;
+}
+
+.syntax-threshold {
+  color: #8b5cf6;
+  font-weight: 500;
+}
+
+.syntax-recurrence {
+  color: #ec4899;
+  font-weight: 500;
+}
+
+.syntax-pomodoro {
+  color: #ef4444;
+  font-weight: 500;
+}
+
+/* Monospace font for timer */
+.font-mono {
+  font-family: 'SF Mono', 'Monaco', 'Menlo', 'Consolas', monospace;
+}
+
+/* Future task indicator */
+.task-future {
+  opacity: 0.6;
+  border-style: dashed !important;
+}
+
+/* E zone aging */
+.task-aging-warning {
+  opacity: 0.5;
+}
+
+.task-aging-danger {
+  opacity: 0.4;
+  background: rgba(239, 68, 68, 0.05) !important;
+}
+
+/* Theme toggle button */
+.theme-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  background: var(--action-btn-bg);
+  color: var(--text-secondary);
+  transition: all var(--transition-fast);
+}
+
+.theme-toggle:hover {
+  background: var(--action-btn-hover-bg);
+  color: var(--text-primary);
+}
+
+.theme-toggle svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* Language selector */
+.language-selector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: var(--radius-md);
+  background: var(--action-btn-bg);
+  color: var(--text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.language-selector:hover {
+  background: var(--action-btn-hover-bg);
+  color: var(--text-primary);
 }
