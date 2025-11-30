@@ -3,9 +3,15 @@
   import { PRIORITY_CONFIG } from '$lib/types';
   import TaskCard from './TaskCard.svelte';
   import { getTasksStore, changePriority } from '$lib/stores/tasks.svelte';
+  import { getPomodoroStore } from '$lib/stores/pomodoro.svelte';
   import { t } from '$lib/i18n';
 
   const tasks = getTasksStore();
+  const pomodoro = getPomodoroStore();
+
+  // Focus mode - dim inbox when pomodoro is active on non-inbox task
+  let isFocusMode = $derived(pomodoro.state === 'work' && pomodoro.activeTaskId !== null);
+  let hasActiveTask = $derived(tasks.tasksByPriority['E'].some(t => t.id === pomodoro.activeTaskId));
 
   let inboxTasks = $derived(tasks.tasksByPriority['E'].filter(t => !t.completed));
   let completedTasks = $derived(tasks.tasksByPriority['E'].filter(t => t.completed));
@@ -32,7 +38,7 @@
   }
 </script>
 
-<div class="inbox-panel">
+<div class="inbox-panel" class:focus-dimmed={isFocusMode && !hasActiveTask}>
   <div class="panel-header">
     <div class="header-title">
       <span class="title-icon">📥</span>
@@ -127,6 +133,13 @@
     border: 1px solid var(--border-subtle);
     border-radius: var(--radius-lg);
     overflow: hidden;
+    transition: all 0.4s ease;
+  }
+
+  .inbox-panel.focus-dimmed {
+    opacity: 0.35;
+    filter: grayscale(0.3);
+    pointer-events: none;
   }
 
   .panel-header {

@@ -4,6 +4,7 @@
   import TaskCard from './TaskCard.svelte';
   import { getUIStore, setDropTarget, clearDragState } from '$lib/stores/ui.svelte';
   import { changePriority, getTasksStore } from '$lib/stores/tasks.svelte';
+  import { getPomodoroStore } from '$lib/stores/pomodoro.svelte';
   import { countActiveByPriority } from '$lib/utils/quota';
   import { t } from '$lib/i18n';
 
@@ -14,6 +15,8 @@
 
   let { priority, tasks }: Props = $props();
 
+  const pomodoro = getPomodoroStore();
+
   const config = PRIORITY_CONFIG[priority];
   const ui = getUIStore();
   const tasksStore = getTasksStore();
@@ -23,6 +26,10 @@
   const counts = $derived(countActiveByPriority(tasksStore.tasks));
   const remaining = $derived(config.quota === Infinity ? Infinity : config.quota - counts[priority]);
   const isFull = $derived(priority !== 'E' && remaining <= 0);
+
+  // Check if pomodoro is actively running on a task
+  const isFocusMode = $derived(pomodoro.state === 'work' && pomodoro.activeTaskId !== null);
+  const hasActiveTask = $derived(tasks.some(t => t.id === pomodoro.activeTaskId));
 
   // Filter out completed tasks for display
   let activeTasks = $derived(tasks.filter(t => !t.completed));
@@ -51,41 +58,25 @@
 </script>
 
 <div
-  class="zone-container"
+  class="zone-container zone-{priority.toLowerCase()}"
   class:drop-target={isDropTarget}
   class:is-priority-a={priority === 'A'}
   class:is-full={isFull}
+  class:focus-dimmed={isFocusMode && !hasActiveTask}
   style:--zone-color={config.color}
   style:--zone-bg={config.bgColor}
   style:--zone-border={config.borderColor}
+  style:--zone-columns={priority === 'B' ? 2 : priority === 'C' ? 3 : priority === 'D' ? 5 : 1}
   ondragover={handleDragOver}
   ondragleave={handleDragLeave}
   ondrop={handleDrop}
   role="region"
   aria-label="{config.name}"
 >
-  <div class="zone-header">
+  <div class="zone-header" title={config.description}>
     <div class="zone-title">
-      {#if priority === 'A'}
-        <span class="zone-icon">🎯</span>
-      {:else if priority === 'B'}
-        <span class="zone-icon">⚡</span>
-      {:else if priority === 'C'}
-        <span class="zone-icon">📋</span>
-      {:else if priority === 'D'}
-        <span class="zone-icon">⏱️</span>
-      {/if}
-      <span class="zone-name">{config.name}</span>
-      <span class="zone-priority">({priority})</span>
-    </div>
-
-    <div class="zone-quota">
-      <span class="quota-dots">
-        {#each Array(config.quota) as _, i}
-          <span class="quota-dot" class:filled={i < counts[priority]}></span>
-        {/each}
-      </span>
-      <span class="quota-text">{counts[priority]}/{config.quota}</span>
+      <span class="zone-letter" style:background={config.color}>{priority}</span>
+      <span class="zone-quota-inline">{counts[priority]}/{config.quota}</span>
     </div>
 
     {#if priority === 'A' && activeTasks.length > 0}
@@ -127,10 +118,10 @@
   .zone-container {
     background: var(--zone-bg);
     border: 1px solid var(--zone-border);
-    border-radius: var(--radius-lg);
-    padding: 14px 16px;
+    border-radius: var(--radius-md);
+    padding: 12px;
     transition: all var(--transition-normal);
-    min-height: 80px;
+    min-height: 60px;
   }
 
   .zone-container.drop-target {
@@ -141,6 +132,18 @@
 
   .zone-container.is-full {
     opacity: 0.7;
+  }
+
+  /* Focus mode dimming - when pomodoro is active on another task */
+  .zone-container.focus-dimmed {
+    opacity: 0.35;
+    filter: grayscale(0.3);
+    pointer-events: none;
+    transition: all 0.4s ease;
+  }
+
+  .zone-container.focus-dimmed:hover {
+    opacity: 0.5;
   }
 
   .zone-container.is-priority-a {
@@ -161,62 +164,34 @@
   .zone-header {
     display: flex;
     align-items: center;
-    gap: 10px;
-    margin-bottom: 12px;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 10px;
     position: relative;
+    cursor: help;
   }
 
   .zone-title {
     display: flex;
     align-items: center;
     gap: 8px;
-    flex: 1;
   }
 
-  .zone-icon {
-    font-size: 16px;
-  }
-
-  .zone-name {
-    font-weight: 600;
-    font-size: 14px;
-    color: var(--text-primary);
-    letter-spacing: -0.01em;
-  }
-
-  .zone-priority {
-    font-size: 12px;
-    color: var(--zone-color);
-    font-weight: 600;
-    opacity: 0.9;
-  }
-
-  .zone-quota {
-    display: flex;
+  .zone-letter {
+    display: inline-flex;
     align-items: center;
-    gap: 6px;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 700;
+    color: white;
+    letter-spacing: 0;
   }
 
-  .quota-dots {
-    display: flex;
-    gap: 3px;
-  }
-
-  .quota-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: var(--radius-full);
-    background: var(--border-color);
-    transition: all var(--transition-fast);
-  }
-
-  .quota-dot.filled {
-    background: var(--zone-color);
-    box-shadow: 0 0 4px var(--zone-color);
-  }
-
-  .quota-text {
-    font-size: 11px;
+  .zone-quota-inline {
+    font-size: 12px;
     font-weight: 500;
     color: var(--text-muted);
   }
@@ -234,25 +209,46 @@
   }
 
   .zone-tasks {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
+    display: grid;
+    grid-template-columns: repeat(var(--zone-columns, 1), 1fr);
+    gap: 8px;
+  }
+
+  /* Responsive: reduce columns on smaller screens */
+  @media (max-width: 1200px) {
+    .zone-d .zone-tasks {
+      grid-template-columns: repeat(3, 1fr);
+    }
+  }
+
+  @media (max-width: 900px) {
+    .zone-b .zone-tasks,
+    .zone-c .zone-tasks,
+    .zone-d .zone-tasks {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+  @media (max-width: 600px) {
+    .zone-tasks {
+      grid-template-columns: 1fr !important;
+    }
   }
 
   .empty-zone {
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 20px;
+    padding: 16px;
     border: 1px dashed var(--border-color);
-    border-radius: var(--radius-md);
-    min-height: 60px;
+    border-radius: var(--radius-sm);
+    min-height: 40px;
+    opacity: 0.6;
   }
 
   .empty-text {
-    font-size: 12px;
+    font-size: 11px;
     color: var(--text-muted);
-    font-style: italic;
   }
 
   .completed-section {

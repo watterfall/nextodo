@@ -105,8 +105,18 @@
       bind:value={content}
       onkeydown={handleKeydown}
       onfocus={() => isExpanded = true}
-      placeholder={t('taskForm.placeholder')}
+      placeholder={isExpanded ? t('taskForm.placeholder') : `${t('taskForm.placeholder')} (+project @context #tag due:date est:4)`}
     />
+
+    <button
+      class="expand-btn"
+      onclick={() => isExpanded = !isExpanded}
+      title={isExpanded ? t('action.close') : 'More options'}
+    >
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class:rotated={isExpanded}>
+        <polyline points="6 9 12 15 18 9"></polyline>
+      </svg>
+    </button>
 
     <button
       class="submit-btn"
@@ -117,103 +127,70 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M12 5v14M5 12h14"></path>
       </svg>
-      <span class="btn-text">{t('taskForm.addToInbox')}</span>
     </button>
   </div>
 
   {#if isExpanded}
     <div class="form-details">
-      <div class="form-row">
+      <div class="form-grid">
         <div class="form-field">
-          <label class="field-label">
-            <span class="label-icon project">+</span>
-            {t('taskForm.project')}
-          </label>
           <input
             type="text"
             class="field-input"
             bind:value={project}
-            placeholder={t('taskForm.projectPlaceholder')}
+            placeholder="+project"
           />
         </div>
 
         <div class="form-field">
-          <label class="field-label">
-            <span class="label-icon context">@</span>
-            {t('taskForm.context')}
-          </label>
           <input
             type="text"
             class="field-input"
             bind:value={context}
-            placeholder={t('taskForm.contextPlaceholder')}
+            placeholder="@context"
           />
         </div>
-      </div>
 
-      <div class="form-row">
         <div class="form-field">
-          <label class="field-label">
-            <span class="label-icon tag">#</span>
-            {t('taskForm.tags')}
-          </label>
           <input
             type="text"
             class="field-input"
             bind:value={tags}
-            placeholder={t('taskForm.tagsPlaceholder')}
+            placeholder="#tags"
           />
         </div>
 
         <div class="form-field">
-          <label class="field-label">
-            <span class="label-icon pomodoro">🍅</span>
-            {t('taskForm.estimatedPomodoros')}
-          </label>
           <input
             type="number"
-            class="field-input"
+            class="field-input pomodoro-input"
             bind:value={estimatedPomodoros}
             min="1"
             max="20"
-            placeholder="0"
+            placeholder="🍅"
           />
         </div>
-      </div>
 
-      <div class="form-row">
         <div class="form-field">
-          <label class="field-label">
-            <span class="label-icon due">📅</span>
-            {t('taskForm.dueDate')}
-          </label>
           <input
             type="date"
             class="field-input"
             bind:value={dueDate}
+            title={t('taskForm.dueDate')}
           />
         </div>
 
         <div class="form-field">
-          <label class="field-label">
-            <span class="label-icon threshold">💤</span>
-            {t('taskForm.thresholdDate')}
-          </label>
           <input
             type="date"
             class="field-input"
             bind:value={thresholdDate}
+            title={t('taskForm.thresholdDate')}
           />
         </div>
-      </div>
 
-      <div class="form-row">
-        <div class="form-field full">
-          <label class="field-label">
-            <span class="label-icon recurrence">🔁</span>
-            {t('taskForm.recurrence')}
-          </label>
-          <select class="field-input" bind:value={recurrence}>
+        <div class="form-field">
+          <select class="field-input" bind:value={recurrence} title={t('taskForm.recurrence')}>
             {#each recurrenceOptions as option}
               <option value={option.value}>{option.label}</option>
             {/each}
@@ -221,13 +198,8 @@
         </div>
       </div>
 
-      <div class="form-actions">
-        <button class="action-btn secondary" onclick={() => { resetForm(); isExpanded = false; }}>
-          {t('action.cancel')}
-        </button>
-        <span class="keyboard-hint">
-          {t('taskForm.keyboardHint')}
-        </span>
+      <div class="form-hint">
+        <span class="hint-text">Ctrl+Enter</span>
       </div>
     </div>
   {/if}
@@ -237,153 +209,117 @@
   .task-form {
     background: var(--card-bg);
     border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-lg);
+    border-radius: var(--radius-md);
     transition: all var(--transition-normal);
   }
 
   .task-form.expanded {
     border-color: var(--primary);
-    box-shadow: 0 0 0 3px var(--primary-bg), var(--shadow-md);
+    box-shadow: 0 0 0 2px var(--primary-bg);
   }
 
   .form-main {
     display: flex;
-    gap: 12px;
-    padding: 16px;
+    gap: 8px;
+    padding: 10px 12px;
+    align-items: center;
   }
 
   .content-input {
     flex: 1;
-    padding: 14px 16px;
-    font-size: 15px;
+    padding: 10px 12px;
+    font-size: 14px;
     font-weight: 450;
-    background: var(--input-bg);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-md);
+    background: transparent;
+    border: none;
     color: var(--text-primary);
     outline: none;
-    transition: all var(--transition-fast);
-  }
-
-  .content-input:focus {
-    border-color: var(--primary);
-    background: var(--bg-secondary);
   }
 
   .content-input::placeholder {
     color: var(--text-muted);
+    font-size: 13px;
+  }
+
+  .expand-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+  }
+
+  .expand-btn:hover {
+    background: var(--hover-bg);
+    color: var(--text-secondary);
+  }
+
+  .expand-btn svg {
+    width: 16px;
+    height: 16px;
+    transition: transform var(--transition-fast);
+  }
+
+  .expand-btn svg.rotated {
+    transform: rotate(180deg);
   }
 
   .submit-btn {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 12px 20px;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
     border: none;
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-sm);
     background: var(--primary);
     color: white;
     cursor: pointer;
-    font-size: 14px;
-    font-weight: 500;
     transition: all var(--transition-fast);
-    white-space: nowrap;
   }
 
   .submit-btn:hover:not(:disabled) {
     background: var(--primary-hover);
-    transform: translateY(-1px);
-    box-shadow: var(--shadow-glow);
+    transform: scale(1.05);
   }
 
   .submit-btn:disabled {
-    opacity: 0.5;
+    opacity: 0.4;
     cursor: not-allowed;
   }
 
   .submit-btn svg {
-    width: 18px;
-    height: 18px;
+    width: 16px;
+    height: 16px;
   }
 
   .form-details {
-    padding: 0 16px 16px;
+    padding: 8px 12px 12px;
     border-top: 1px solid var(--border-subtle);
-    animation: slideDown 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    animation: slideDown 0.15s ease-out;
   }
 
-  .form-row {
+  .form-grid {
     display: flex;
-    gap: 12px;
-    margin-top: 12px;
+    flex-wrap: wrap;
+    gap: 8px;
   }
 
   .form-field {
     flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-
-  .form-field.full {
-    flex: none;
-    width: 50%;
-  }
-
-  .field-label {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 12px;
-    font-weight: 500;
-    color: var(--text-secondary);
-  }
-
-  .label-icon {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 18px;
-    height: 18px;
-    border-radius: 4px;
-    font-size: 11px;
-    font-weight: 600;
-  }
-
-  .label-icon.project {
-    background: rgba(177, 151, 252, 0.15);
-    color: #b197fc;
-  }
-
-  .label-icon.context {
-    background: rgba(116, 192, 252, 0.15);
-    color: #74c0fc;
-  }
-
-  .label-icon.tag {
-    background: rgba(99, 230, 190, 0.15);
-    color: #63e6be;
-  }
-
-  .label-icon.due {
-    font-size: 12px;
-  }
-
-  .label-icon.threshold {
-    font-size: 12px;
-  }
-
-  .label-icon.pomodoro {
-    font-size: 12px;
-  }
-
-  .label-icon.recurrence {
-    font-size: 12px;
+    min-width: 100px;
   }
 
   .field-input {
-    padding: 10px 12px;
-    font-size: 13px;
+    width: 100%;
+    padding: 8px 10px;
+    font-size: 12px;
     background: var(--input-bg);
     border: 1px solid var(--border-subtle);
     border-radius: var(--radius-sm);
@@ -400,48 +336,33 @@
     color: var(--text-muted);
   }
 
+  .field-input.pomodoro-input {
+    max-width: 60px;
+  }
+
   select.field-input {
     cursor: pointer;
+    min-width: 100px;
   }
 
-  .form-actions {
+  .form-hint {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-top: 16px;
-    padding-top: 12px;
-    border-top: 1px solid var(--border-subtle);
+    justify-content: flex-end;
+    margin-top: 8px;
   }
 
-  .action-btn {
-    padding: 8px 16px;
-    border-radius: var(--radius-sm);
-    font-size: 13px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all var(--transition-fast);
-  }
-
-  .action-btn.secondary {
-    background: transparent;
-    border: 1px solid var(--border-color);
-    color: var(--text-secondary);
-  }
-
-  .action-btn.secondary:hover {
-    background: var(--hover-bg);
-    color: var(--text-primary);
-  }
-
-  .keyboard-hint {
-    font-size: 11px;
+  .hint-text {
+    font-size: 10px;
     color: var(--text-muted);
+    padding: 2px 6px;
+    background: var(--hover-bg);
+    border-radius: var(--radius-sm);
   }
 
   @keyframes slideDown {
     from {
       opacity: 0;
-      transform: translateY(-8px);
+      transform: translateY(-4px);
     }
     to {
       opacity: 1;
@@ -449,21 +370,13 @@
     }
   }
 
-  @media (max-width: 768px) {
-    .form-row {
+  @media (max-width: 600px) {
+    .form-grid {
       flex-direction: column;
     }
 
-    .form-field.full {
-      width: 100%;
-    }
-
-    .submit-btn .btn-text {
-      display: none;
-    }
-
-    .submit-btn {
-      padding: 12px;
+    .field-input.pomodoro-input {
+      max-width: 100%;
     }
   }
 </style>
