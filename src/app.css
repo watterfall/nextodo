@@ -150,6 +150,16 @@ body {
   outline-offset: 2px;
 }
 
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Improved button active states */
+button:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
 /* Selection */
 ::selection {
   background: var(--primary-bg);
@@ -474,11 +484,20 @@ a:hover {
   align-items: center;
   gap: 12px;
   padding: 12px 20px;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
   cursor: pointer;
   transition: background var(--transition-fast);
 }
 
 .search-result-item:hover {
+  background: var(--hover-bg);
+}
+
+.search-result-item:focus-visible {
+  outline: none;
   background: var(--hover-bg);
 }
 

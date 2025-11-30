@@ -7,6 +7,12 @@
     skipSession
   } from '$lib/stores/pomodoro.svelte';
 
+  interface Props {
+    onEnterImmersive?: () => void;
+  }
+
+  let { onEnterImmersive }: Props = $props();
+
   const pomodoro = getPomodoroStore();
 
   // Calculate circle progress
@@ -105,6 +111,15 @@
     <span class="count-label">今日番茄</span>
     <span class="count-value">🍅 ×{pomodoro.todayCount}</span>
   </div>
+
+  {#if pomodoro.state !== 'idle' && onEnterImmersive}
+    <button class="immersive-btn" onclick={onEnterImmersive} title="进入沉浸模式">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path>
+      </svg>
+      <span>沉浸模式</span>
+    </button>
+  {/if}
 </div>
 
 <style>
@@ -246,5 +261,32 @@
     font-size: 14px;
     font-weight: 600;
     color: var(--text-primary);
+  }
+
+  .immersive-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    padding: 12px 16px;
+    border: 1px dashed var(--border-color);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.2s ease;
+  }
+
+  .immersive-btn:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+    background: var(--primary-bg);
+  }
+
+  .immersive-btn svg {
+    width: 16px;
+    height: 16px;
   }
 </style>
