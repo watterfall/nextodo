@@ -415,18 +415,25 @@
     color: var(--text-secondary);
     cursor: pointer;
     text-align: left;
-    transition: all 0.2s ease;
+    transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
     font-size: 13px;
   }
 
   .nav-item:hover:not(.static) {
     background: var(--hover-bg);
     color: var(--text-primary);
+    transform: translateX(4px);
   }
 
   .nav-item.active {
     background: var(--primary-bg);
     color: var(--primary);
+    font-weight: 500;
+  }
+
+  .nav-item:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: -2px;
   }
 
   .nav-item.static {

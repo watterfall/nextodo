@@ -46,8 +46,9 @@
   {#if showCreateForm}
     <div class="create-form">
       <div class="form-group">
-        <label class="form-label">本周期反思</label>
+        <label class="form-label" for="review-reflection">本周期反思</label>
         <textarea
+          id="review-reflection"
           class="form-textarea"
           bind:value={reflection}
           placeholder="回顾本周期的工作情况，有什么做得好的？有什么需要改进的？"
@@ -56,8 +57,9 @@
       </div>
 
       <div class="form-group">
-        <label class="form-label">下周期重点</label>
+        <label class="form-label" for="review-next-focus">下周期重点</label>
         <input
+          id="review-next-focus"
           type="text"
           class="form-input"
           bind:value={nextUnitFocus}

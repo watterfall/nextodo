@@ -247,8 +247,18 @@
 
   <!-- Search Overlay -->
   {#if ui.isSearchOpen}
-    <div class="search-overlay" onclick={closeSearch} role="dialog" aria-modal="true">
-      <div class="search-box" onclick={(e) => e.stopPropagation()}>
+    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+    <div
+      class="search-overlay"
+      onclick={closeSearch}
+      onkeydown={(e) => e.key === 'Escape' && closeSearch()}
+      role="dialog"
+      aria-modal="true"
+      aria-label="搜索任务"
+      tabindex="-1"
+    >
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div class="search-box" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.stopPropagation()}>
         <div class="search-input-wrapper">
           <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="11" cy="11" r="8"></circle>
@@ -263,9 +273,14 @@
             onkeydown={handleSearchKeydown}
           />
         </div>
-        <div class="search-results">
+        <div class="search-results" role="listbox" aria-label="搜索结果">
           {#each tasks.filteredTasks.slice(0, 10) as task (task.id)}
-            <div class="search-result-item" onclick={() => { closeSearch(); searchInput = ''; setSearchQuery(''); }}>
+            <button
+              class="search-result-item"
+              onclick={() => { closeSearch(); searchInput = ''; setSearchQuery(''); }}
+              role="option"
+              aria-selected="false"
+            >
               <span class="result-priority" style:color="var(--priority-{task.priority.toLowerCase()}-color)">
                 {task.priority}
               </span>
@@ -273,7 +288,7 @@
               {#each task.projects as project}
                 <span class="result-tag project">{project}</span>
               {/each}
-            </div>
+            </button>
           {:else}
             <div class="search-empty">
               {searchInput ? t('filter.noResults') : t('filter.search')}
@@ -286,10 +301,10 @@
 
   <!-- Toast -->
   {#if ui.toastMessage}
-    <div class="toast-container">
+    <div class="toast-container" role="alert" aria-live="polite">
       <div class="toast {ui.toastType}">
         <span class="toast-message">{ui.toastMessage}</span>
-        <button class="toast-close" onclick={hideToast}>
+        <button class="toast-close" onclick={hideToast} aria-label="关闭通知">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
             <line x1="18" y1="6" x2="6" y2="18"></line>
             <line x1="6" y1="6" x2="18" y2="18"></line>

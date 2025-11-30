@@ -130,7 +130,15 @@
           onblur={handleSaveEdit}
         />
       {:else}
-        <span class="task-text" ondblclick={handleEdit}>
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <span
+          class="task-text"
+          ondblclick={handleEdit}
+          onkeydown={(e) => e.key === 'Enter' && handleEdit()}
+          role="textbox"
+          aria-readonly="true"
+          tabindex="0"
+        >
           {task.content}
         </span>
 
@@ -216,14 +224,20 @@
     border: 1px solid var(--priority-border);
     border-left: 3px solid var(--priority-color);
     border-radius: 8px;
-    transition: all 0.2s ease;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     cursor: grab;
     position: relative;
   }
 
   .task-card:hover {
     background: var(--card-hover-bg);
-    transform: translateX(2px);
+    transform: translateX(4px);
+    box-shadow: -4px 0 12px -2px var(--priority-bg);
+  }
+
+  .task-card:focus-within {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
   }
 
   .task-card.active {
@@ -292,17 +306,28 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 0.2s ease;
+    transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
     padding: 0;
   }
 
   .checkbox:hover {
-    background: var(--priority-color);
-    opacity: 0.3;
+    background: var(--priority-bg);
+    transform: scale(1.1);
+  }
+
+  .checkbox:active {
+    transform: scale(0.95);
   }
 
   .checkbox.checked {
     background: var(--priority-color);
+    animation: checkmark 0.3s ease-out;
+  }
+
+  @keyframes checkmark {
+    0% { transform: scale(0.8); }
+    50% { transform: scale(1.2); }
+    100% { transform: scale(1); }
   }
 
   .checkbox svg {

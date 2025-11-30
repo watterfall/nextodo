@@ -114,30 +114,30 @@
     </div>
 
     <!-- Controls -->
-    <div class="controls">
+    <div class="controls" role="group" aria-label="计时器控制">
       {#if pomodoro.isRunning}
-        <button class="control-btn pause" onclick={pausePomodoro}>
-          <svg viewBox="0 0 24 24" fill="currentColor">
+        <button class="control-btn pause" onclick={pausePomodoro} aria-label="暂停" title="暂停">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
             <rect x="6" y="4" width="4" height="16" rx="1"></rect>
             <rect x="14" y="4" width="4" height="16" rx="1"></rect>
           </svg>
         </button>
       {:else}
-        <button class="control-btn play" onclick={resumePomodoro}>
-          <svg viewBox="0 0 24 24" fill="currentColor">
+        <button class="control-btn play" onclick={resumePomodoro} aria-label="继续" title="继续">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
             <polygon points="5,3 19,12 5,21"></polygon>
           </svg>
         </button>
       {/if}
 
-      <button class="control-btn stop" onclick={stopPomodoro}>
-        <svg viewBox="0 0 24 24" fill="currentColor">
+      <button class="control-btn stop" onclick={stopPomodoro} aria-label="停止" title="停止">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
           <rect x="4" y="4" width="16" height="16" rx="2"></rect>
         </svg>
       </button>
 
-      <button class="control-btn skip" onclick={skipSession}>
-        <svg viewBox="0 0 24 24" fill="currentColor">
+      <button class="control-btn skip" onclick={skipSession} aria-label="跳过" title="跳过">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
           <polygon points="5,4 15,12 5,20"></polygon>
           <rect x="15" y="4" width="4" height="16"></rect>
         </svg>
@@ -402,10 +402,5 @@
     50% {
       opacity: 0.7;
     }
-  }
-
-  /* Last minute pulse animation */
-  .timer-container:has(.progress-bar[style*="ef4444"]) .time-text {
-    animation: pulse 1s ease-in-out infinite;
   }
 </style>
