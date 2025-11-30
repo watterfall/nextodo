@@ -7,6 +7,7 @@ let activeTaskId = $state<string | null>(null);
 let activeTask = $state<Task | null>(null);
 let sessionCount = $state(0);
 let isRunning = $state(false);
+let interruptionCount = $state(0); // Current session interruption counter
 
 // Settings (will be synced from main store)
 let workDuration = $state(25);
@@ -50,6 +51,7 @@ export function startPomodoro(task: Task): void {
   state = 'work';
   timeRemaining = workDuration * 60;
   isRunning = true;
+  interruptionCount = 0; // Reset interruption counter for new session
   startTimer();
 }
 
@@ -64,6 +66,26 @@ export function resumePomodoro(): void {
   if (state !== 'idle') {
     isRunning = true;
     startTimer();
+  }
+}
+
+// Toggle pause/resume (for Space key shortcut)
+export function togglePomodoro(): void {
+  if (state === 'idle') {
+    return; // Can't toggle if no session is active
+  }
+  if (isRunning) {
+    pausePomodoro();
+  } else {
+    resumePomodoro();
+  }
+}
+
+// Record an interruption during work session (without stopping timer)
+export function recordInterruption(): void {
+  if (state === 'work') {
+    interruptionCount++;
+    console.log('Interruption recorded:', interruptionCount);
   }
 }
 
@@ -118,10 +140,12 @@ function handleSessionComplete(): void {
       taskId: activeTaskId,
       startedAt: new Date(Date.now() - workDuration * 60 * 1000).toISOString(),
       duration: workDuration,
-      completed: true
+      completed: true,
+      interruptions: interruptionCount
     };
     sessions = [...sessions, session];
     sessionCount++;
+    interruptionCount = 0; // Reset for next session
 
     // Dispatch event for task store to increment pomodoro count
     if (typeof window !== 'undefined') {
@@ -242,6 +266,7 @@ export function getPomodoroStore() {
     get stateLabel() { return getStateLabel(); },
     get sessions() { return sessions; },
     get todaySessions() { return getTodaySessions(); },
-    get todayCount() { return getTodaySessions().length; }
+    get todayCount() { return getTodaySessions().length; },
+    get interruptionCount() { return interruptionCount; }
   };
 }

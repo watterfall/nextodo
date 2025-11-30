@@ -20,6 +20,7 @@
   import {
     getUIStore,
     initKeyboardShortcuts,
+    registerKeyboardCallbacks,
     hideToast,
     closeSearch,
     exitImmersiveMode,
@@ -27,7 +28,8 @@
   } from '$lib/stores/ui.svelte';
   import {
     initPomodoro,
-    getPomodoroStore
+    getPomodoroStore,
+    togglePomodoro
   } from '$lib/stores/pomodoro.svelte';
   import {
     initSettings,
@@ -49,6 +51,7 @@
   let searchInput = $state('');
   let isInitialized = $state(false);
   let unlistenFileWatcher: (() => void) | null = null;
+  let taskInputRef: { focus: () => void } | undefined = $state();
 
   onMount(async () => {
     // Initialize i18n first
@@ -79,9 +82,28 @@
     // Initialize keyboard shortcuts
     initKeyboardShortcuts();
 
-    // Setup file watcher for external changes
+    // Register keyboard callbacks for Ctrl+N (new task) and Space (toggle pomodoro)
+    registerKeyboardCallbacks({
+      focusNewTask: () => {
+        taskInputRef?.focus();
+      },
+      togglePomodoro: () => {
+        togglePomodoro();
+      }
+    });
+
+    // Setup file watcher for external changes (with conflict protection)
     unlistenFileWatcher = await setupFileWatcher(async (fileType) => {
-      console.log('External file change detected:', fileType);
+      // Conflict protection: Don't reload if user is editing or pomodoro is active
+      if (ui.editingTaskId) {
+        console.log('Skipping reload - user is editing a task');
+        return;
+      }
+      if (pomodoro.state !== 'idle') {
+        console.log('Skipping reload - pomodoro is active');
+        return;
+      }
+      console.log('External file change detected, reloading:', fileType);
       await reloadData(fileType);
     });
 
@@ -199,7 +221,7 @@
       <!-- Left: Task Zones -->
       <div class="zones-panel">
         <div class="main-input">
-          <TaskInput placeholder={t('task.addPlaceholder')} />
+          <TaskInput bind:this={taskInputRef} placeholder={t('task.addPlaceholder')} />
         </div>
 
         <div class="zones-grid">

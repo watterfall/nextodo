@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { getPomodoroStore, pausePomodoro, resumePomodoro, stopPomodoro, skipSession } from '$lib/stores/pomodoro.svelte';
+  import { getPomodoroStore, pausePomodoro, resumePomodoro, stopPomodoro, skipSession, recordInterruption } from '$lib/stores/pomodoro.svelte';
   import { t } from '$lib/i18n';
 
   interface Props {
@@ -52,6 +52,9 @@
       } else {
         resumePomodoro();
       }
+    } else if (e.key === 'i' || e.key === 'I') {
+      // Press 'i' to record interruption
+      recordInterruption();
     }
   }
 </script>
@@ -139,17 +142,33 @@
           <rect x="15" y="4" width="4" height="16"></rect>
         </svg>
       </button>
+
+      {#if pomodoro.state === 'work'}
+        <button class="control-btn interrupt" onclick={recordInterruption} title="记录中断 (I)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="8" x2="12" y2="12"></line>
+            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+          </svg>
+        </button>
+      {/if}
     </div>
 
-    <!-- Session count -->
+    <!-- Session count and interruptions -->
     <div class="session-count">
       <span class="tomato-icon">🍅</span>
       <span class="count">× {pomodoro.todayCount}</span>
+      {#if pomodoro.state === 'work' && pomodoro.interruptionCount > 0}
+        <span class="interruption-count" title="本次中断次数">
+          ⚡ {pomodoro.interruptionCount}
+        </span>
+      {/if}
     </div>
 
     <!-- Keyboard hint -->
     <div class="keyboard-hint">
       <kbd>Space</kbd> 暂停/继续
+      <kbd>I</kbd> 记录中断
       <kbd>Esc</kbd> 退出
     </div>
   </div>
@@ -319,6 +338,16 @@
     height: 32px;
   }
 
+  .control-btn.interrupt {
+    background: rgba(251, 146, 60, 0.2);
+    color: #fb923c;
+  }
+
+  .control-btn.interrupt:hover {
+    background: rgba(251, 146, 60, 0.3);
+    color: #fb923c;
+  }
+
   .session-count {
     display: flex;
     align-items: center;
@@ -332,6 +361,16 @@
   }
 
   .count {
+    font-weight: 500;
+  }
+
+  .interruption-count {
+    margin-left: 16px;
+    padding: 4px 12px;
+    background: rgba(251, 146, 60, 0.2);
+    border-radius: 16px;
+    color: #fb923c;
+    font-size: 18px;
     font-weight: 500;
   }
 

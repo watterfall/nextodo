@@ -64,6 +64,7 @@ export interface PomodoroSession {
   startedAt: string;
   duration: number;
   completed: boolean;
+  interruptions?: number; // Number of interruptions recorded during this session
 }
 
 // Custom tag groups

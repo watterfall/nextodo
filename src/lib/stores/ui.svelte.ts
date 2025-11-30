@@ -112,18 +112,51 @@ export function toggleImmersiveMode(): void {
   isImmersiveMode = !isImmersiveMode;
 }
 
+// Callback for focusing new task input
+let focusNewTaskCallback: (() => void) | null = null;
+
+// Callback for toggling pomodoro
+let togglePomodoroCallback: (() => void) | null = null;
+
+// Register callbacks for keyboard shortcuts
+export function registerKeyboardCallbacks(callbacks: {
+  focusNewTask?: () => void;
+  togglePomodoro?: () => void;
+}): void {
+  if (callbacks.focusNewTask) {
+    focusNewTaskCallback = callbacks.focusNewTask;
+  }
+  if (callbacks.togglePomodoro) {
+    togglePomodoroCallback = callbacks.togglePomodoro;
+  }
+}
+
 // Keyboard shortcuts
 export function initKeyboardShortcuts(): void {
   if (typeof window === 'undefined') return;
 
   window.addEventListener('keydown', (e) => {
+    // Don't handle shortcuts when typing in input fields (except for specific keys)
+    const target = e.target as HTMLElement;
+    const isInInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
+
     // Cmd/Ctrl + K for search
     if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
       e.preventDefault();
       toggleSearch();
+      return;
     }
 
-    // Escape to close modals/search/immersive
+    // Cmd/Ctrl + N for new task (focus input)
+    if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
+      e.preventDefault();
+      if (focusNewTaskCallback) {
+        focusNewTaskCallback();
+      }
+      return;
+    }
+
+    // Escape to close modals/search/immersive/editing
     if (e.key === 'Escape') {
       if (isImmersiveMode) {
         exitImmersiveMode();
@@ -134,18 +167,33 @@ export function initKeyboardShortcuts(): void {
       } else if (editingTaskId) {
         setEditingTask(null);
       }
+      return;
+    }
+
+    // Don't handle remaining shortcuts if in input
+    if (isInInput) return;
+
+    // Space to toggle pomodoro (only when not typing)
+    if (e.key === ' ') {
+      e.preventDefault();
+      if (togglePomodoroCallback) {
+        togglePomodoroCallback();
+      }
+      return;
     }
 
     // Cmd/Ctrl + B for sidebar
     if ((e.metaKey || e.ctrlKey) && e.key === 'b') {
       e.preventDefault();
       toggleSidebar();
+      return;
     }
 
     // Cmd/Ctrl + Shift + F for immersive mode
     if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'f') {
       e.preventDefault();
       toggleImmersiveMode();
+      return;
     }
   });
 }

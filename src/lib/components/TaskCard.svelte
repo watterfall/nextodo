@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Task, Priority } from '$lib/types';
-  import { PRIORITY_CONFIG } from '$lib/types';
+  import { PRIORITY_CONFIG, isThresholdPassed } from '$lib/types';
   import { completeTask, uncompleteTask, deleteTask, updateTask, changePriority } from '$lib/stores/tasks.svelte';
   import { setEditingTask, getUIStore, showToast, setDraggedTask, clearDragState } from '$lib/stores/ui.svelte';
   import { startPomodoro, getPomodoroStore } from '$lib/stores/pomodoro.svelte';
@@ -84,6 +84,10 @@
   const config = $derived(PRIORITY_CONFIG[task.priority]);
   const isTaskOverdue = $derived(isOverdue(task.dueDate));
   const dueDateLabel = $derived(task.dueDate ? getRelativeDayLabel(parseISODate(task.dueDate)) : null);
+
+  // Check if task is dormant (has threshold date in the future)
+  const isDormant = $derived(!isThresholdPassed(task));
+  const thresholdLabel = $derived(task.thresholdDate ? getRelativeDayLabel(parseISODate(task.thresholdDate)) : null);
 </script>
 
 <div
@@ -93,6 +97,7 @@
   class:active={isActive}
   class:dragging={isDragging}
   class:overdue={isTaskOverdue && !task.completed}
+  class:dormant={isDormant}
   style:--priority-color={config.color}
   style:--priority-bg={config.bgColor}
   style:--priority-border={config.borderColor}
@@ -154,8 +159,13 @@
     {/if}
   </div>
 
-  {#if !compact && (task.dueDate || task.recurrence)}
+  {#if !compact && (task.dueDate || task.recurrence || task.thresholdDate)}
     <div class="task-footer">
+      {#if task.thresholdDate && isDormant}
+        <span class="threshold-date" title="休眠至">
+          💤 {thresholdLabel}
+        </span>
+      {/if}
       {#if task.dueDate}
         <span class="due-date" class:overdue={isTaskOverdue}>
           {dueDateLabel}
@@ -238,6 +248,27 @@
 
   .task-card.overdue {
     border-left-color: var(--error);
+  }
+
+  /* Dormant (threshold date not reached) - low contrast style */
+  .task-card.dormant {
+    opacity: 0.5;
+    background: var(--bg-secondary);
+    border-left-color: var(--text-muted);
+    filter: grayscale(30%);
+  }
+
+  .task-card.dormant:hover {
+    opacity: 0.7;
+    filter: grayscale(20%);
+  }
+
+  .task-card.dormant .task-text {
+    color: var(--text-muted);
+  }
+
+  .task-card.dormant .checkbox {
+    border-color: var(--text-muted);
   }
 
   .task-card.compact {
@@ -359,6 +390,11 @@
     margin-top: 8px;
     padding-left: 32px;
     font-size: 12px;
+  }
+
+  .threshold-date {
+    color: var(--text-muted);
+    font-style: italic;
   }
 
   .due-date {
