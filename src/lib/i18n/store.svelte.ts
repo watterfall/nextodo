@@ -9,8 +9,8 @@ const locales: Record<Language, typeof zhCN> = {
 };
 
 // Current language state
-let currentLanguage: Language = $state('zh-CN');
-let currentLocale = $state(zhCN);
+let _currentLanguage: Language = $state('zh-CN');
+let _currentLocale = $state(zhCN);
 
 // Initialize from settings or system
 export function initI18n(language?: Language): void {
@@ -36,8 +36,8 @@ function detectSystemLanguage(): Language {
 
 // Set language
 export function setLanguage(language: Language): void {
-  currentLanguage = language;
-  currentLocale = locales[language] || locales['zh-CN'];
+  _currentLanguage = language;
+  _currentLocale = locales[language] || locales['zh-CN'];
 
   // Update document language attribute
   if (typeof document !== 'undefined') {
@@ -47,13 +47,18 @@ export function setLanguage(language: Language): void {
 
 // Get current language
 export function getLanguage(): Language {
-  return currentLanguage;
+  return _currentLanguage;
+}
+
+// Export current language as a getter function for reactivity
+export function currentLanguage(): Language {
+  return _currentLanguage;
 }
 
 // Get translation function
 export function t(key: string, params?: Record<string, string | number>): string {
   const keys = key.split('.');
-  let value: any = currentLocale;
+  let value: any = _currentLocale;
 
   for (const k of keys) {
     if (value && typeof value === 'object' && k in value) {
@@ -81,13 +86,13 @@ export function t(key: string, params?: Record<string, string | number>): string
 
 // Get date format for current locale
 export function getDateFormat(): string {
-  return currentLocale.date.format;
+  return _currentLocale.date.format;
 }
 
 // Format date according to locale
 export function formatDateLocale(date: Date | string): string {
   const d = typeof date === 'string' ? new Date(date) : date;
-  const format = currentLocale.date.format;
+  const format = _currentLocale.date.format;
 
   const year = d.getFullYear();
   const month = String(d.getMonth() + 1).padStart(2, '0');
@@ -108,9 +113,9 @@ export function getRelativeDate(date: Date | string): string {
 
   const diff = Math.floor((d.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 
-  if (diff === 0) return currentLocale.date.today;
-  if (diff === 1) return currentLocale.date.tomorrow;
-  if (diff === -1) return currentLocale.date.yesterday;
+  if (diff === 0) return _currentLocale.date.today;
+  if (diff === 1) return _currentLocale.date.tomorrow;
+  if (diff === -1) return _currentLocale.date.yesterday;
 
   return formatDateLocale(d);
 }
@@ -118,8 +123,8 @@ export function getRelativeDate(date: Date | string): string {
 // Export store for reactivity
 export function getI18nStore() {
   return {
-    get language() { return currentLanguage; },
-    get locale() { return currentLocale; },
+    get language() { return _currentLanguage; },
+    get locale() { return _currentLocale; },
     t,
     formatDate: formatDateLocale,
     getRelativeDate,

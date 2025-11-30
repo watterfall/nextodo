@@ -34,6 +34,40 @@ export default {
     },
   },
 
+  // Task Form
+  taskForm: {
+    placeholder: 'Enter task content...',
+    addToInbox: 'Add to Inbox',
+    project: 'Project',
+    projectPlaceholder: 'e.g., Work, Study',
+    context: 'Context',
+    contextPlaceholder: 'e.g., Office, Home',
+    tags: 'Tags',
+    tagsPlaceholder: 'Separate with commas',
+    dueDate: 'Due Date',
+    thresholdDate: 'Start Date',
+    estimatedPomodoros: 'Estimated Pomodoros',
+    recurrence: 'Recurrence',
+    noRecurrence: 'No Recurrence',
+    daily: 'Daily',
+    every2Days: 'Every 2 Days',
+    every3Days: 'Every 3 Days',
+    weekly: 'Weekly',
+    biweekly: 'Biweekly',
+    monthly: 'Monthly',
+    keyboardHint: 'Press Ctrl+Enter to add quickly',
+  },
+
+  // Inbox Panel
+  inbox: {
+    title: 'Inbox',
+    hint: 'Drag or click buttons to move tasks to priorities',
+    moveTo: 'Move to',
+    empty: 'Inbox is empty',
+    emptyHint: 'Use the form above to add new tasks',
+    completed: 'Completed',
+  },
+
   // Task
   task: {
     add: 'Add Task',
@@ -88,6 +122,21 @@ export default {
     },
   },
 
+  // Review Panel
+  review: {
+    title: 'Period Review',
+    createReview: 'Create Review',
+    reflection: 'Period Reflection',
+    reflectionPlaceholder: 'Review the work of this period. What went well? What needs improvement?',
+    nextFocus: 'Next Period Focus',
+    nextFocusPlaceholder: 'What is the core goal for the next period?',
+    saveReview: 'Save Review',
+    completionRate: 'Completion Rate',
+    pomodorosTotal: 'Total Pomodoros',
+    noReviews: 'No reviews yet',
+    noReviewsHint: 'Create a review at the end of each period to track your progress',
+  },
+
   // Filter
   filter: {
     all: 'All',
@@ -106,16 +155,19 @@ export default {
   // Settings
   settings: {
     title: 'Settings',
+    appearance: 'Appearance',
     theme: 'Theme',
+    themeDesc: 'Choose the app appearance theme',
     themeLight: 'Light',
     themeDark: 'Dark',
     themeSystem: 'System',
     language: 'Language',
+    languageDesc: 'Choose the interface language',
     pomodoro: {
       title: 'Pomodoro Settings',
-      workDuration: 'Focus Duration (min)',
-      shortBreak: 'Short Break (min)',
-      longBreak: 'Long Break (min)',
+      workDuration: 'Focus Duration',
+      shortBreak: 'Short Break',
+      longBreak: 'Long Break',
     },
     data: {
       title: 'Data Management',
@@ -127,7 +179,36 @@ export default {
       autoBackup: 'Auto Backup',
     },
     autoArchive: 'Auto Archive Days',
-    eZoneAging: 'E-Zone Aging Alert Days',
+    autoArchiveDesc: 'Days until completed tasks are auto-archived',
+    eZoneAging: 'Inbox Aging Alert',
+    eZoneAgingDesc: 'Days until inbox tasks show aging warning',
+    minutes: 'min',
+    days: 'days',
+  },
+
+  // Sidebar
+  sidebar: {
+    todayCompleted: 'Today Completed',
+    projects: 'Projects',
+    contexts: 'Contexts',
+    tags: 'Tags',
+    dueDates: 'Due Dates',
+    recurring: 'Recurring',
+    dueToday: 'Today',
+    dueThisWeek: 'This Week',
+    overdue: 'Overdue',
+    dailyRecurring: 'Daily',
+    weeklyRecurring: 'Weekly',
+    noProjects: 'No projects',
+    noContexts: 'No contexts',
+    collapse: 'Collapse sidebar',
+  },
+
+  // Zone
+  zone: {
+    full: 'Quota full',
+    dropHere: 'Drop tasks here',
+    empty: 'No tasks',
   },
 
   // Actions
@@ -157,6 +238,7 @@ export default {
     dataExported: 'Data exported',
     dataImported: 'Data imported',
     backupCreated: 'Backup created',
+    taskAdded: 'Task added to inbox',
   },
 
   // Date/Time

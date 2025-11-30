@@ -2,11 +2,13 @@
   import { onMount, onDestroy } from 'svelte';
   import Sidebar from '$lib/components/Sidebar.svelte';
   import ZoneContainer from '$lib/components/ZoneContainer.svelte';
-  import TaskInput from '$lib/components/TaskInput.svelte';
+  import TaskForm from '$lib/components/TaskForm.svelte';
+  import InboxPanel from '$lib/components/InboxPanel.svelte';
   import PomodoroTimer from '$lib/components/PomodoroTimer.svelte';
   import QuotaMeter from '$lib/components/QuotaMeter.svelte';
   import UnitNav from '$lib/components/UnitNav.svelte';
   import ReviewPanel from '$lib/components/ReviewPanel.svelte';
+  import SettingsModal from '$lib/components/SettingsModal.svelte';
   import Confetti from '$lib/components/Confetti.svelte';
   import ImmersivePomodoro from '$lib/components/ImmersivePomodoro.svelte';
 
@@ -38,9 +40,9 @@
   } from '$lib/stores/settings.svelte';
   import { initReviews } from '$lib/stores/reviews.svelte';
   import { saveAppData, setupFileWatcher } from '$lib/utils/storage';
-  import { initI18n, t, availableLanguages, setLanguage } from '$lib/i18n';
+  import { initI18n, t } from '$lib/i18n';
 
-  import type { Priority, Language } from '$lib/types';
+  import type { Priority } from '$lib/types';
 
   const tasks = getTasksStore();
   const ui = getUIStore();
@@ -51,7 +53,8 @@
   let searchInput = $state('');
   let isInitialized = $state(false);
   let unlistenFileWatcher: (() => void) | null = null;
-  let taskInputRef: { focus: () => void } | undefined = $state();
+  let isSettingsOpen = $state(false);
+  let isReviewOpen = $state(false);
 
   onMount(async () => {
     // Initialize i18n first
@@ -82,10 +85,10 @@
     // Initialize keyboard shortcuts
     initKeyboardShortcuts();
 
-    // Register keyboard callbacks for Ctrl+N (new task) and Space (toggle pomodoro)
+    // Register keyboard callbacks
     registerKeyboardCallbacks({
       focusNewTask: () => {
-        taskInputRef?.focus();
+        // Focus will be handled by TaskForm
       },
       togglePomodoro: () => {
         togglePomodoro();
@@ -148,7 +151,8 @@
     return settings.effectiveTheme;
   }
 
-  const priorities: Priority[] = ['A', 'B', 'C', 'D', 'E'];
+  // Only show A, B, C, D zones in main area (not E - that's in Inbox)
+  const mainPriorities: Priority[] = ['A', 'B', 'C', 'D'];
 </script>
 
 <svelte:head>
@@ -164,7 +168,10 @@
     </div>
   </div>
 {:else}
-  <Sidebar />
+  <Sidebar
+    onOpenSettings={() => isSettingsOpen = true}
+    onOpenReview={() => isReviewOpen = true}
+  />
 
   <main class="main-content">
     <!-- Header -->
@@ -188,7 +195,7 @@
         <QuotaMeter />
 
         <!-- Theme Toggle -->
-        <button class="theme-toggle" onclick={toggleTheme} title="切换主题">
+        <button class="theme-toggle" onclick={toggleTheme} title={t('settings.theme')}>
           {#if getThemeIcon() === 'dark'}
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
@@ -216,31 +223,33 @@
       </div>
     </header>
 
-    <!-- Main Layout -->
-    <div class="content-layout">
-      <!-- Left: Task Zones -->
-      <div class="zones-panel">
-        <div class="main-input">
-          <TaskInput bind:this={taskInputRef} placeholder={t('task.addPlaceholder')} />
-        </div>
+    <!-- Task Form at Top -->
+    <div class="task-form-container">
+      <TaskForm />
+    </div>
 
+    <!-- Main Layout: Zones + Inbox -->
+    <div class="content-layout">
+      <!-- Left: Priority Zones (A-D) -->
+      <div class="zones-panel">
         <div class="zones-grid">
-          {#each priorities as priority}
+          {#each mainPriorities as priority}
             <ZoneContainer
               {priority}
               tasks={tasks.tasksByPriority[priority]}
             />
           {/each}
         </div>
+
+        <!-- Pomodoro Timer at Bottom -->
+        <div class="timer-section">
+          <PomodoroTimer onEnterImmersive={handleImmersiveMode} />
+        </div>
       </div>
 
-      <!-- Right: Timer & Reviews -->
-      <div class="side-panel">
-        <PomodoroTimer onEnterImmersive={handleImmersiveMode} />
-
-        {#if tasks.currentUnit.isReviewDay}
-          <ReviewPanel />
-        {/if}
+      <!-- Right: Inbox Panel -->
+      <div class="inbox-section">
+        <InboxPanel />
       </div>
     </div>
   </main>
@@ -254,7 +263,7 @@
       onkeydown={(e) => e.key === 'Escape' && closeSearch()}
       role="dialog"
       aria-modal="true"
-      aria-label="搜索任务"
+      aria-label={t('filter.search')}
       tabindex="-1"
     >
       <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -273,7 +282,7 @@
             onkeydown={handleSearchKeydown}
           />
         </div>
-        <div class="search-results" role="listbox" aria-label="搜索结果">
+        <div class="search-results" role="listbox" aria-label={t('filter.searchResults')}>
           {#each tasks.filteredTasks.slice(0, 10) as task (task.id)}
             <button
               class="search-result-item"
@@ -299,12 +308,42 @@
     </div>
   {/if}
 
+  <!-- Settings Modal -->
+  <SettingsModal
+    isOpen={isSettingsOpen}
+    onClose={() => isSettingsOpen = false}
+  />
+
+  <!-- Review Modal -->
+  {#if isReviewOpen}
+    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+    <div
+      class="modal-overlay"
+      onclick={() => isReviewOpen = false}
+      onkeydown={(e) => e.key === 'Escape' && (isReviewOpen = false)}
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+    >
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div class="review-modal" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.stopPropagation()}>
+        <button class="modal-close" onclick={() => isReviewOpen = false}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+        <ReviewPanel />
+      </div>
+    </div>
+  {/if}
+
   <!-- Toast -->
   {#if ui.toastMessage}
     <div class="toast-container" role="alert" aria-live="polite">
       <div class="toast {ui.toastType}">
         <span class="toast-message">{ui.toastMessage}</span>
-        <button class="toast-close" onclick={hideToast} aria-label="关闭通知">
+        <button class="toast-close" onclick={hideToast} aria-label={t('action.close')}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
             <line x1="18" y1="6" x2="6" y2="18"></line>
             <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -377,6 +416,7 @@
     padding: 12px 20px;
     background: var(--bg-secondary);
     border-bottom: 1px solid var(--border-subtle);
+    flex-shrink: 0;
   }
 
   .header-left {
@@ -427,12 +467,17 @@
     font-weight: 450;
   }
 
+  .task-form-container {
+    padding: 16px 20px;
+    flex-shrink: 0;
+  }
+
   .content-layout {
     display: flex;
     flex: 1;
     overflow: hidden;
     gap: 20px;
-    padding: 20px;
+    padding: 0 20px 20px;
   }
 
   .zones-panel {
@@ -444,23 +489,47 @@
     padding-right: 4px;
   }
 
-  .main-input {
-    flex-shrink: 0;
-  }
-
   .zones-grid {
     display: flex;
     flex-direction: column;
     gap: 12px;
   }
 
-  .side-panel {
-    width: 260px;
+  .timer-section {
+    margin-top: auto;
+    padding-top: 16px;
+    border-top: 1px solid var(--border-subtle);
+  }
+
+  .inbox-section {
+    width: 320px;
     flex-shrink: 0;
+    overflow: hidden;
+  }
+
+  /* Theme toggle in header */
+  .theme-toggle {
     display: flex;
-    flex-direction: column;
-    gap: 16px;
-    overflow-y: auto;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border: none;
+    border-radius: var(--radius-md);
+    background: var(--action-btn-bg);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+  }
+
+  .theme-toggle:hover {
+    background: var(--action-btn-hover-bg);
+    color: var(--text-primary);
+  }
+
+  .theme-toggle svg {
+    width: 16px;
+    height: 16px;
   }
 
   /* Search Results */
@@ -500,46 +569,88 @@
     color: #b197fc;
   }
 
-  /* Theme toggle in header */
-  .theme-toggle {
+  /* Modal Overlay */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 34px;
-    height: 34px;
-    border-radius: var(--radius-md);
-    background: var(--action-btn-bg);
-    color: var(--text-secondary);
+    z-index: 1000;
+    animation: fadeIn 0.2s ease;
+  }
+
+  .review-modal {
+    position: relative;
+    width: 100%;
+    max-width: 600px;
+    max-height: 85vh;
+    overflow-y: auto;
+    animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .modal-close {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: var(--hover-bg);
+    color: var(--text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1;
     transition: all var(--transition-fast);
   }
 
-  .theme-toggle:hover {
-    background: var(--action-btn-hover-bg);
+  .modal-close:hover {
+    background: var(--card-hover-bg);
     color: var(--text-primary);
   }
 
-  .theme-toggle svg {
-    width: 16px;
-    height: 16px;
+  .modal-close svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes slideUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 
   /* Responsive */
   @media (max-width: 1024px) {
-    .side-panel {
-      width: 220px;
+    .inbox-section {
+      width: 280px;
     }
   }
 
   @media (max-width: 768px) {
     .content-layout {
       flex-direction: column;
-      padding: 16px;
+      padding: 0 16px 16px;
     }
 
-    .side-panel {
+    .inbox-section {
       width: 100%;
-      flex-direction: row;
-      overflow-x: auto;
+      height: 300px;
     }
 
     .header {
@@ -552,6 +663,10 @@
       width: 100%;
       max-width: none;
       margin-top: 8px;
+    }
+
+    .task-form-container {
+      padding: 12px 16px;
     }
   }
 </style>
