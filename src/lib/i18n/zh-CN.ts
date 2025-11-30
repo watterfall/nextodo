@@ -34,6 +34,40 @@ export default {
     },
   },
 
+  // Task Form
+  taskForm: {
+    placeholder: '输入任务内容...',
+    addToInbox: '添加到收集箱',
+    project: '项目',
+    projectPlaceholder: '例如: 工作、学习',
+    context: '上下文',
+    contextPlaceholder: '例如: 办公室、家里',
+    tags: '标签',
+    tagsPlaceholder: '多个标签用逗号分隔',
+    dueDate: '截止日期',
+    thresholdDate: '开始日期',
+    estimatedPomodoros: '预估番茄数',
+    recurrence: '重复',
+    noRecurrence: '不重复',
+    daily: '每天',
+    every2Days: '每2天',
+    every3Days: '每3天',
+    weekly: '每周',
+    biweekly: '每两周',
+    monthly: '每月',
+    keyboardHint: '按 Ctrl+Enter 快速添加',
+  },
+
+  // Inbox Panel
+  inbox: {
+    title: '收集箱',
+    hint: '拖拽或点击按钮将任务移到对应优先级',
+    moveTo: '移动到',
+    empty: '收集箱已清空',
+    emptyHint: '使用上方表单添加新任务',
+    completed: '已完成',
+  },
+
   // Task
   task: {
     add: '添加任务',
@@ -88,6 +122,21 @@ export default {
     },
   },
 
+  // Review Panel
+  review: {
+    title: '周期复盘',
+    createReview: '创建复盘',
+    reflection: '本周期反思',
+    reflectionPlaceholder: '回顾本周期的工作情况，有什么做得好的？有什么需要改进的？',
+    nextFocus: '下周期重点',
+    nextFocusPlaceholder: '下个周期的核心目标是什么？',
+    saveReview: '保存复盘',
+    completionRate: '完成率',
+    pomodorosTotal: '番茄总数',
+    noReviews: '暂无复盘记录',
+    noReviewsHint: '在每个周期结束时创建复盘，追踪你的进步',
+  },
+
   // Filter
   filter: {
     all: '全部',
@@ -106,16 +155,19 @@ export default {
   // Settings
   settings: {
     title: '设置',
+    appearance: '外观',
     theme: '主题',
+    themeDesc: '选择应用的外观主题',
     themeLight: '浅色',
     themeDark: '深色',
-    themeSystem: '跟随系统',
+    themeSystem: '系统',
     language: '语言',
+    languageDesc: '选择界面显示语言',
     pomodoro: {
       title: '番茄钟设置',
-      workDuration: '专注时长 (分钟)',
-      shortBreak: '短休息 (分钟)',
-      longBreak: '长休息 (分钟)',
+      workDuration: '专注时长',
+      shortBreak: '短休息时长',
+      longBreak: '长休息时长',
     },
     data: {
       title: '数据管理',
@@ -127,7 +179,36 @@ export default {
       autoBackup: '自动备份',
     },
     autoArchive: '自动归档天数',
-    eZoneAging: 'E区老化提醒天数',
+    autoArchiveDesc: '已完成任务在多少天后自动归档',
+    eZoneAging: '收集箱老化提醒',
+    eZoneAgingDesc: '收集箱任务超过多少天提示处理',
+    minutes: '分钟',
+    days: '天',
+  },
+
+  // Sidebar
+  sidebar: {
+    todayCompleted: '今日完成',
+    projects: '项目',
+    contexts: '上下文',
+    tags: '标签',
+    dueDates: '截止日期',
+    recurring: '重复任务',
+    dueToday: '今天',
+    dueThisWeek: '本周',
+    overdue: '已过期',
+    dailyRecurring: '每日',
+    weeklyRecurring: '每周',
+    noProjects: '暂无项目',
+    noContexts: '暂无上下文',
+    collapse: '收起侧边栏',
+  },
+
+  // Zone
+  zone: {
+    full: '配额已满',
+    dropHere: '拖拽任务到这里',
+    empty: '暂无任务',
   },
 
   // Actions
@@ -157,6 +238,7 @@ export default {
     dataExported: '数据已导出',
     dataImported: '数据已导入',
     backupCreated: '备份已创建',
+    taskAdded: '任务已添加到收集箱',
   },
 
   // Date/Time
