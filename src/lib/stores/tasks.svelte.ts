@@ -172,27 +172,28 @@ export async function deleteTask(taskId: string): Promise<void> {
 }
 
 export async function completeTask(taskId: string): Promise<void> {
+  // Find the task first to check for recurrence
+  const taskToComplete = appData.tasks.find(t => t.id === taskId && !t.completed);
   let nextRecurringTask: Task | null = null;
 
+  // Create next occurrence before modifying the task
+  if (taskToComplete?.recurrence?.pattern && taskToComplete.dueDate) {
+    nextRecurringTask = createNextOccurrence(taskToComplete);
+  }
+
+  // Mark task as completed
   appData.tasks = appData.tasks.map(task => {
     if (task.id === taskId && !task.completed) {
-      const completed = {
+      return {
         ...task,
         completed: true,
         completedAt: new Date().toISOString()
       };
-
-      // Handle recurring task - collect for later to avoid race condition
-      if (task.recurrence?.pattern && task.dueDate) {
-        nextRecurringTask = createNextOccurrence(task);
-      }
-
-      return completed;
     }
     return task;
   });
 
-  // Add next recurring task synchronously before persisting
+  // Add next recurring task
   if (nextRecurringTask) {
     const quotaError = validateQuota(appData.tasks, nextRecurringTask.priority);
     if (!quotaError) {
@@ -271,6 +272,26 @@ export async function incrementPomodoro(taskId: string): Promise<void> {
     }
     return task;
   });
+
+  await persist();
+}
+
+// Reorder tasks within a priority zone (for drag-and-drop)
+export async function reorderTask(priority: Priority, newOrder: string[]): Promise<void> {
+  // Get tasks in this priority
+  const priorityTasks = appData.tasks.filter(t => t.priority === priority && !t.completed);
+  const otherTasks = appData.tasks.filter(t => t.priority !== priority || t.completed);
+
+  // Create a map for quick lookup
+  const taskMap = new Map(priorityTasks.map(t => [t.id, t]));
+
+  // Reorder based on newOrder array
+  const reorderedPriorityTasks = newOrder
+    .map(id => taskMap.get(id))
+    .filter((t): t is Task => t !== undefined);
+
+  // Combine reordered priority tasks with other tasks
+  appData.tasks = [...reorderedPriorityTasks, ...otherTasks];
 
   await persist();
 }

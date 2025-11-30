@@ -2,10 +2,13 @@
   import type { Task, Priority } from '$lib/types';
   import { PRIORITY_CONFIG } from '$lib/types';
   import TaskCard from './TaskCard.svelte';
-  import { getTasksStore, changePriority } from '$lib/stores/tasks.svelte';
+  import { getTasksStore, changePriority, reorderTask } from '$lib/stores/tasks.svelte';
   import { getPomodoroStore } from '$lib/stores/pomodoro.svelte';
   import { getUIStore } from '$lib/stores/ui.svelte';
   import { t } from '$lib/i18n';
+  import { dndzone, TRIGGERS, SHADOW_ITEM_MARKER_PROPERTY_NAME } from 'svelte-dnd-action';
+  import { flip } from 'svelte/animate';
+  import { dndConfig, areTaskArraysEqual, type DndConsiderEvent, type DndFinalizeEvent } from '$lib/utils/motion';
 
   const tasks = getTasksStore();
   const pomodoro = getPomodoroStore();
@@ -19,8 +22,19 @@
   let completedTasks = $derived(tasks.tasksByPriority['E'].filter(t => t.completed));
   let showCompleted = $state(false);
 
-  // Check if any task is being dragged
-  let isDragging = $derived(ui.draggedTaskId !== null);
+  // DnD state
+  let dndItems = $state<Task[]>([]);
+  let isDndActive = $state(false);
+
+  // Keep dndItems in sync with inboxTasks (with shallow comparison)
+  $effect(() => {
+    if (!isDndActive && !areTaskArraysEqual(dndItems, inboxTasks)) {
+      dndItems = [...inboxTasks];
+    }
+  });
+
+  // Check if any task is being dragged (from ui store for legacy support)
+  let isDragging = $derived(ui.draggedTaskId !== null || isDndActive);
 
   const priorityTargets: { priority: Priority; label: string; color: string; time: string }[] = [
     { priority: 'A', label: t('priority.A'), color: PRIORITY_CONFIG.A.color, time: t('priority.time.A') },
@@ -33,12 +47,42 @@
     changePriority(taskId, priority);
   }
 
+  // Legacy drop handler for native drag events
   function handleDrop(e: DragEvent, priority: Priority) {
     e.preventDefault();
     const taskId = e.dataTransfer!.getData('text/plain');
     if (taskId) {
       handleMoveToPriority(taskId, priority);
     }
+  }
+
+  // DnD handlers for svelte-dnd-action
+  function handleDndConsider(e: DndConsiderEvent) {
+    const { items, info } = e.detail;
+    dndItems = items;
+
+    if (info.trigger === TRIGGERS.DRAG_STARTED) {
+      isDndActive = true;
+    }
+  }
+
+  function handleDndFinalize(e: DndFinalizeEvent) {
+    const { items, info } = e.detail;
+
+    // Filter out shadow placeholders
+    const cleanItems = items.filter(item => !item[SHADOW_ITEM_MARKER_PROPERTY_NAME as keyof Task]);
+    dndItems = cleanItems;
+
+    if (info.trigger === TRIGGERS.DROPPED_INTO_ZONE) {
+      // Reorder within inbox
+      const newOrder = cleanItems.map(t => t.id);
+      reorderTask('E', newOrder);
+    } else if (info.trigger === TRIGGERS.DROPPED_OUTSIDE_OF_ANY) {
+      // Reset if dropped outside
+      dndItems = [...inboxTasks];
+    }
+
+    isDndActive = false;
   }
 </script>
 
@@ -55,18 +99,21 @@
     </div>
   </div>
 
-  <!-- Drag Drop Targets - Only shown in Inbox -->
+  <!-- Drag Drop Targets - Expanded when dragging -->
   {#if isDragging || inboxTasks.length > 0}
-    <div class="drag-targets" class:active={isDragging}>
-      <div class="drag-hint">{t('inbox.dragHint')}</div>
+    <div class="drag-targets" class:active={isDragging} class:expanded={isDragging}>
+      <div class="drag-hint" class:visible={isDragging}>{t('inbox.dragHint')}</div>
       <div class="target-row">
         {#each priorityTargets as target}
           <div
             class="drop-target"
+            class:pulse={isDragging}
             style:--target-color={target.color}
             ondragover={(e) => e.preventDefault()}
             ondrop={(e) => handleDrop(e, target.priority)}
             title={t(`priority.tooltip.${target.priority}`)}
+            role="button"
+            tabindex="0"
           >
             <span class="target-letter">{target.priority}</span>
             <span class="target-time">{target.time}</span>
@@ -77,10 +124,21 @@
   {/if}
 
   <div class="tasks-container">
-    {#if inboxTasks.length > 0}
-      <div class="tasks-list">
-        {#each inboxTasks as task (task.id)}
-          <div class="task-wrapper">
+    {#if dndItems.length > 0 || inboxTasks.length > 0}
+      <div
+        class="tasks-list"
+        use:dndzone={{
+          items: dndItems,
+          flipDurationMs: dndConfig.flipDurationMs,
+          dropTargetStyle: {},
+          dropTargetClasses: ['dnd-drop-target-active'],
+          dragDisabled: isFocusMode && !hasActiveTask
+        }}
+        onconsider={handleDndConsider}
+        onfinalize={handleDndFinalize}
+      >
+        {#each dndItems as task (task.id)}
+          <div animate:flip={{ duration: dndConfig.flipDurationMs }} class="task-wrapper">
             <TaskCard {task} compact={true} />
 
             <!-- Quick Priority Buttons (shown on hover) -->
@@ -144,11 +202,14 @@
     border-radius: var(--radius-lg);
     overflow: hidden;
     transition: all 0.4s ease;
+    /* Glassmorphism */
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
   }
 
   .inbox-panel.focus-dimmed {
-    opacity: 0.35;
-    filter: grayscale(0.3);
+    opacity: 0.3;
+    filter: grayscale(0.4) blur(0.5px);
     pointer-events: none;
   }
 
@@ -209,13 +270,18 @@
     padding: 12px 16px;
     background: var(--bg-secondary);
     border-bottom: 1px solid var(--border-subtle);
-    opacity: 0.7;
+    opacity: 0.5;
     transition: all var(--transition-normal);
+    max-height: 48px;
+    overflow: hidden;
   }
 
-  .drag-targets.active {
+  .drag-targets.active,
+  .drag-targets.expanded {
     opacity: 1;
     background: var(--hover-bg);
+    max-height: 100px;
+    padding: 14px 16px;
   }
 
   .drag-hint {
@@ -223,6 +289,14 @@
     color: var(--text-muted);
     margin-bottom: 8px;
     text-align: center;
+    opacity: 0;
+    transform: translateY(-4px);
+    transition: all var(--transition-fast);
+  }
+
+  .drag-hint.visible {
+    opacity: 1;
+    transform: translateY(0);
   }
 
   .target-row {
@@ -246,9 +320,25 @@
     gap: 2px;
   }
 
+  .drop-target.pulse {
+    animation: targetPulse 1.5s ease-in-out infinite;
+  }
+
+  @keyframes targetPulse {
+    0%, 100% {
+      transform: scale(1);
+      box-shadow: none;
+    }
+    50% {
+      transform: scale(1.02);
+      box-shadow: 0 0 8px var(--target-color);
+    }
+  }
+
   .drop-target:hover {
     background: var(--target-color);
     border-style: solid;
+    transform: scale(1.05);
   }
 
   .drop-target:hover .target-letter,
@@ -279,10 +369,12 @@
     display: flex;
     flex-direction: column;
     gap: 8px;
+    min-height: 20px;
   }
 
   .task-wrapper {
     position: relative;
+    transform-origin: center center;
   }
 
   .priority-actions {
@@ -293,11 +385,15 @@
     display: flex;
     gap: 4px;
     opacity: 0;
-    transition: opacity var(--transition-fast);
+    transform: translateY(-50%) translateX(4px);
+    transition: all var(--transition-fast);
+    pointer-events: none;
   }
 
   .task-wrapper:hover .priority-actions {
     opacity: 1;
+    transform: translateY(-50%) translateX(0);
+    pointer-events: auto;
   }
 
   .priority-btn {

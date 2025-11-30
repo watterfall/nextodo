@@ -2,11 +2,14 @@
   import type { Task, Priority } from '$lib/types';
   import { PRIORITY_CONFIG } from '$lib/types';
   import TaskCard from './TaskCard.svelte';
-  import { getTasksStore, changePriority } from '$lib/stores/tasks.svelte';
+  import { getTasksStore, changePriority, reorderTask } from '$lib/stores/tasks.svelte';
   import { getPomodoroStore } from '$lib/stores/pomodoro.svelte';
   import { setDropTarget, clearDragState, getUIStore } from '$lib/stores/ui.svelte';
   import { countActiveByPriority } from '$lib/utils/quota';
   import { t } from '$lib/i18n';
+  import { dndzone, TRIGGERS, SHADOW_ITEM_MARKER_PROPERTY_NAME } from 'svelte-dnd-action';
+  import { flip } from 'svelte/animate';
+  import { dndConfig, areTaskArraysEqual, type DndConsiderEvent, type DndFinalizeEvent } from '$lib/utils/motion';
 
   const tasks = getTasksStore();
   const pomodoro = getPomodoroStore();
@@ -17,6 +20,12 @@
 
   // Focus mode check
   const isFocusMode = $derived(pomodoro.state === 'work' && pomodoro.activeTaskId !== null);
+
+  // DnD state for each column
+  let dndItemsByPriority = $state<Record<Priority, Task[]>>({
+    A: [], B: [], C: [], D: [], E: []
+  });
+  let activeDndColumn = $state<Priority | null>(null);
 
   function getTasksForPriority(priority: Priority) {
     return tasks.tasksByPriority[priority].filter(t => !t.completed);
@@ -30,6 +39,72 @@
     return tasks.tasksByPriority[priority].some(t => t.id === pomodoro.activeTaskId);
   }
 
+  // Sync dndItems with actual tasks for each priority (with shallow comparison)
+  $effect(() => {
+    if (!activeDndColumn) {
+      const newItems = {
+        A: getTasksForPriority('A'),
+        B: getTasksForPriority('B'),
+        C: getTasksForPriority('C'),
+        D: getTasksForPriority('D'),
+        E: getTasksForPriority('E')
+      };
+      // Only update if any priority's tasks changed
+      let needsUpdate = false;
+      for (const p of priorities) {
+        if (!areTaskArraysEqual(dndItemsByPriority[p], newItems[p])) {
+          needsUpdate = true;
+          break;
+        }
+      }
+      if (needsUpdate) {
+        dndItemsByPriority = newItems;
+      }
+    }
+  });
+
+  // DnD handlers
+  function handleDndConsider(priority: Priority) {
+    return (e: DndConsiderEvent) => {
+      const { items, info } = e.detail;
+      dndItemsByPriority[priority] = items;
+
+      if (info.trigger === TRIGGERS.DRAG_STARTED) {
+        activeDndColumn = priority;
+        setDropTarget(priority);
+      }
+    };
+  }
+
+  function handleDndFinalize(priority: Priority) {
+    return (e: DndFinalizeEvent) => {
+      const { items, info } = e.detail;
+
+      // Filter out shadow placeholders
+      const cleanItems = items.filter(item => !item[SHADOW_ITEM_MARKER_PROPERTY_NAME as keyof Task]);
+      dndItemsByPriority[priority] = cleanItems;
+
+      if (info.trigger === TRIGGERS.DROPPED_INTO_ZONE) {
+        const droppedTask = cleanItems.find(t => t.id === info.id);
+        if (droppedTask && droppedTask.priority !== priority) {
+          // Item came from another column - change its priority
+          changePriority(info.id, priority);
+        } else {
+          // Reorder within column
+          const newOrder = cleanItems.map(t => t.id);
+          reorderTask(priority, newOrder);
+        }
+      } else if (info.trigger === TRIGGERS.DROPPED_OUTSIDE_OF_ANY) {
+        // Reset
+        dndItemsByPriority[priority] = getTasksForPriority(priority);
+      }
+
+      activeDndColumn = null;
+      clearDragState();
+    };
+  }
+
+  // Legacy drag handlers for fallback
   function handleDragOver(e: DragEvent, priority: Priority) {
     e.preventDefault();
     e.dataTransfer!.dropEffect = 'move';
@@ -53,9 +128,9 @@
 <div class="kanban-view">
   {#each priorities as priority}
     {@const config = PRIORITY_CONFIG[priority]}
-    {@const activeTasks = getTasksForPriority(priority)}
+    {@const activeTasks = dndItemsByPriority[priority]}
     {@const completedTasks = getCompletedForPriority(priority)}
-    {@const isDropTarget = ui.dropTargetPriority === priority}
+    {@const isDropTarget = ui.dropTargetPriority === priority || activeDndColumn === priority}
     {@const isFull = priority !== 'E' && counts[priority] >= config.quota}
     {@const isDimmed = isFocusMode && !hasActiveTaskInColumn(priority)}
 
@@ -68,19 +143,35 @@
       ondragover={(e) => handleDragOver(e, priority)}
       ondragleave={handleDragLeave}
       ondrop={(e) => handleDrop(e, priority)}
+      role="region"
+      aria-label={t(`priority.${priority}`)}
     >
       <div class="column-header" title={config.description}>
         <span class="column-letter" style:background={config.color}>{priority}</span>
+        <span class="column-name">{t(`priority.${priority}`)}</span>
         <span class="column-count">{counts[priority]}/{config.quota === Infinity ? '∞' : config.quota}</span>
       </div>
 
-      <div class="column-tasks">
+      <div
+        class="column-tasks"
+        use:dndzone={{
+          items: activeTasks,
+          flipDurationMs: dndConfig.flipDurationMs,
+          dropTargetStyle: {},
+          dropTargetClasses: ['dnd-drop-target-active'],
+          dragDisabled: isDimmed
+        }}
+        onconsider={handleDndConsider(priority)}
+        onfinalize={handleDndFinalize(priority)}
+      >
         {#if activeTasks.length > 0}
           {#each activeTasks as task (task.id)}
-            <TaskCard {task} compact={priority === 'D' || priority === 'E'} />
+            <div animate:flip={{ duration: dndConfig.flipDurationMs }} class="task-item-wrapper">
+              <TaskCard {task} compact={priority === 'D' || priority === 'E'} />
+            </div>
           {/each}
         {:else}
-          <div class="empty-column">
+          <div class="empty-column" class:very-subtle={!isDropTarget}>
             <span class="empty-text">{t('zone.dropHere')}</span>
           </div>
         {/if}
@@ -120,11 +211,15 @@
     border: 1px solid var(--border-subtle);
     border-radius: var(--radius-lg);
     transition: all var(--transition-normal);
+    /* Glassmorphism */
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
   }
 
   .kanban-column.drop-target {
     border-color: var(--column-color);
     box-shadow: 0 0 0 2px var(--column-color);
+    transform: scale(1.01);
   }
 
   .kanban-column.is-full {
@@ -132,8 +227,8 @@
   }
 
   .kanban-column.focus-dimmed {
-    opacity: 0.35;
-    filter: grayscale(0.3);
+    opacity: 0.3;
+    filter: grayscale(0.4) blur(0.5px);
     pointer-events: none;
     transition: all 0.4s ease;
   }
@@ -159,6 +254,16 @@
     color: white;
   }
 
+  .column-name {
+    flex: 1;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
   .column-count {
     font-size: 12px;
     font-weight: 500;
@@ -172,6 +277,11 @@
     display: flex;
     flex-direction: column;
     gap: 8px;
+    min-height: 60px;
+  }
+
+  .task-item-wrapper {
+    transform-origin: center center;
   }
 
   .empty-column {
@@ -182,6 +292,17 @@
     border: 1px dashed var(--border-color);
     border-radius: var(--radius-md);
     min-height: 80px;
+    transition: all var(--transition-normal);
+  }
+
+  .empty-column.very-subtle {
+    opacity: 0.2;
+    border-color: transparent;
+  }
+
+  .kanban-column:hover .empty-column.very-subtle {
+    opacity: 0.5;
+    border-color: var(--border-color);
   }
 
   .empty-text {
