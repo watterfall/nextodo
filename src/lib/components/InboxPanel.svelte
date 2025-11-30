@@ -4,10 +4,12 @@
   import TaskCard from './TaskCard.svelte';
   import { getTasksStore, changePriority } from '$lib/stores/tasks.svelte';
   import { getPomodoroStore } from '$lib/stores/pomodoro.svelte';
+  import { getUIStore } from '$lib/stores/ui.svelte';
   import { t } from '$lib/i18n';
 
   const tasks = getTasksStore();
   const pomodoro = getPomodoroStore();
+  const ui = getUIStore();
 
   // Focus mode - dim inbox when pomodoro is active on non-inbox task
   let isFocusMode = $derived(pomodoro.state === 'work' && pomodoro.activeTaskId !== null);
@@ -16,53 +18,61 @@
   let inboxTasks = $derived(tasks.tasksByPriority['E'].filter(t => !t.completed));
   let completedTasks = $derived(tasks.tasksByPriority['E'].filter(t => t.completed));
   let showCompleted = $state(false);
-  let draggedTaskId = $state<string | null>(null);
 
-  const priorityTargets: { priority: Priority; label: string; color: string }[] = [
-    { priority: 'A', label: t('priority.A'), color: PRIORITY_CONFIG.A.color },
-    { priority: 'B', label: t('priority.B'), color: PRIORITY_CONFIG.B.color },
-    { priority: 'C', label: t('priority.C'), color: PRIORITY_CONFIG.C.color },
-    { priority: 'D', label: t('priority.D'), color: PRIORITY_CONFIG.D.color },
+  // Check if any task is being dragged
+  let isDragging = $derived(ui.draggedTaskId !== null);
+
+  const priorityTargets: { priority: Priority; label: string; color: string; time: string }[] = [
+    { priority: 'A', label: t('priority.A'), color: PRIORITY_CONFIG.A.color, time: t('priority.time.A') },
+    { priority: 'B', label: t('priority.B'), color: PRIORITY_CONFIG.B.color, time: t('priority.time.B') },
+    { priority: 'C', label: t('priority.C'), color: PRIORITY_CONFIG.C.color, time: t('priority.time.C') },
+    { priority: 'D', label: t('priority.D'), color: PRIORITY_CONFIG.D.color, time: t('priority.time.D') },
   ];
-
-  function handleDragStart(taskId: string) {
-    draggedTaskId = taskId;
-  }
-
-  function handleDragEnd() {
-    draggedTaskId = null;
-  }
 
   function handleMoveToPriority(taskId: string, priority: Priority) {
     changePriority(taskId, priority);
   }
+
+  function handleDrop(e: DragEvent, priority: Priority) {
+    e.preventDefault();
+    const taskId = e.dataTransfer!.getData('text/plain');
+    if (taskId) {
+      handleMoveToPriority(taskId, priority);
+    }
+  }
 </script>
 
 <div class="inbox-panel" class:focus-dimmed={isFocusMode && !hasActiveTask}>
+  <!-- Header with Sleek-style badge -->
   <div class="panel-header">
-    <div class="header-title">
-      <span class="title-icon">📥</span>
-      <h3 class="title-text">{t('inbox.title')}</h3>
+    <div class="header-main">
+      <div class="inbox-badge" style:background={PRIORITY_CONFIG.E.color}>E</div>
+      <div class="header-info">
+        <h3 class="title-text">{t('inbox.title')}</h3>
+        <span class="subtitle">{t('inbox.subtitle')}</span>
+      </div>
       <span class="task-count">{inboxTasks.length}</span>
     </div>
-    <p class="header-hint">{t('inbox.hint')}</p>
   </div>
 
-  <!-- Quick Move Buttons (shown when dragging) -->
-  {#if draggedTaskId}
-    <div class="quick-move-bar">
-      <span class="move-label">{t('inbox.moveTo')}</span>
-      {#each priorityTargets as target}
-        <button
-          class="move-target"
-          style:--target-color={target.color}
-          onclick={() => handleMoveToPriority(draggedTaskId!, target.priority)}
-          ondragover={(e) => e.preventDefault()}
-          ondrop={() => handleMoveToPriority(draggedTaskId!, target.priority)}
-        >
-          {target.priority}
-        </button>
-      {/each}
+  <!-- Drag Drop Targets - Only shown in Inbox -->
+  {#if isDragging || inboxTasks.length > 0}
+    <div class="drag-targets" class:active={isDragging}>
+      <div class="drag-hint">{t('inbox.dragHint')}</div>
+      <div class="target-row">
+        {#each priorityTargets as target}
+          <div
+            class="drop-target"
+            style:--target-color={target.color}
+            ondragover={(e) => e.preventDefault()}
+            ondrop={(e) => handleDrop(e, target.priority)}
+            title={t(`priority.tooltip.${target.priority}`)}
+          >
+            <span class="target-letter">{target.priority}</span>
+            <span class="target-time">{target.time}</span>
+          </div>
+        {/each}
+      </div>
     </div>
   {/if}
 
@@ -70,22 +80,17 @@
     {#if inboxTasks.length > 0}
       <div class="tasks-list">
         {#each inboxTasks as task (task.id)}
-          <div
-            class="task-wrapper"
-            draggable="true"
-            ondragstart={() => handleDragStart(task.id)}
-            ondragend={handleDragEnd}
-          >
+          <div class="task-wrapper">
             <TaskCard {task} compact={true} />
 
-            <!-- Quick Priority Buttons -->
+            <!-- Quick Priority Buttons (shown on hover) -->
             <div class="priority-actions">
               {#each priorityTargets as target}
                 <button
                   class="priority-btn"
                   style:--btn-color={target.color}
                   onclick={() => handleMoveToPriority(task.id, target.priority)}
-                  title={`${t('inbox.moveTo')} ${target.label}`}
+                  title={`${t('inbox.moveTo')} ${target.label} (${target.time})`}
                 >
                   {target.priority}
                 </button>
@@ -96,7 +101,12 @@
       </div>
     {:else}
       <div class="empty-state">
-        <span class="empty-icon">✨</span>
+        <div class="empty-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M9 12l2 2 4-4"></path>
+            <circle cx="12" cy="12" r="10"></circle>
+          </svg>
+        </div>
         <p class="empty-text">{t('inbox.empty')}</p>
         <p class="empty-hint">{t('inbox.emptyHint')}</p>
       </div>
@@ -148,71 +158,115 @@
     flex-shrink: 0;
   }
 
-  .header-title {
+  .header-main {
     display: flex;
     align-items: center;
-    gap: 10px;
-    margin-bottom: 6px;
+    gap: 12px;
   }
 
-  .title-icon {
-    font-size: 20px;
+  .inbox-badge {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 700;
+    color: white;
+    flex-shrink: 0;
+  }
+
+  .header-info {
+    flex: 1;
+    min-width: 0;
   }
 
   .title-text {
     margin: 0;
-    font-size: 16px;
+    font-size: 15px;
     font-weight: 600;
     color: var(--text-primary);
   }
 
+  .subtitle {
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
   .task-count {
-    padding: 2px 8px;
+    padding: 3px 10px;
     font-size: 12px;
     font-weight: 600;
     background: var(--primary-bg);
     color: var(--primary);
     border-radius: var(--radius-full);
+    flex-shrink: 0;
   }
 
-  .header-hint {
-    margin: 0;
-    font-size: 12px;
-    color: var(--text-muted);
-  }
-
-  .quick-move-bar {
-    display: flex;
-    align-items: center;
-    gap: 8px;
+  /* Drag targets - centralized in inbox */
+  .drag-targets {
     padding: 12px 16px;
     background: var(--bg-secondary);
     border-bottom: 1px solid var(--border-subtle);
-    animation: slideDown 0.2s ease;
+    opacity: 0.7;
+    transition: all var(--transition-normal);
   }
 
-  .move-label {
-    font-size: 12px;
+  .drag-targets.active {
+    opacity: 1;
+    background: var(--hover-bg);
+  }
+
+  .drag-hint {
+    font-size: 11px;
     color: var(--text-muted);
+    margin-bottom: 8px;
+    text-align: center;
   }
 
-  .move-target {
-    width: 32px;
-    height: 32px;
+  .target-row {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+  }
+
+  .drop-target {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 56px;
+    height: 48px;
     border: 2px dashed var(--target-color);
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-md);
     background: transparent;
-    color: var(--target-color);
-    font-size: 13px;
-    font-weight: 600;
     cursor: pointer;
     transition: all var(--transition-fast);
+    gap: 2px;
   }
 
-  .move-target:hover {
+  .drop-target:hover {
     background: var(--target-color);
-    color: white;
     border-style: solid;
+  }
+
+  .drop-target:hover .target-letter,
+  .drop-target:hover .target-time {
+    color: white;
+  }
+
+  .target-letter {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--target-color);
+    transition: color var(--transition-fast);
+  }
+
+  .target-time {
+    font-size: 9px;
+    color: var(--text-muted);
+    transition: color var(--transition-fast);
   }
 
   .tasks-container {
@@ -229,11 +283,6 @@
 
   .task-wrapper {
     position: relative;
-    cursor: grab;
-  }
-
-  .task-wrapper:active {
-    cursor: grabbing;
   }
 
   .priority-actions {
@@ -262,7 +311,7 @@
     font-weight: 600;
     cursor: pointer;
     transition: all var(--transition-fast);
-    opacity: 0.8;
+    opacity: 0.85;
   }
 
   .priority-btn:hover {
@@ -280,8 +329,16 @@
   }
 
   .empty-icon {
-    font-size: 40px;
+    width: 48px;
+    height: 48px;
     margin-bottom: 12px;
+    color: var(--success);
+    opacity: 0.7;
+  }
+
+  .empty-icon svg {
+    width: 100%;
+    height: 100%;
   }
 
   .empty-text {
@@ -332,16 +389,5 @@
     display: flex;
     flex-direction: column;
     gap: 6px;
-  }
-
-  @keyframes slideDown {
-    from {
-      opacity: 0;
-      transform: translateY(-4px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
   }
 </style>

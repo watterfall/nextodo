@@ -22,6 +22,7 @@
   const tasksStore = getTasksStore();
 
   let isDropTarget = $derived(ui.dropTargetPriority === priority);
+  let showCompleted = $state(false);
 
   const counts = $derived(countActiveByPriority(tasksStore.tasks));
   const remaining = $derived(config.quota === Infinity ? Infinity : config.quota - counts[priority]);
@@ -34,6 +35,9 @@
   // Filter out completed tasks for display
   let activeTasks = $derived(tasks.filter(t => !t.completed));
   let completedTasks = $derived(tasks.filter(t => t.completed));
+
+  // Get tooltip text for priority
+  const tooltipText = $derived(t(`priority.tooltip.${priority}`));
 
   function handleDragOver(e: DragEvent) {
     e.preventDefault();
@@ -66,19 +70,24 @@
   style:--zone-color={config.color}
   style:--zone-bg={config.bgColor}
   style:--zone-border={config.borderColor}
-  style:--zone-columns={priority === 'B' ? 2 : priority === 'C' ? 3 : priority === 'D' ? 5 : 1}
   ondragover={handleDragOver}
   ondragleave={handleDragLeave}
   ondrop={handleDrop}
   role="region"
   aria-label="{config.name}"
 >
-  <div class="zone-header" title={config.description}>
-    <div class="zone-title">
-      <span class="zone-letter" style:background={config.color}>{priority}</span>
-      <span class="zone-quota-inline">{counts[priority]}/{config.quota}</span>
+  <!-- Sleek-style Header -->
+  <div class="zone-header" title={tooltipText}>
+    <div class="zone-badge" style:background={config.color}>
+      {priority}
     </div>
-
+    <div class="zone-info">
+      <span class="zone-name">{t(`priority.${priority}`)}</span>
+      <span class="zone-meta">
+        <span class="zone-quota">{counts[priority]}/{config.quota === Infinity ? '∞' : config.quota}</span>
+        <span class="zone-time">{t(`priority.time.${priority}`)}</span>
+      </span>
+    </div>
     {#if priority === 'A' && activeTasks.length > 0}
       <span class="breathing-light"></span>
     {/if}
@@ -86,9 +95,11 @@
 
   <div class="zone-tasks">
     {#if activeTasks.length > 0}
-      {#each activeTasks as task (task.id)}
-        <TaskCard {task} compact={priority === 'D'} />
-      {/each}
+      <div class="tasks-grid" class:compact={priority === 'D'}>
+        {#each activeTasks as task (task.id)}
+          <TaskCard {task} compact={priority === 'D'} />
+        {/each}
+      </div>
     {:else}
       <div class="empty-zone">
         <span class="empty-text">
@@ -103,38 +114,51 @@
   </div>
 
   {#if completedTasks.length > 0}
-    <div class="completed-section">
-      <div class="completed-divider">
-        <span class="completed-label">{t('filter.completed')} ({completedTasks.length})</span>
+    <button
+      class="completed-toggle"
+      onclick={() => showCompleted = !showCompleted}
+    >
+      <svg class="toggle-icon" class:rotated={showCompleted} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polyline points="9 18 15 12 9 6"></polyline>
+      </svg>
+      <span>{t('filter.completed')} ({completedTasks.length})</span>
+    </button>
+
+    {#if showCompleted}
+      <div class="completed-list">
+        {#each completedTasks as task (task.id)}
+          <TaskCard {task} compact={true} />
+        {/each}
       </div>
-      {#each completedTasks as task (task.id)}
-        <TaskCard {task} compact={true} />
-      {/each}
-    </div>
+    {/if}
   {/if}
 </div>
 
 <style>
   .zone-container {
-    background: var(--zone-bg);
-    border: 1px solid var(--zone-border);
-    border-radius: var(--radius-md);
-    padding: 12px;
+    background: var(--card-bg);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    padding: 16px;
     transition: all var(--transition-normal);
-    min-height: 60px;
+    min-height: 80px;
+  }
+
+  .zone-container:hover {
+    border-color: var(--border-color);
   }
 
   .zone-container.drop-target {
     border-color: var(--zone-color);
     box-shadow: 0 0 0 2px var(--zone-color), var(--shadow-md);
-    background: rgba(var(--zone-color-rgb), 0.08);
+    background: var(--zone-bg);
   }
 
   .zone-container.is-full {
     opacity: 0.7;
   }
 
-  /* Focus mode dimming - when pomodoro is active on another task */
+  /* Focus mode dimming */
   .zone-container.focus-dimmed {
     opacity: 0.35;
     filter: grayscale(0.3);
@@ -142,58 +166,74 @@
     transition: all 0.4s ease;
   }
 
-  .zone-container.focus-dimmed:hover {
-    opacity: 0.5;
-  }
-
   .zone-container.is-priority-a {
-    background: var(--zone-bg);
     position: relative;
     overflow: hidden;
-    border-color: var(--priority-a-border);
   }
 
   .zone-container.is-priority-a::before {
     content: '';
     position: absolute;
     inset: 0;
-    background: linear-gradient(135deg, rgba(218, 119, 242, 0.08), rgba(151, 117, 250, 0.03));
+    background: linear-gradient(135deg, rgba(218, 119, 242, 0.06), rgba(151, 117, 250, 0.02));
     pointer-events: none;
   }
 
+  /* Sleek-style Header */
   .zone-header {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    margin-bottom: 10px;
+    gap: 12px;
+    margin-bottom: 14px;
     position: relative;
     cursor: help;
   }
 
-  .zone-title {
+  .zone-badge {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 700;
+    color: white;
+    flex-shrink: 0;
+  }
+
+  .zone-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .zone-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .zone-meta {
     display: flex;
     align-items: center;
     gap: 8px;
-  }
-
-  .zone-letter {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 22px;
-    height: 22px;
-    border-radius: 6px;
-    font-size: 12px;
-    font-weight: 700;
-    color: white;
-    letter-spacing: 0;
-  }
-
-  .zone-quota-inline {
-    font-size: 12px;
-    font-weight: 500;
+    font-size: 11px;
     color: var(--text-muted);
+  }
+
+  .zone-quota {
+    font-weight: 500;
+    color: var(--zone-color);
+  }
+
+  .zone-time {
+    opacity: 0.8;
   }
 
   .breathing-light {
@@ -209,64 +249,72 @@
   }
 
   .zone-tasks {
-    display: grid;
-    grid-template-columns: repeat(var(--zone-columns, 1), 1fr);
+    min-height: 40px;
+  }
+
+  .tasks-grid {
+    display: flex;
+    flex-direction: column;
     gap: 8px;
   }
 
-  /* Responsive: reduce columns on smaller screens */
-  @media (max-width: 1200px) {
-    .zone-d .zone-tasks {
-      grid-template-columns: repeat(3, 1fr);
-    }
-  }
-
-  @media (max-width: 900px) {
-    .zone-b .zone-tasks,
-    .zone-c .zone-tasks,
-    .zone-d .zone-tasks {
-      grid-template-columns: repeat(2, 1fr);
-    }
-  }
-
-  @media (max-width: 600px) {
-    .zone-tasks {
-      grid-template-columns: 1fr !important;
-    }
+  .tasks-grid.compact {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 8px;
   }
 
   .empty-zone {
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 16px;
+    padding: 20px 16px;
     border: 1px dashed var(--border-color);
-    border-radius: var(--radius-sm);
-    min-height: 40px;
-    opacity: 0.6;
+    border-radius: var(--radius-md);
+    min-height: 50px;
+    opacity: 0.5;
   }
 
   .empty-text {
-    font-size: 11px;
+    font-size: 12px;
     color: var(--text-muted);
   }
 
-  .completed-section {
+  .completed-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    padding: 10px 0;
     margin-top: 12px;
-    padding-top: 12px;
+    border: none;
     border-top: 1px solid var(--border-subtle);
-  }
-
-  .completed-divider {
-    margin-bottom: 8px;
-  }
-
-  .completed-label {
-    font-size: 11px;
-    font-weight: 500;
+    background: transparent;
     color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+  }
+
+  .completed-toggle:hover {
+    color: var(--text-secondary);
+  }
+
+  .toggle-icon {
+    width: 12px;
+    height: 12px;
+    transition: transform var(--transition-fast);
+  }
+
+  .toggle-icon.rotated {
+    transform: rotate(90deg);
+  }
+
+  .completed-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-top: 8px;
   }
 
   @keyframes breathe {
@@ -279,6 +327,13 @@
       opacity: 1;
       transform: translateY(-50%) scale(1.1);
       box-shadow: 0 0 12px var(--zone-color), 0 0 20px var(--zone-color);
+    }
+  }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    .tasks-grid.compact {
+      grid-template-columns: 1fr;
     }
   }
 </style>
