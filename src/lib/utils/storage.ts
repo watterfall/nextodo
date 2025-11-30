@@ -1,11 +1,27 @@
-import type { AppData } from '$lib/types';
-import { createDefaultAppData } from '$lib/types';
+import type { AppData, ActiveData, ArchiveData, PomodoroHistoryData, Task } from '$lib/types';
+import {
+  createDefaultAppData,
+  createDefaultActiveData,
+  createDefaultArchiveData,
+  createDefaultPomodoroHistoryData,
+  createDefaultSettings
+} from '$lib/types';
 
-// For development/web mode, use localStorage
-// For Tauri, use the file system
+// Storage keys for web/dev mode
+const STORAGE_KEYS = {
+  active: 'focusflow_active',
+  archive: 'focusflow_archive',
+  pomodoroHistory: 'focusflow_pomodoro_history',
+  // Legacy key for migration
+  legacy: 'focusflow_data'
+};
 
-const STORAGE_KEY = 'focusflow_data';
-const BACKUP_KEY = 'focusflow_backup';
+// Anti-deadlock: isSaving flag to prevent self-triggered file change events
+let isSaving = false;
+
+// Debounce timeout for file watcher
+let fileWatcherDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+const FILE_WATCHER_DEBOUNCE_MS = 300;
 
 /**
  * Check if running in Tauri environment
@@ -15,7 +31,7 @@ export function isTauri(): boolean {
 }
 
 /**
- * Load app data from storage
+ * Load all app data from storage (combines all separated files)
  */
 export async function loadAppData(): Promise<AppData> {
   if (isTauri()) {
@@ -25,10 +41,9 @@ export async function loadAppData(): Promise<AppData> {
 }
 
 /**
- * Save app data to storage
+ * Save app data to storage (writes to separated files)
  */
 export async function saveAppData(data: AppData): Promise<void> {
-  // Update last modified timestamp
   data.lastModified = new Date().toISOString();
 
   if (isTauri()) {
@@ -39,20 +54,138 @@ export async function saveAppData(data: AppData): Promise<void> {
 }
 
 /**
- * Load from localStorage (web/dev mode)
+ * Save only active data (hot data)
+ */
+export async function saveActiveData(data: ActiveData): Promise<void> {
+  data.lastModified = new Date().toISOString();
+
+  if (isTauri()) {
+    await saveFileTauri('active', data);
+  } else {
+    localStorage.setItem(STORAGE_KEYS.active, JSON.stringify(data));
+  }
+}
+
+/**
+ * Save only archive data (cold data)
+ */
+export async function saveArchiveData(data: ArchiveData): Promise<void> {
+  data.lastModified = new Date().toISOString();
+
+  if (isTauri()) {
+    await saveFileTauri('archive', data);
+  } else {
+    localStorage.setItem(STORAGE_KEYS.archive, JSON.stringify(data));
+  }
+}
+
+/**
+ * Save only pomodoro history
+ */
+export async function savePomodoroHistoryData(data: PomodoroHistoryData): Promise<void> {
+  data.lastModified = new Date().toISOString();
+
+  if (isTauri()) {
+    await saveFileTauri('pomodoro_history', data);
+  } else {
+    localStorage.setItem(STORAGE_KEYS.pomodoroHistory, JSON.stringify(data));
+  }
+}
+
+/**
+ * Load specific file type
+ */
+export async function loadFileData<T>(fileType: 'active' | 'archive' | 'pomodoro_history'): Promise<T | null> {
+  if (isTauri()) {
+    const { invoke } = await import('@tauri-apps/api/core');
+    const content = await invoke<string | null>('read_data_file', { fileType });
+
+    if (content) {
+      return JSON.parse(content) as T;
+    }
+    return null;
+  } else {
+    const key = fileType === 'active' ? STORAGE_KEYS.active :
+                fileType === 'archive' ? STORAGE_KEYS.archive :
+                STORAGE_KEYS.pomodoroHistory;
+    const stored = localStorage.getItem(key);
+    if (stored) {
+      return JSON.parse(stored) as T;
+    }
+    return null;
+  }
+}
+
+/**
+ * Reload specific file and return updated data
+ */
+export async function reloadFile(fileType: string): Promise<ActiveData | ArchiveData | PomodoroHistoryData | null> {
+  switch (fileType) {
+    case 'active':
+      return await loadFileData<ActiveData>('active');
+    case 'archive':
+      return await loadFileData<ArchiveData>('archive');
+    case 'pomodoro_history':
+      return await loadFileData<PomodoroHistoryData>('pomodoro_history');
+    default:
+      return null;
+  }
+}
+
+/**
+ * Load from localStorage (web/dev mode) - handles migration
  */
 function loadFromLocalStorage(): AppData {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      const data = JSON.parse(stored) as AppData;
-      return migrateData(data);
+  // Check for legacy data first
+  const legacy = localStorage.getItem(STORAGE_KEYS.legacy);
+  if (legacy && !localStorage.getItem(STORAGE_KEYS.active)) {
+    // Migrate from legacy format
+    try {
+      const legacyData = JSON.parse(legacy) as AppData;
+      const migrated = migrateData(legacyData);
+
+      // Save to new format
+      saveToLocalStorage(migrated);
+
+      // Keep legacy as backup
+      localStorage.setItem(STORAGE_KEYS.legacy + '_backup', legacy);
+      localStorage.removeItem(STORAGE_KEYS.legacy);
+
+      return migrated;
+    } catch (error) {
+      console.error('Failed to migrate legacy data:', error);
     }
-  } catch (error) {
-    console.error('Failed to load from localStorage:', error);
   }
 
-  return createDefaultAppData();
+  // Load from separated files
+  try {
+    const activeStr = localStorage.getItem(STORAGE_KEYS.active);
+    const archiveStr = localStorage.getItem(STORAGE_KEYS.archive);
+    const pomodoroStr = localStorage.getItem(STORAGE_KEYS.pomodoroHistory);
+
+    const active = activeStr ? JSON.parse(activeStr) as ActiveData : createDefaultActiveData();
+    const archive = archiveStr ? JSON.parse(archiveStr) as ArchiveData : createDefaultArchiveData();
+    const pomodoro = pomodoroStr ? JSON.parse(pomodoroStr) as PomodoroHistoryData : createDefaultPomodoroHistoryData();
+
+    // Combine into AppData
+    return {
+      version: active.version,
+      lastModified: active.lastModified,
+      tasks: migrateTasks(active.tasks || []),
+      archive: migrateTasks(archive.tasks || []),
+      trash: migrateTasks(active.trash || []),
+      reviews: active.reviews || [],
+      customTagGroups: active.customTagGroups || {
+        energy: ['⚡高能量', '😴低能量', '☕中等'],
+        type: ['📞电话', '💻编码', '✍️写作', '🤝会议']
+      },
+      pomodoroHistory: pomodoro.sessions || [],
+      settings: migrateSettings(active.settings)
+    };
+  } catch (error) {
+    console.error('Failed to load from localStorage:', error);
+    return createDefaultAppData();
+  }
 }
 
 /**
@@ -60,13 +193,32 @@ function loadFromLocalStorage(): AppData {
  */
 function saveToLocalStorage(data: AppData): void {
   try {
-    // Create backup before saving
-    const existing = localStorage.getItem(STORAGE_KEY);
-    if (existing) {
-      localStorage.setItem(BACKUP_KEY, existing);
-    }
+    // Separate into different files
+    const active: ActiveData = {
+      version: data.version,
+      lastModified: data.lastModified,
+      tasks: data.tasks,
+      trash: data.trash,
+      reviews: data.reviews,
+      customTagGroups: data.customTagGroups,
+      settings: data.settings
+    };
 
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    const archive: ArchiveData = {
+      version: data.version,
+      lastModified: data.lastModified,
+      tasks: data.archive
+    };
+
+    const pomodoroHistory: PomodoroHistoryData = {
+      version: data.version,
+      lastModified: data.lastModified,
+      sessions: data.pomodoroHistory
+    };
+
+    localStorage.setItem(STORAGE_KEYS.active, JSON.stringify(active));
+    localStorage.setItem(STORAGE_KEYS.archive, JSON.stringify(archive));
+    localStorage.setItem(STORAGE_KEYS.pomodoroHistory, JSON.stringify(pomodoroHistory));
   } catch (error) {
     console.error('Failed to save to localStorage:', error);
     throw error;
@@ -74,63 +226,154 @@ function saveToLocalStorage(data: AppData): void {
 }
 
 /**
- * Load from Tauri file system
+ * Load from Tauri file system - handles migration
  */
 async function loadFromTauri(): Promise<AppData> {
   try {
-    const { readTextFile, BaseDirectory } = await import('@tauri-apps/plugin-fs');
+    const { invoke } = await import('@tauri-apps/api/core');
 
-    const content = await readTextFile('focusflow_data.json', {
-      baseDir: BaseDirectory.AppData
-    });
+    // Check if migration is needed
+    const migrated = await invoke<boolean>('migrate_legacy_data');
+    if (migrated) {
+      console.log('Migrated from legacy data format');
+    }
 
-    const data = JSON.parse(content) as AppData;
-    return migrateData(data);
+    // Read separated files
+    const activeContent = await invoke<string | null>('read_data_file', { fileType: 'active' });
+    const archiveContent = await invoke<string | null>('read_data_file', { fileType: 'archive' });
+    const pomodoroContent = await invoke<string | null>('read_data_file', { fileType: 'pomodoro_history' });
+
+    const active = activeContent ? JSON.parse(activeContent) as ActiveData : createDefaultActiveData();
+    const archive = archiveContent ? JSON.parse(archiveContent) as ArchiveData : createDefaultArchiveData();
+    const pomodoro = pomodoroContent ? JSON.parse(pomodoroContent) as PomodoroHistoryData : createDefaultPomodoroHistoryData();
+
+    // Combine into AppData
+    return {
+      version: active.version || '3.0',
+      lastModified: active.lastModified,
+      tasks: migrateTasks(active.tasks || []),
+      archive: migrateTasks(archive.tasks || []),
+      trash: migrateTasks(active.trash || []),
+      reviews: active.reviews || [],
+      customTagGroups: active.customTagGroups || {
+        energy: ['⚡高能量', '😴低能量', '☕中等'],
+        type: ['📞电话', '💻编码', '✍️写作', '🤝会议']
+      },
+      pomodoroHistory: pomodoro.sessions || [],
+      settings: migrateSettings(active.settings)
+    };
   } catch (error) {
-    // File doesn't exist, return default
-    console.log('No existing data file, creating default');
+    console.error('Failed to load from Tauri:', error);
     return createDefaultAppData();
   }
 }
 
 /**
- * Save to Tauri file system
+ * Save to Tauri file system using atomic writes
  */
 async function saveToTauri(data: AppData): Promise<void> {
+  // Set isSaving flag to prevent file watcher from triggering reload
+  isSaving = true;
+
   try {
-    const { writeTextFile, mkdir, exists, BaseDirectory } = await import('@tauri-apps/plugin-fs');
+    const { invoke } = await import('@tauri-apps/api/core');
 
-    // Ensure directory exists
-    const dirExists = await exists('', { baseDir: BaseDirectory.AppData });
-    if (!dirExists) {
-      await mkdir('', { baseDir: BaseDirectory.AppData, recursive: true });
-    }
+    // Separate into different files
+    const active: ActiveData = {
+      version: data.version,
+      lastModified: data.lastModified,
+      tasks: data.tasks,
+      trash: data.trash,
+      reviews: data.reviews,
+      customTagGroups: data.customTagGroups,
+      settings: data.settings
+    };
 
-    // Create backup if auto-backup is enabled
-    if (data.settings.autoBackup) {
-      try {
-        const { readTextFile } = await import('@tauri-apps/plugin-fs');
-        const existing = await readTextFile('focusflow_data.json', {
-          baseDir: BaseDirectory.AppData
-        });
+    const archive: ArchiveData = {
+      version: data.version,
+      lastModified: data.lastModified,
+      tasks: data.archive
+    };
 
-        const backupName = `focusflow_backup_${new Date().toISOString().split('T')[0]}.json`;
-        await writeTextFile(backupName, existing, {
-          baseDir: BaseDirectory.AppData
-        });
-      } catch {
-        // No existing file to backup
-      }
-    }
+    const pomodoroHistory: PomodoroHistoryData = {
+      version: data.version,
+      lastModified: data.lastModified,
+      sessions: data.pomodoroHistory
+    };
 
-    // Write main data file
-    await writeTextFile('focusflow_data.json', JSON.stringify(data, null, 2), {
-      baseDir: BaseDirectory.AppData
-    });
+    // Write all files atomically (in parallel)
+    await Promise.all([
+      invoke('atomic_write_file', {
+        fileType: 'active',
+        content: JSON.stringify(active, null, 2)
+      }),
+      invoke('atomic_write_file', {
+        fileType: 'archive',
+        content: JSON.stringify(archive, null, 2)
+      }),
+      invoke('atomic_write_file', {
+        fileType: 'pomodoro_history',
+        content: JSON.stringify(pomodoroHistory, null, 2)
+      })
+    ]);
   } catch (error) {
     console.error('Failed to save to Tauri:', error);
     throw error;
+  } finally {
+    // Clear isSaving flag after a short delay to allow file watcher events to pass
+    setTimeout(() => {
+      isSaving = false;
+    }, 100);
   }
+}
+
+/**
+ * Save a specific file to Tauri using atomic write
+ */
+async function saveFileTauri(fileType: string, data: unknown): Promise<void> {
+  // Set isSaving flag to prevent file watcher from triggering reload
+  isSaving = true;
+
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    await invoke('atomic_write_file', {
+      fileType,
+      content: JSON.stringify(data, null, 2)
+    });
+  } finally {
+    // Clear isSaving flag after a short delay to allow file watcher events to pass
+    setTimeout(() => {
+      isSaving = false;
+    }, 100);
+  }
+}
+
+/**
+ * Migrate tasks to add new fields
+ */
+function migrateTasks(tasks: Task[]): Task[] {
+  return tasks.map(task => ({
+    ...task,
+    thresholdDate: task.thresholdDate ?? null,
+    recurrence: task.recurrence ?? null,
+    pomodoros: task.pomodoros ?? { estimated: 0, completed: 0 }
+  }));
+}
+
+/**
+ * Migrate settings to add new fields
+ */
+function migrateSettings(settings: any): AppData['settings'] {
+  const defaults = createDefaultSettings();
+  return {
+    ...defaults,
+    ...settings,
+    theme: settings?.theme ?? defaults.theme,
+    language: settings?.language ?? defaults.language,
+    autoArchiveDays: settings?.autoArchiveDays ?? defaults.autoArchiveDays,
+    eZoneAgingDays: settings?.eZoneAgingDays ?? defaults.eZoneAgingDays,
+    showFutureTasks: settings?.showFutureTasks ?? defaults.showFutureTasks
+  };
 }
 
 /**
@@ -142,8 +385,8 @@ function migrateData(data: AppData): AppData {
     data.version = '1.0';
   }
 
-  // Migrate from 1.0 to 2.0
-  if (data.version === '1.0') {
+  // Migrate from older versions
+  if (data.version < '3.0') {
     // Add new fields that might be missing
     data.reviews = data.reviews || [];
     data.pomodoroHistory = data.pomodoroHistory || [];
@@ -153,27 +396,82 @@ function migrateData(data: AppData): AppData {
     };
 
     // Migrate tasks
-    data.tasks = data.tasks.map(task => ({
-      ...task,
-      pomodoros: task.pomodoros || { estimated: 0, completed: 0 },
-      recurrence: task.recurrence || null
-    }));
+    data.tasks = migrateTasks(data.tasks || []);
+    data.archive = migrateTasks(data.archive || []);
+    data.trash = migrateTasks(data.trash || []);
 
-    data.version = '2.0';
+    // Migrate settings
+    data.settings = migrateSettings(data.settings);
+
+    data.version = '3.0';
   }
 
-  // Ensure settings have all required fields
-  data.settings = {
-    theme: 'dark',
-    pomodoroWork: 25,
-    pomodoroShortBreak: 5,
-    pomodoroLongBreak: 20,
-    autoBackup: true,
-    sidebarCollapsed: false,
-    ...data.settings
-  };
-
   return data;
+}
+
+/**
+ * Check if currently saving (for external use)
+ */
+export function isCurrentlySaving(): boolean {
+  return isSaving;
+}
+
+/**
+ * Setup file change listener with debounce and isSaving protection
+ */
+export async function setupFileWatcher(onFileChange: (fileType: string) => void): Promise<() => void> {
+  if (!isTauri()) {
+    return () => {}; // No-op for web
+  }
+
+  // Track pending file changes for debounce
+  const pendingChanges = new Set<string>();
+
+  const { listen } = await import('@tauri-apps/api/event');
+  const unlisten = await listen<string>('data-file-changed', (event) => {
+    const fileType = event.payload;
+
+    // Skip if we're currently saving (self-triggered event)
+    if (isSaving) {
+      console.log('Ignoring file change (isSaving):', fileType);
+      return;
+    }
+
+    // Add to pending changes
+    pendingChanges.add(fileType);
+
+    // Clear existing debounce timer
+    if (fileWatcherDebounceTimer) {
+      clearTimeout(fileWatcherDebounceTimer);
+    }
+
+    // Set new debounce timer
+    fileWatcherDebounceTimer = setTimeout(() => {
+      // Double-check isSaving after debounce
+      if (isSaving) {
+        console.log('Ignoring debounced file changes (isSaving)');
+        pendingChanges.clear();
+        return;
+      }
+
+      // Process all pending changes
+      for (const type of pendingChanges) {
+        console.log('Processing external file change:', type);
+        onFileChange(type);
+      }
+      pendingChanges.clear();
+      fileWatcherDebounceTimer = null;
+    }, FILE_WATCHER_DEBOUNCE_MS);
+  });
+
+  return () => {
+    // Clear debounce timer on cleanup
+    if (fileWatcherDebounceTimer) {
+      clearTimeout(fileWatcherDebounceTimer);
+      fileWatcherDebounceTimer = null;
+    }
+    unlisten();
+  };
 }
 
 /**
@@ -220,13 +518,34 @@ export async function importData(file: File): Promise<AppData> {
 export async function clearAllData(): Promise<void> {
   if (isTauri()) {
     const { remove, BaseDirectory } = await import('@tauri-apps/plugin-fs');
-    try {
-      await remove('focusflow_data.json', { baseDir: BaseDirectory.AppData });
-    } catch {
-      // File doesn't exist
+    const files = ['active.json', 'archive.json', 'pomodoro_history.json'];
+
+    for (const file of files) {
+      try {
+        await remove(file, { baseDir: BaseDirectory.AppData });
+      } catch {
+        // File doesn't exist
+      }
     }
   } else {
-    localStorage.removeItem(STORAGE_KEY);
-    localStorage.removeItem(BACKUP_KEY);
+    localStorage.removeItem(STORAGE_KEYS.active);
+    localStorage.removeItem(STORAGE_KEYS.archive);
+    localStorage.removeItem(STORAGE_KEYS.pomodoroHistory);
+    localStorage.removeItem(STORAGE_KEYS.legacy);
+  }
+}
+
+/**
+ * Create backup
+ */
+export async function createBackup(): Promise<string> {
+  if (isTauri()) {
+    const { invoke } = await import('@tauri-apps/api/core');
+    return await invoke<string>('backup_data');
+  } else {
+    // For web, just export to file
+    const data = await loadAppData();
+    await exportData(data);
+    return 'Exported to downloads';
   }
 }

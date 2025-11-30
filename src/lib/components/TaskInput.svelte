@@ -24,6 +24,11 @@
   let inputElement: HTMLInputElement | undefined = $state();
   let showSyntaxHint = $state(false);
 
+  // Export focus method for external use (keyboard shortcuts)
+  export function focus(): void {
+    inputElement?.focus();
+  }
+
   // Auto-add default priority if not specified
   $effect(() => {
     if (autoFocus && inputElement) {

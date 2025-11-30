@@ -1,14 +1,9 @@
-import type { Settings, CustomTagGroups } from '$lib/types';
+import type { Settings, CustomTagGroups, Theme, Language } from '$lib/types';
+import { createDefaultSettings } from '$lib/types';
+import { setLanguage } from '$lib/i18n';
 
 // Settings state
-let settings = $state<Settings>({
-  theme: 'dark',
-  pomodoroWork: 25,
-  pomodoroShortBreak: 5,
-  pomodoroLongBreak: 20,
-  autoBackup: true,
-  sidebarCollapsed: false
-});
+let settings = $state<Settings>(createDefaultSettings());
 
 let customTagGroups = $state<CustomTagGroups>({
   energy: ['⚡高能量', '😴低能量', '☕中等'],
@@ -18,20 +13,60 @@ let customTagGroups = $state<CustomTagGroups>({
 // Callback for persisting changes
 let persistCallback: (() => void) | null = null;
 
+// System theme preference
+let systemTheme = $state<'dark' | 'light'>('dark');
+
 // Initialize settings
 export function initSettings(
   existingSettings: Settings,
   existingTagGroups: CustomTagGroups,
   onPersist: () => void
 ): void {
-  settings = { ...settings, ...existingSettings };
+  settings = { ...createDefaultSettings(), ...existingSettings };
   customTagGroups = { ...customTagGroups, ...existingTagGroups };
   persistCallback = onPersist;
 
-  // Apply theme
-  if (typeof document !== 'undefined') {
-    document.documentElement.setAttribute('data-theme', settings.theme);
+  // Initialize language
+  setLanguage(settings.language);
+
+  // Listen for system theme changes
+  if (typeof window !== 'undefined' && window.matchMedia) {
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    systemTheme = mediaQuery.matches ? 'dark' : 'light';
+
+    mediaQuery.addEventListener('change', (e) => {
+      systemTheme = e.matches ? 'dark' : 'light';
+      if (settings.theme === 'system') {
+        applyTheme('system');
+      }
+    });
   }
+
+  // Apply initial theme
+  applyTheme(settings.theme);
+}
+
+// Apply theme to document
+function applyTheme(theme: Theme): void {
+  if (typeof document === 'undefined') return;
+
+  const effectiveTheme = theme === 'system' ? systemTheme : theme;
+
+  // Add transition class for smooth theme change
+  document.documentElement.classList.add('theme-transition');
+
+  // Set theme attribute
+  document.documentElement.setAttribute('data-theme', effectiveTheme);
+
+  // Remove transition class after animation
+  setTimeout(() => {
+    document.documentElement.classList.remove('theme-transition');
+  }, 200);
+}
+
+// Get effective theme (resolves 'system' to actual theme)
+export function getEffectiveTheme(): 'dark' | 'light' {
+  return settings.theme === 'system' ? systemTheme : settings.theme;
 }
 
 // Update settings
@@ -39,17 +74,34 @@ export function updateSettings(updates: Partial<Settings>): void {
   settings = { ...settings, ...updates };
 
   // Apply theme if changed
-  if (updates.theme && typeof document !== 'undefined') {
-    document.documentElement.setAttribute('data-theme', updates.theme);
+  if (updates.theme !== undefined) {
+    applyTheme(updates.theme);
+  }
+
+  // Apply language if changed
+  if (updates.language !== undefined) {
+    setLanguage(updates.language);
   }
 
   persistCallback?.();
 }
 
-// Toggle theme
+// Set theme
+export function setTheme(theme: Theme): void {
+  updateSettings({ theme });
+}
+
+// Toggle theme (cycles through dark -> light -> system)
 export function toggleTheme(): void {
-  const newTheme = settings.theme === 'dark' ? 'light' : 'dark';
-  updateSettings({ theme: newTheme });
+  const themes: Theme[] = ['dark', 'light', 'system'];
+  const currentIndex = themes.indexOf(settings.theme);
+  const nextIndex = (currentIndex + 1) % themes.length;
+  setTheme(themes[nextIndex]);
+}
+
+// Set language
+export function setAppLanguage(language: Language): void {
+  updateSettings({ language });
 }
 
 // Pomodoro settings
@@ -63,6 +115,16 @@ export function setPomodoroShortBreak(minutes: number): void {
 
 export function setPomodoroLongBreak(minutes: number): void {
   updateSettings({ pomodoroLongBreak: Math.max(1, Math.min(60, minutes)) });
+}
+
+// Auto archive days
+export function setAutoArchiveDays(days: number): void {
+  updateSettings({ autoArchiveDays: Math.max(1, Math.min(365, days)) });
+}
+
+// E zone aging days
+export function setEZoneAgingDays(days: number): void {
+  updateSettings({ eZoneAgingDays: Math.max(1, Math.min(30, days)) });
 }
 
 // Tag groups
@@ -118,8 +180,13 @@ export function getSettingsStore() {
     get customTagGroups() { return customTagGroups; },
     get allTags() { return getAllTags(); },
     get theme() { return settings.theme; },
+    get effectiveTheme() { return getEffectiveTheme(); },
+    get language() { return settings.language; },
     get pomodoroWork() { return settings.pomodoroWork; },
     get pomodoroShortBreak() { return settings.pomodoroShortBreak; },
-    get pomodoroLongBreak() { return settings.pomodoroLongBreak; }
+    get pomodoroLongBreak() { return settings.pomodoroLongBreak; },
+    get autoArchiveDays() { return settings.autoArchiveDays; },
+    get eZoneAgingDays() { return settings.eZoneAgingDays; },
+    get showFutureTasks() { return settings.showFutureTasks; }
   };
 }

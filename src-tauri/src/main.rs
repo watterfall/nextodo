@@ -23,8 +23,13 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::get_app_data_path,
+            commands::get_data_file_paths,
+            commands::atomic_write_file,
+            commands::read_data_file,
             commands::backup_data,
-            commands::get_system_info
+            commands::migrate_legacy_data,
+            commands::get_system_info,
+            commands::trigger_reload
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

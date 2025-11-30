@@ -2,7 +2,6 @@ import type { ViewMode, Priority } from '$lib/types';
 
 // UI State
 let sidebarCollapsed = $state(false);
-let theme = $state<'dark' | 'light'>('dark');
 let viewMode = $state<ViewMode>('zones');
 let activeModal = $state<string | null>(null);
 let modalData = $state<unknown>(null);
@@ -12,6 +11,9 @@ let isSearchOpen = $state(false);
 let editingTaskId = $state<string | null>(null);
 let draggedTaskId = $state<string | null>(null);
 let dropTargetPriority = $state<Priority | null>(null);
+
+// Immersive mode
+let isImmersiveMode = $state(false);
 
 // Toast timeout
 let toastTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -23,20 +25,6 @@ export function toggleSidebar(): void {
 
 export function setSidebarCollapsed(collapsed: boolean): void {
   sidebarCollapsed = collapsed;
-}
-
-// Theme
-export function setTheme(newTheme: 'dark' | 'light'): void {
-  theme = newTheme;
-
-  // Apply to document
-  if (typeof document !== 'undefined') {
-    document.documentElement.setAttribute('data-theme', newTheme);
-  }
-}
-
-export function toggleTheme(): void {
-  setTheme(theme === 'dark' ? 'light' : 'dark');
 }
 
 // View mode
@@ -111,32 +99,101 @@ export function clearDragState(): void {
   dropTargetPriority = null;
 }
 
+// Immersive mode
+export function enterImmersiveMode(): void {
+  isImmersiveMode = true;
+}
+
+export function exitImmersiveMode(): void {
+  isImmersiveMode = false;
+}
+
+export function toggleImmersiveMode(): void {
+  isImmersiveMode = !isImmersiveMode;
+}
+
+// Callback for focusing new task input
+let focusNewTaskCallback: (() => void) | null = null;
+
+// Callback for toggling pomodoro
+let togglePomodoroCallback: (() => void) | null = null;
+
+// Register callbacks for keyboard shortcuts
+export function registerKeyboardCallbacks(callbacks: {
+  focusNewTask?: () => void;
+  togglePomodoro?: () => void;
+}): void {
+  if (callbacks.focusNewTask) {
+    focusNewTaskCallback = callbacks.focusNewTask;
+  }
+  if (callbacks.togglePomodoro) {
+    togglePomodoroCallback = callbacks.togglePomodoro;
+  }
+}
+
 // Keyboard shortcuts
 export function initKeyboardShortcuts(): void {
   if (typeof window === 'undefined') return;
 
   window.addEventListener('keydown', (e) => {
+    // Don't handle shortcuts when typing in input fields (except for specific keys)
+    const target = e.target as HTMLElement;
+    const isInInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
+
     // Cmd/Ctrl + K for search
     if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
       e.preventDefault();
       toggleSearch();
+      return;
     }
 
-    // Escape to close modals/search
+    // Cmd/Ctrl + N for new task (focus input)
+    if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
+      e.preventDefault();
+      if (focusNewTaskCallback) {
+        focusNewTaskCallback();
+      }
+      return;
+    }
+
+    // Escape to close modals/search/immersive/editing
     if (e.key === 'Escape') {
-      if (activeModal) {
+      if (isImmersiveMode) {
+        exitImmersiveMode();
+      } else if (activeModal) {
         closeModal();
       } else if (isSearchOpen) {
         closeSearch();
       } else if (editingTaskId) {
         setEditingTask(null);
       }
+      return;
+    }
+
+    // Don't handle remaining shortcuts if in input
+    if (isInInput) return;
+
+    // Space to toggle pomodoro (only when not typing)
+    if (e.key === ' ') {
+      e.preventDefault();
+      if (togglePomodoroCallback) {
+        togglePomodoroCallback();
+      }
+      return;
     }
 
     // Cmd/Ctrl + B for sidebar
     if ((e.metaKey || e.ctrlKey) && e.key === 'b') {
       e.preventDefault();
       toggleSidebar();
+      return;
+    }
+
+    // Cmd/Ctrl + Shift + F for immersive mode
+    if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'f') {
+      e.preventDefault();
+      toggleImmersiveMode();
+      return;
     }
   });
 }
@@ -145,15 +202,17 @@ export function initKeyboardShortcuts(): void {
 export function getUIStore() {
   return {
     get sidebarCollapsed() { return sidebarCollapsed; },
-    get theme() { return theme; },
+    set sidebarCollapsed(v: boolean) { sidebarCollapsed = v; },
     get viewMode() { return viewMode; },
     get activeModal() { return activeModal; },
     get modalData() { return modalData; },
     get toastMessage() { return toastMessage; },
     get toastType() { return toastType; },
     get isSearchOpen() { return isSearchOpen; },
+    set isSearchOpen(v: boolean) { isSearchOpen = v; },
     get editingTaskId() { return editingTaskId; },
     get draggedTaskId() { return draggedTaskId; },
-    get dropTargetPriority() { return dropTargetPriority; }
+    get dropTargetPriority() { return dropTargetPriority; },
+    get isImmersiveMode() { return isImmersiveMode; }
   };
 }
