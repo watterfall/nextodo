@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { t } from '$lib/i18n';
+  import { getI18nStore } from '$lib/i18n';
   import { getTasksStore, archiveCompleted } from '$lib/stores/tasks.svelte';
   import { getPomodoroStore } from '$lib/stores/pomodoro.svelte';
   import { getUIStore, setViewMode, toggleSidebar, setSidebarCollapsed } from '$lib/stores/ui.svelte';
@@ -10,15 +10,17 @@
   const tasks = getTasksStore();
   const pomodoroStore = getPomodoroStore();
   const ui = getUIStore();
+  const i18n = getI18nStore();
+  const t = i18n.t;
 
   let step = $state(0);
   let showConfetti = $state(false);
   
   // Basic Stats
-  const completedCount = $derived(tasks.tasks.filter(t => t.completed).length);
-  const activeCount = $derived(tasks.tasks.filter(t => !t.completed).length);
-  const completedA = $derived(tasks.tasks.filter(t => t.completed && t.priority === 'A').length);
-  const activeA = $derived(tasks.tasks.filter(t => !t.completed && t.priority === 'A').length);
+  const completedCount = $derived(tasks.tasks.filter(task => task.completed).length);
+  const activeCount = $derived(tasks.tasks.filter(task => !task.completed).length);
+  const completedA = $derived(tasks.tasks.filter(task => task.completed && task.priority === 'A').length);
+  const activeA = $derived(tasks.tasks.filter(task => !task.completed && task.priority === 'A').length);
   
   // Challenge Level Calculation
   // Sweet spot: 70-90% completion rate of planned tasks (weighted by priority)
@@ -28,17 +30,17 @@
     
     // Consider completed tasks + uncompleted tasks that were "planned" (due today or overdue)
     // Simplifying: all active non-E tasks + all completed tasks
-    const relevantTasks = tasks.tasks.filter(t => t.priority !== 'E' || t.completed);
+    const relevantTasks = tasks.tasks.filter(task => task.priority !== 'E' || task.completed);
     
     if (relevantTasks.length === 0) return 0;
 
     let totalPoints = 0;
     let completedPoints = 0;
 
-    for (const t of relevantTasks) {
-      const w = getWeight(t.priority);
+    for (const task of relevantTasks) {
+      const w = getWeight(task.priority);
       totalPoints += w;
-      if (t.completed) completedPoints += w;
+      if (task.completed) completedPoints += w;
     }
 
     if (totalPoints === 0) return 0;
@@ -69,21 +71,21 @@
   });
 
   // Analytics: Estimation Calibration
-  const estimatedTasks = $derived(tasks.tasks.filter(t => t.completed && t.pomodoros.estimated > 0));
+  const estimatedTasks = $derived(tasks.tasks.filter(task => task.completed && task.pomodoros.estimated > 0));
   const estimationAccuracy = $derived.by(() => {
     if (estimatedTasks.length === 0) return 0;
     let totalDiff = 0;
-    for (const t of estimatedTasks) {
+    for (const task of estimatedTasks) {
       // Calculate deviation percentage
-      const diff = Math.abs(t.pomodoros.completed - t.pomodoros.estimated);
+      const diff = Math.abs(task.pomodoros.completed - task.pomodoros.estimated);
       totalDiff += diff;
     }
     const avgDev = totalDiff / estimatedTasks.length;
     return Math.max(0, Math.round(100 - (avgDev * 20)));
   });
 
-  const underEstimatedCount = $derived(estimatedTasks.filter(t => t.pomodoros.completed > t.pomodoros.estimated).length);
-  const overEstimatedCount = $derived(estimatedTasks.filter(t => t.pomodoros.completed < t.pomodoros.estimated).length);
+  const underEstimatedCount = $derived(estimatedTasks.filter(task => task.pomodoros.completed > task.pomodoros.estimated).length);
+  const overEstimatedCount = $derived(estimatedTasks.filter(task => task.pomodoros.completed < task.pomodoros.estimated).length);
 
   // Analytics: Interruptions
   const todaySessions = $derived(pomodoroStore.todaySessions);

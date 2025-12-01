@@ -2,7 +2,7 @@
   import { getTasksStore, addTaskDirect, updateTask } from '$lib/stores/tasks.svelte';
   import TaskCard from './TaskCard.svelte';
   import InboxPanel from './InboxPanel.svelte';
-  import { t } from '$lib/i18n';
+  import { getI18nStore } from '$lib/i18n';
   import { fade, slide } from 'svelte/transition';
   import { createEmptyTask } from '$lib/types';
   import { isToday, isOverdue } from '$lib/utils/unitCalc';
@@ -10,15 +10,17 @@
   import { flip } from 'svelte/animate';
 
   const tasks = getTasksStore();
+  const i18n = getI18nStore();
+  const t = i18n.t;
 
   // Inbox Drawer State
   let isInboxOpen = $state(false);
 
   // Get tasks due today or overdue
-  const todayTasks = $derived(tasks.tasks.filter(t => 
-    !t.completed && 
-    t.dueDate && 
-    (isToday(t.dueDate) || isOverdue(t.dueDate))
+  const todayTasks = $derived(tasks.tasks.filter(task =>
+    !task.completed &&
+    task.dueDate &&
+    (isToday(task.dueDate) || isOverdue(task.dueDate))
   ).sort((a, b) => {
     // Sort by priority first, then due date
     if (a.priority !== b.priority) {
@@ -27,10 +29,10 @@
     return 0;
   }));
 
-  const completedTodayTasks = $derived(tasks.tasks.filter(t => 
-    t.completed && 
-    t.completedAt && 
-    isToday(t.completedAt)
+  const completedTodayTasks = $derived(tasks.tasks.filter(task =>
+    task.completed &&
+    task.completedAt &&
+    isToday(task.completedAt)
   ));
 
   // Progress
@@ -39,9 +41,9 @@
 
   // Group today tasks by priority for better visual scanning
   const groupedTasks = $derived({
-    high: todayTasks.filter(t => t.priority === 'A' || t.priority === 'B'),
-    standard: todayTasks.filter(t => t.priority === 'C' || t.priority === 'D'),
-    other: todayTasks.filter(t => t.priority === 'E')
+    high: todayTasks.filter(task => task.priority === 'A' || task.priority === 'B'),
+    standard: todayTasks.filter(task => task.priority === 'C' || task.priority === 'D'),
+    other: todayTasks.filter(task => task.priority === 'E')
   });
 
   // Today's Date
@@ -102,7 +104,7 @@
             <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
             <polyline points="22,6 12,13 2,6"></polyline>
           </svg>
-          <span class="count-badge">{tasks.tasksByPriority['E'].filter(t => !t.completed).length}</span>
+          <span class="count-badge">{tasks.tasksByPriority['E'].filter(task => !task.completed).length}</span>
         </button>
       </div>
     </div>

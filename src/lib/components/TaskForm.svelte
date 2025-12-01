@@ -3,13 +3,16 @@
   import { PRIORITY_CONFIG } from '$lib/types';
   import { addTask } from '$lib/stores/tasks.svelte';
   import { showToast } from '$lib/stores/ui.svelte';
-  import { t } from '$lib/i18n';
+  import { getI18nStore } from '$lib/i18n';
 
   interface Props {
     onSubmit?: () => void;
   }
 
   let { onSubmit }: Props = $props();
+
+  const i18n = getI18nStore();
+  const t = i18n.t;
 
   let content = $state('');
   let project = $state('');
@@ -22,7 +25,7 @@
   let isExpanded = $state(false);
   let showSyntaxHint = $state(false);
 
-  const recurrenceOptions = [
+  const recurrenceOptions = $derived([
     { value: '', label: t('taskForm.noRecurrence') },
     { value: '1d', label: t('taskForm.daily') },
     { value: '2d', label: t('taskForm.every2Days') },
@@ -30,17 +33,17 @@
     { value: '1w', label: t('taskForm.weekly') },
     { value: '2w', label: t('taskForm.biweekly') },
     { value: '1m', label: t('taskForm.monthly') },
-  ];
+  ]);
 
   // Syntax patterns for highlighting
-  const syntaxPatterns = [
+  const syntaxPatterns = $derived([
     { pattern: '+', label: t('syntax.project'), color: '#b197fc' },
     { pattern: '@', label: t('syntax.context'), color: '#74c0fc' },
     { pattern: '#', label: t('syntax.tag'), color: '#63e6be' },
     { pattern: 'due:', label: t('syntax.dueDate'), color: '#fcc419' },
     { pattern: 't:', label: t('syntax.threshold'), color: '#a9a9a9' },
     { pattern: 'est:', label: t('syntax.pomodoro'), color: '#ff6b6b' },
-  ];
+  ]);
 
   function buildTaskString(): string {
     let parts: string[] = [content.trim()];

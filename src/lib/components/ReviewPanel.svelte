@@ -3,10 +3,12 @@
   import { PRIORITY_CONFIG } from '$lib/types';
   import { getReviewsStore, createReview, getCompletionRate, getPriorityRates } from '$lib/stores/reviews.svelte';
   import { getTasksStore } from '$lib/stores/tasks.svelte';
-  import { t } from '$lib/i18n';
+  import { getI18nStore } from '$lib/i18n';
 
   const reviews = getReviewsStore();
   const tasks = getTasksStore();
+  const i18n = getI18nStore();
+  const t = i18n.t;
 
   let reflection = $state('');
   let nextUnitFocus = $state('');

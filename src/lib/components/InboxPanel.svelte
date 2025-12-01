@@ -5,7 +5,7 @@
   import { getTasksStore, changePriority, reorderTask } from '$lib/stores/tasks.svelte';
   import { getPomodoroStore } from '$lib/stores/pomodoro.svelte';
   import { getUIStore } from '$lib/stores/ui.svelte';
-  import { t } from '$lib/i18n';
+  import { getI18nStore } from '$lib/i18n';
   import { dndzone, TRIGGERS, SHADOW_ITEM_MARKER_PROPERTY_NAME } from 'svelte-dnd-action';
   import { flip } from 'svelte/animate';
   import { dndConfig, areTaskArraysEqual, type DndConsiderEvent, type DndFinalizeEvent } from '$lib/utils/motion';
@@ -13,6 +13,8 @@
   const tasks = getTasksStore();
   const pomodoro = getPomodoroStore();
   const ui = getUIStore();
+  const i18n = getI18nStore();
+  const t = i18n.t;
 
   interface Props {
     isDrawer?: boolean; // New prop to style as drawer
@@ -22,10 +24,10 @@
 
   // Focus mode - dim inbox when pomodoro is active on non-inbox task
   let isFocusMode = $derived(pomodoro.state === 'work' && pomodoro.activeTaskId !== null);
-  let hasActiveTask = $derived(tasks.tasksByPriority['E'].some(t => t.id === pomodoro.activeTaskId));
+  let hasActiveTask = $derived(tasks.tasksByPriority['E'].some(task => task.id === pomodoro.activeTaskId));
 
-  let inboxTasks = $derived(tasks.tasksByPriority['E'].filter(t => !t.completed));
-  let completedTasks = $derived(tasks.tasksByPriority['E'].filter(t => t.completed));
+  let inboxTasks = $derived(tasks.tasksByPriority['E'].filter(task => !task.completed));
+  let completedTasks = $derived(tasks.tasksByPriority['E'].filter(task => task.completed));
   let showCompleted = $state(false);
 
   // DnD state
@@ -42,12 +44,12 @@
   // Check if any task is being dragged (from ui store for legacy support)
   let isDragging = $derived(ui.draggedTaskId !== null || isDndActive);
 
-  const priorityTargets: { priority: Priority; label: string; color: string; time: string }[] = [
-    { priority: 'A', label: t('priority.A'), color: PRIORITY_CONFIG.A.color, time: t('priority.time.A') },
-    { priority: 'B', label: t('priority.B'), color: PRIORITY_CONFIG.B.color, time: t('priority.time.B') },
-    { priority: 'C', label: t('priority.C'), color: PRIORITY_CONFIG.C.color, time: t('priority.time.C') },
-    { priority: 'D', label: t('priority.D'), color: PRIORITY_CONFIG.D.color, time: t('priority.time.D') },
-  ];
+  const priorityTargets = $derived([
+    { priority: 'A' as Priority, label: t('priority.A'), color: PRIORITY_CONFIG.A.color, time: t('priority.time.A') },
+    { priority: 'B' as Priority, label: t('priority.B'), color: PRIORITY_CONFIG.B.color, time: t('priority.time.B') },
+    { priority: 'C' as Priority, label: t('priority.C'), color: PRIORITY_CONFIG.C.color, time: t('priority.time.C') },
+    { priority: 'D' as Priority, label: t('priority.D'), color: PRIORITY_CONFIG.D.color, time: t('priority.time.D') },
+  ]);
 
   function handleMoveToPriority(taskId: string, priority: Priority) {
     changePriority(taskId, priority);
@@ -81,7 +83,7 @@
 
     if (info.trigger === TRIGGERS.DROPPED_INTO_ZONE) {
       // Reorder within inbox
-      const newOrder = cleanItems.map(t => t.id);
+      const newOrder = cleanItems.map(task => task.id);
       reorderTask('E', newOrder);
     } else if (info.trigger === TRIGGERS.DROPPED_OUTSIDE_OF_ANY) {
       // Reset if dropped outside

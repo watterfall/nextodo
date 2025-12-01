@@ -1,7 +1,7 @@
 <script lang="ts">
   import { getTasksStore } from '$lib/stores/tasks.svelte';
   import TaskCard from './TaskCard.svelte';
-  import { t } from '$lib/i18n';
+  import { getI18nStore } from '$lib/i18n';
   import { slide } from 'svelte/transition';
   import { PRIORITY_CONFIG, type Priority } from '$lib/types';
   import PomodoroTimer from './PomodoroTimer.svelte';
@@ -11,19 +11,21 @@
   const tasks = getTasksStore();
   const ui = getUIStore();
   const pomodoro = getPomodoroStore();
+  const i18n = getI18nStore();
+  const t = i18n.t;
 
   const priorities: Priority[] = ['A', 'B', 'C', 'D', 'E'];
 
   // Group tasks by priority
   const groupedTasks = $derived({
-    A: tasks.tasksByPriority['A'].filter(t => !t.completed),
-    B: tasks.tasksByPriority['B'].filter(t => !t.completed),
-    C: tasks.tasksByPriority['C'].filter(t => !t.completed),
-    D: tasks.tasksByPriority['D'].filter(t => !t.completed),
-    E: tasks.tasksByPriority['E'].filter(t => !t.completed)
+    A: tasks.tasksByPriority['A'].filter(task => !task.completed),
+    B: tasks.tasksByPriority['B'].filter(task => !task.completed),
+    C: tasks.tasksByPriority['C'].filter(task => !task.completed),
+    D: tasks.tasksByPriority['D'].filter(task => !task.completed),
+    E: tasks.tasksByPriority['E'].filter(task => !task.completed)
   });
 
-  const completedTasks = $derived(tasks.tasks.filter(t => t.completed));
+  const completedTasks = $derived(tasks.tasks.filter(task => task.completed));
   let showCompleted = $state(false);
 
   function handleImmersiveMode() {

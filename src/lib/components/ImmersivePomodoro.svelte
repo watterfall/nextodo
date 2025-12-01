@@ -1,6 +1,6 @@
 <script lang="ts">
   import { getPomodoroStore, pausePomodoro, resumePomodoro, stopPomodoro, skipSession, recordInterruption } from '$lib/stores/pomodoro.svelte';
-  import { t } from '$lib/i18n';
+  import { getI18nStore } from '$lib/i18n';
   import { scale, fade } from 'svelte/transition';
 
   interface Props {
@@ -10,6 +10,8 @@
   let { onClose }: Props = $props();
 
   const pomodoro = getPomodoroStore();
+  const i18n = getI18nStore();
+  const t = i18n.t;
   let showInterruptionInput = $state(false);
   let interruptionReason = $state('');
 

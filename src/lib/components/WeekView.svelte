@@ -2,7 +2,7 @@
   import { getTasksStore, updateTask } from '$lib/stores/tasks.svelte';
   import TaskCard from './TaskCard.svelte';
   import InboxPanel from './InboxPanel.svelte';
-  import { t } from '$lib/i18n';
+  import { getI18nStore } from '$lib/i18n';
   import { fade } from 'svelte/transition';
   import type { Task } from '$lib/types';
   import { dndzone, TRIGGERS } from 'svelte-dnd-action';
@@ -10,6 +10,8 @@
   import { isToday } from '$lib/utils/unitCalc';
 
   const tasks = getTasksStore();
+  const i18n = getI18nStore();
+  const t = i18n.t;
 
   // Inbox Drawer State
   let isInboxOpen = $state(false);
@@ -97,7 +99,7 @@
             <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
             <polyline points="22,6 12,13 2,6"></polyline>
           </svg>
-          <span class="count-badge">{tasks.tasksByPriority['E'].filter(t => !t.completed).length}</span>
+          <span class="count-badge">{tasks.tasksByPriority['E'].filter(task => !task.completed).length}</span>
         </button>
       </div>
     </div>
