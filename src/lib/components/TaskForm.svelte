@@ -16,7 +16,7 @@
 
   let content = $state('');
   let project = $state('');
-  let context = $state('');
+  let mood = $state('');
   let tags = $state('');
   let dueDate = $state('');
   let thresholdDate = $state('');
@@ -24,6 +24,17 @@
   let recurrence = $state('');
   let isExpanded = $state(false);
   let showSyntaxHint = $state(false);
+  let hasStartedTyping = $state(false);
+
+  const moodOptions = $derived([
+    { value: '', label: t('taskForm.moodPlaceholder'), emoji: '' },
+    { value: 'challenging', label: t('taskForm.moodOptions.challenging'), emoji: '🔥' },
+    { value: 'focused', label: t('taskForm.moodOptions.focused'), emoji: '⚡' },
+    { value: 'calm', label: t('taskForm.moodOptions.calm'), emoji: '😌' },
+    { value: 'motivated', label: t('taskForm.moodOptions.motivated'), emoji: '💪' },
+    { value: 'creative', label: t('taskForm.moodOptions.creative'), emoji: '🎨' },
+    { value: 'routine', label: t('taskForm.moodOptions.routine'), emoji: '📋' },
+  ]);
 
   const recurrenceOptions = $derived([
     { value: '', label: t('taskForm.noRecurrence') },
@@ -38,11 +49,10 @@
   // Syntax patterns for highlighting
   const syntaxPatterns = $derived([
     { pattern: '+', label: t('syntax.project'), color: '#b197fc' },
-    { pattern: '@', label: t('syntax.context'), color: '#74c0fc' },
+    { pattern: '@', label: t('taskForm.mood'), color: '#74c0fc' },
     { pattern: '#', label: t('syntax.tag'), color: '#63e6be' },
     { pattern: 'due:', label: t('syntax.dueDate'), color: '#fcc419' },
     { pattern: 't:', label: t('syntax.threshold'), color: '#a9a9a9' },
-    { pattern: 'est:', label: t('syntax.pomodoro'), color: '#ff6b6b' },
   ]);
 
   function buildTaskString(): string {
@@ -51,8 +61,12 @@
     if (project.trim()) {
       parts.push(`+${project.trim().replace(/\s+/g, '_')}`);
     }
-    if (context.trim()) {
-      parts.push(`@${context.trim().replace(/\s+/g, '_')}`);
+    if (mood) {
+      // Add mood as context with emoji
+      const selectedMood = moodOptions.find(m => m.value === mood);
+      if (selectedMood && selectedMood.value) {
+        parts.push(`@${selectedMood.emoji}${selectedMood.value}`);
+      }
     }
     if (tags.trim()) {
       tags.trim().split(/[,\s]+/).forEach(tag => {
@@ -96,12 +110,13 @@
   function resetForm() {
     content = '';
     project = '';
-    context = '';
+    mood = '';
     tags = '';
     dueDate = '';
     thresholdDate = '';
     estimatedPomodoros = null;
     recurrence = '';
+    hasStartedTyping = false;
   }
 
   function handleKeydown(e: KeyboardEvent) {
@@ -115,17 +130,27 @@
   }
 
   function handleInputFocus() {
-    isExpanded = true;
     showSyntaxHint = true;
   }
 
   function handleInputBlur() {
-    // Delay to allow clicking on syntax hints
+    // Delay to allow clicking on other fields
     setTimeout(() => {
       if (!content.trim()) {
         showSyntaxHint = false;
+        hasStartedTyping = false;
       }
     }, 200);
+  }
+
+  function handleContentInput(e: Event) {
+    const input = e.target as HTMLInputElement;
+    content = input.value;
+    if (input.value.trim().length > 0 && !hasStartedTyping) {
+      hasStartedTyping = true;
+      // Show expanded form after user starts typing
+      isExpanded = true;
+    }
   }
 
   // Detect syntax patterns being typed
@@ -133,11 +158,10 @@
     syntaxPatterns.filter(p =>
       content.includes(p.pattern) ||
       (p.pattern === '+' && project.trim()) ||
-      (p.pattern === '@' && context.trim()) ||
+      (p.pattern === '@' && mood) ||
       (p.pattern === '#' && tags.trim()) ||
       (p.pattern === 'due:' && dueDate) ||
-      (p.pattern === 't:' && thresholdDate) ||
-      (p.pattern === 'est:' && estimatedPomodoros)
+      (p.pattern === 't:' && thresholdDate)
     )
   );
 </script>
@@ -148,7 +172,8 @@
       <input
         type="text"
         class="content-input"
-        bind:value={content}
+        value={content}
+        oninput={handleContentInput}
         onkeydown={handleKeydown}
         onfocus={handleInputFocus}
         onblur={handleInputBlur}
@@ -224,14 +249,13 @@
         <div class="field-group">
           <label class="field-label">
             <span class="label-icon" style:color="#74c0fc">@</span>
-            {t('taskForm.context')}
+            {t('taskForm.mood')}
           </label>
-          <input
-            type="text"
-            class="field-input"
-            bind:value={context}
-            placeholder={t('taskForm.contextPlaceholder')}
-          />
+          <select class="field-input mood-select" bind:value={mood}>
+            {#each moodOptions as option}
+              <option value={option.value}>{option.label}</option>
+            {/each}
+          </select>
         </div>
 
         <div class="field-group">
@@ -275,10 +299,9 @@
           />
         </div>
 
-        <div class="field-group small-input">
-          <label class="field-label">
+        <div class="field-group pomodoro-input">
+          <label class="field-label pomodoro-label">
             <span class="label-icon">🍅</span>
-            {t('taskForm.estimatedPomodoros')}
           </label>
           <input
             type="number"
@@ -498,14 +521,22 @@
     min-width: 140px;
   }
 
-  .field-group.small-input {
-    flex: 0 0 100px;
-    min-width: 100px;
+  .field-group.pomodoro-input {
+    flex: 0 0 70px;
+    min-width: 70px;
   }
 
   .field-group.recurrence-input {
     flex: 0 0 140px;
     min-width: 140px;
+  }
+
+  .pomodoro-label {
+    justify-content: center;
+  }
+
+  .mood-select {
+    cursor: pointer;
   }
 
   .field-label {

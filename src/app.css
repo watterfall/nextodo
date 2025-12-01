@@ -29,15 +29,15 @@ html.theme-transition *::after {
 /* Theme Variables - Dark Mode (Default) */
 :root,
 [data-theme="dark"] {
-  /* Background Colors - Softer gray tones instead of pure black */
-  --bg-primary: #1a1a1f;
-  --bg-secondary: #222228;
-  --sidebar-bg: #1e1e24;
-  --card-bg: #26262e;
-  --card-hover-bg: #2e2e38;
-  --input-bg: #2a2a32;
-  --hover-bg: rgba(255, 255, 255, 0.06);
-  --tag-bg: rgba(255, 255, 255, 0.08);
+  /* Background Colors - Deeper, richer dark tones */
+  --bg-primary: #121215;
+  --bg-secondary: #18181c;
+  --sidebar-bg: #151518;
+  --card-bg: #1e1e23;
+  --card-hover-bg: #252530;
+  --input-bg: #1c1c22;
+  --hover-bg: rgba(255, 255, 255, 0.05);
+  --tag-bg: rgba(255, 255, 255, 0.07);
 
   /* Text Colors */
   --text-primary: #f4f4f5;
@@ -45,8 +45,8 @@ html.theme-transition *::after {
   --text-muted: #6b6b76;
 
   /* Border Colors */
-  --border-color: #36363f;
-  --border-subtle: #2d2d35;
+  --border-color: #2a2a32;
+  --border-subtle: #222228;
 
   /* Brand Colors - Refined purple */
   --primary: #9775fa;
@@ -121,23 +121,23 @@ html.theme-transition *::after {
   --space-xl: 24px;
 }
 
-/* Light Mode - Clean, bright, with proper contrast */
+/* Light Mode - Softer, less bright with gray undertones */
 [data-theme="light"] {
-  --bg-primary: #f8f9fa;
-  --bg-secondary: #ffffff;
-  --sidebar-bg: #f1f3f5;
-  --card-bg: #ffffff;
-  --card-hover-bg: #f8f9fa;
-  --input-bg: #f1f3f5;
+  --bg-primary: #ebedef;
+  --bg-secondary: #f5f6f7;
+  --sidebar-bg: #e4e6e8;
+  --card-bg: #f8f9fa;
+  --card-hover-bg: #f0f1f3;
+  --input-bg: #e8eaec;
   --hover-bg: rgba(0, 0, 0, 0.04);
   --tag-bg: rgba(0, 0, 0, 0.05);
 
-  --text-primary: #212529;
-  --text-secondary: #495057;
-  --text-muted: #868e96;
+  --text-primary: #1a1d21;
+  --text-secondary: #404550;
+  --text-muted: #6c757d;
 
-  --border-color: #dee2e6;
-  --border-subtle: #e9ecef;
+  --border-color: #ced4da;
+  --border-subtle: #dde1e5;
 
   --primary: #7950f2;
   --primary-hover: #6741d9;
