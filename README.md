@@ -19,7 +19,9 @@
 - **Immersive Mode** - Full-screen distraction-free pomodoro sessions
 - **Recurring Tasks** - Daily, weekly, monthly patterns with threshold dates
 - **Smart Parsing** - Quick task input with intuitive syntax
-- **Multiple Views** - Zone view and Kanban board
+- **Multiple Views** - Zone, Kanban, Today, and Week views
+- **Drag & Drop** - Intuitive task reordering and scheduling
+- **Gamification** - Achievement badges for productivity milestones
 - **Theme Support** - Dark, light, and system themes
 - **Data Separation** - Hot/cold data architecture for performance
 - **Bilingual** - Chinese and English interface
@@ -34,6 +36,8 @@
 | Build Tool | Vite | ^6.0.5 |
 | Desktop Framework | Tauri 2 | ^2.1.0 |
 | Backend | Rust (2021 edition) | - |
+| Animation | Motion | ^12.23.24 |
+| Drag & Drop | svelte-dnd-action | ^0.9.67 |
 
 ### Quick Start
 
@@ -134,7 +138,9 @@ MIT
 - **沉浸模式** - 全屏无干扰番茄专注
 - **循环任务** - 支持每日、每周、每月模式与阈值日期
 - **智能解析** - 直观的快速输入语法
-- **多视图** - 区域视图和看板视图
+- **多视图** - 区域、看板、今日、周视图
+- **拖拽操作** - 直观的任务排序和日程安排
+- **成就系统** - 生产力里程碑徽章奖励
 - **主题支持** - 深色、浅色和跟随系统
 - **数据分离** - 冷热数据架构提升性能
 - **双语界面** - 中文和英文界面
@@ -149,6 +155,8 @@ MIT
 | 构建工具 | Vite | ^6.0.5 |
 | 桌面框架 | Tauri 2 | ^2.1.0 |
 | 后端 | Rust（2021 版） | - |
+| 动画 | Motion | ^12.23.24 |
+| 拖拽 | svelte-dnd-action | ^0.9.67 |
 
 ### 快速开始
 
