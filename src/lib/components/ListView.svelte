@@ -4,13 +4,8 @@
   import { getI18nStore } from '$lib/i18n';
   import { slide } from 'svelte/transition';
   import { PRIORITY_CONFIG, type Priority } from '$lib/types';
-  import PomodoroTimer from './PomodoroTimer.svelte';
-  import { getPomodoroStore } from '$lib/stores/pomodoro.svelte';
-  import { enterImmersiveMode, getUIStore } from '$lib/stores/ui.svelte';
 
   const tasks = getTasksStore();
-  const ui = getUIStore();
-  const pomodoro = getPomodoroStore();
   const i18n = getI18nStore();
   const t = i18n.t;
 
@@ -27,12 +22,6 @@
 
   const completedTasks = $derived(tasks.tasks.filter(task => task.completed));
   let showCompleted = $state(false);
-
-  function handleImmersiveMode() {
-    if (pomodoro.state !== 'idle') {
-      enterImmersiveMode();
-    }
-  }
 </script>
 
 <div class="list-view-container">
@@ -40,28 +29,26 @@
     <div class="tasks-container">
       {#each priorities as priority}
         {@const priorityTasks = groupedTasks[priority]}
-        {#if priorityTasks.length > 0} <!-- Only show if has tasks -->
-          <section class="task-section" class:priority-section={true} style:--section-color={PRIORITY_CONFIG[priority].color}>
-            <div class="section-header">
-              <div class="header-left">
-                <span class="priority-badge">{priority}</span>
-                <h3 class="section-title">{t(`priority.${priority}`)}</h3>
+        <section class="task-section" class:priority-section={true} style:--section-color={PRIORITY_CONFIG[priority].color}>
+          <div class="section-header">
+            <div class="header-left">
+              <span class="priority-badge">{priority}</span>
+              <h3 class="section-title">{t(`priority.${priority}`)}</h3>
+            </div>
+            <span class="count-badge">{priorityTasks.length}</span>
+          </div>
+
+          <div class="task-list">
+            {#each priorityTasks as task (task.id)}
+              <div animate:slide={{ duration: 200 }}>
+                <TaskCard {task} />
               </div>
-              <span class="count-badge">{priorityTasks.length}</span>
-            </div>
-            
-            <div class="task-list">
-              {#each priorityTasks as task (task.id)}
-                <div animate:slide={{ duration: 200 }}>
-                  <TaskCard {task} />
-                </div>
-              {/each}
-              {#if priorityTasks.length === 0}
-                 <div class="empty-section-hint">{t('zone.empty')}</div>
-              {/if}
-            </div>
-          </section>
-        {/if}
+            {/each}
+            {#if priorityTasks.length === 0}
+               <div class="empty-section-hint">{t('zone.empty')}</div>
+            {/if}
+          </div>
+        </section>
       {/each}
 
       <!-- Completed Section -->
@@ -86,17 +73,12 @@
       {/if}
     </div>
   </div>
-
-  <div class="timer-sidebar">
-    <PomodoroTimer onEnterImmersive={handleImmersiveMode} />
-  </div>
 </div>
 
 <style>
   .list-view-container {
     display: flex;
     height: 100%;
-    gap: 20px;
     overflow: hidden;
   }
 
@@ -104,11 +86,6 @@
     flex: 1;
     overflow-y: auto;
     padding-right: 4px;
-  }
-
-  .timer-sidebar {
-    width: 300px;
-    flex-shrink: 0;
   }
 
   .tasks-container {
@@ -209,17 +186,5 @@
     transform: rotate(90deg);
   }
 
-  @media (max-width: 900px) {
-    .list-view-container {
-      flex-direction: column;
-    }
-    
-    .timer-sidebar {
-      width: 100%;
-      height: auto;
-      border-top: 1px solid var(--border-subtle);
-      padding-top: 16px;
-    }
-  }
 </style>
 

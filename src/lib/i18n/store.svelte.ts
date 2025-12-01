@@ -8,9 +8,9 @@ const locales: Record<Language, typeof zhCN> = {
   'en-US': enUS,
 };
 
-// Current language state (use regular variables at module level, not $state)
-let _currentLanguage: Language = 'zh-CN';
-let _currentLocale: typeof zhCN = zhCN;
+// Reactive state using Svelte 5 runes
+let _currentLanguage = $state<Language>('zh-CN');
+let _currentLocale = $state<typeof zhCN>(zhCN);
 
 // Initialize from settings or system
 export function initI18n(language?: Language): void {
@@ -55,8 +55,8 @@ export function currentLanguage(): Language {
   return _currentLanguage;
 }
 
-// Get translation function
-export function t(key: string, params?: Record<string, string | number>): string {
+// Translation function that accesses reactive locale
+function translate(key: string, params?: Record<string, string | number>): string {
   const keys = key.split('.');
   let value: any = _currentLocale;
 
@@ -76,13 +76,16 @@ export function t(key: string, params?: Record<string, string | number>): string
 
   // Replace parameters
   if (params) {
-    return value.replace(/\{(\w+)\}/g, (_, name) =>
+    return value.replace(/\{(\w+)\}/g, (_: string, name: string) =>
       params[name] !== undefined ? String(params[name]) : `{${name}}`
     );
   }
 
   return value;
 }
+
+// Export t as alias for translate
+export const t = translate;
 
 // Get date format for current locale
 export function getDateFormat(): string {
@@ -120,12 +123,12 @@ export function getRelativeDate(date: Date | string): string {
   return formatDateLocale(d);
 }
 
-// Export store for reactivity
+// Export store for reactivity - returns an object with reactive getters
 export function getI18nStore() {
   return {
     get language() { return _currentLanguage; },
     get locale() { return _currentLocale; },
-    t,
+    t: translate,
     formatDate: formatDateLocale,
     getRelativeDate,
   };

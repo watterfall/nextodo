@@ -8,7 +8,6 @@
   // import WeekView from '$lib/components/WeekView.svelte';
   import TaskForm from '$lib/components/TaskForm.svelte';
   import InboxPanel from '$lib/components/InboxPanel.svelte';
-  import PomodoroTimer from '$lib/components/PomodoroTimer.svelte';
   import QuotaMeter from '$lib/components/QuotaMeter.svelte';
   import UnitNav from '$lib/components/UnitNav.svelte';
   import ReviewPanel from '$lib/components/ReviewPanel.svelte';
@@ -31,7 +30,6 @@
     hideToast,
     closeSearch,
     exitImmersiveMode,
-    enterImmersiveMode,
     setViewMode // Import this
   } from '$lib/stores/ui.svelte';
   import {
@@ -149,12 +147,6 @@
       closeSearch();
       searchInput = '';
       setSearchQuery('');
-    }
-  }
-
-  function handleImmersiveMode() {
-    if (pomodoro.state !== 'idle') {
-      enterImmersiveMode();
     }
   }
 
@@ -278,11 +270,6 @@
         <div class="kanban-panel">
           <KanbanView />
         </div>
-
-        <!-- Pomodoro Timer -->
-        <div class="timer-section-kanban">
-          <PomodoroTimer onEnterImmersive={handleImmersiveMode} />
-        </div>
       </div>
     {:else if ui.viewMode === 'list'}
       <div class="content-layout list-layout">
@@ -293,9 +280,6 @@
       <div class="content-layout kanban-layout">
         <div class="kanban-panel">
           <KanbanView />
-        </div>
-        <div class="timer-section-kanban">
-          <PomodoroTimer onEnterImmersive={handleImmersiveMode} />
         </div>
       </div>
     {/if}

@@ -1,12 +1,15 @@
 <script lang="ts">
   import { getTasksStore, setFilter, clearFilters } from '$lib/stores/tasks.svelte';
-  import { getUIStore, toggleSidebar, setViewMode } from '$lib/stores/ui.svelte';
+  import { getUIStore, toggleSidebar, setViewMode, enterImmersiveMode } from '$lib/stores/ui.svelte';
   import { getSettingsStore, toggleTheme, setAppLanguage } from '$lib/stores/settings.svelte';
-  import { getI18nStore, setLanguage, currentLanguage } from '$lib/i18n';
+  import { getPomodoroStore } from '$lib/stores/pomodoro.svelte';
+  import { getI18nStore, setLanguage } from '$lib/i18n';
+  import PomodoroTimer from './PomodoroTimer.svelte';
   import type { Language } from '$lib/types';
 
   // Get translation function from store to ensure stable reference
   const i18n = getI18nStore();
+  const pomodoro = getPomodoroStore();
   const t = i18n.t;
 
   interface Props {
@@ -75,10 +78,16 @@
   }
 
   function handleLanguageToggle() {
-    const currentLang = currentLanguage();
+    const currentLang = i18n.language;
     const newLang: Language = currentLang === 'zh-CN' ? 'en-US' : 'zh-CN';
     setLanguage(newLang);
     setAppLanguage(newLang); // Also persist to settings
+  }
+
+  function handleImmersiveMode() {
+    if (pomodoro.state !== 'idle') {
+      enterImmersiveMode();
+    }
   }
 
   function getThemeIcon(): 'dark' | 'light' | 'system' {
@@ -223,6 +232,11 @@
       {/if}
     </div>
 
+    <!-- Pomodoro Timer in Sidebar -->
+    <div class="sidebar-timer">
+      <PomodoroTimer onEnterImmersive={handleImmersiveMode} />
+    </div>
+
     <div class="sidebar-footer">
       <!-- Language Toggle -->
       <button
@@ -230,7 +244,7 @@
         onclick={handleLanguageToggle}
         title={t('settings.language')}
       >
-        <span class="lang-label">{currentLanguage() === 'zh-CN' ? '中' : 'EN'}</span>
+        <span class="lang-label">{i18n.language === 'zh-CN' ? '中' : 'EN'}</span>
       </button>
 
       <!-- Theme Toggle -->
@@ -583,6 +597,12 @@
   .clear-btn svg {
     width: 14px;
     height: 14px;
+  }
+
+  .sidebar-timer {
+    padding: 12px;
+    border-top: 1px solid var(--border-subtle);
+    border-bottom: 1px solid var(--border-subtle);
   }
 
   .sidebar-footer {
