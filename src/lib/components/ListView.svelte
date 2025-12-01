@@ -96,65 +96,61 @@
 </script>
 
 <div class="list-view-container">
-  <!-- Main tasks area with responsive grid for A/B/C/D -->
-  <div class="list-main">
-    <div class="tasks-grid">
-      {#each mainPriorities as priority}
-        {@const priorityTasks = dndItemsByPriority[priority]}
-        {@const isDropTarget = ui.dropTargetPriority === priority || activeDndPriority === priority}
-        <section
-          class="task-section"
-          class:drop-target={isDropTarget}
-          style:--section-color={PRIORITY_CONFIG[priority].color}
-        >
-          <div class="section-header">
-            <div class="header-left">
-              <span class="priority-badge">{priority}</span>
-              <h3 class="section-title">{t(`priority.${priority}`)}</h3>
-            </div>
-            <span class="count-badge">{priorityTasks.length}</span>
-          </div>
+  <!-- Main tasks area - A/B/C/D as horizontal rows -->
+  <div class="list-main" class:expanded={!showIdeaPool}>
+    {#each mainPriorities as priority}
+      {@const priorityTasks = dndItemsByPriority[priority]}
+      {@const isDropTarget = ui.dropTargetPriority === priority || activeDndPriority === priority}
+      <section
+        class="task-row"
+        class:drop-target={isDropTarget}
+        style:--section-color={PRIORITY_CONFIG[priority].color}
+      >
+        <div class="row-header">
+          <span class="priority-badge">{priority}</span>
+          <h3 class="row-title">{t(`priority.${priority}`)}</h3>
+          <span class="count-badge">{priorityTasks.length}</span>
+        </div>
 
-          <div
-            class="task-list"
-            use:dndzone={{
-              items: priorityTasks,
-              flipDurationMs: dndConfig.flipDurationMs,
-              dropTargetStyle: {},
-              dropTargetClasses: ['dnd-drop-target-active'],
-              type: DND_TYPE
-            }}
-            onconsider={handleDndConsider(priority)}
-            onfinalize={handleDndFinalize(priority)}
-          >
-            {#each priorityTasks as task (task.id)}
-              <div animate:flip={{ duration: dndConfig.flipDurationMs }} class="task-item">
-                <TaskCard {task} />
-              </div>
-            {/each}
-            {#if priorityTasks.length === 0}
-               <div class="empty-section-hint">{t('zone.dropHere')}</div>
-            {/if}
-          </div>
-        </section>
-      {/each}
-    </div>
+        <div
+          class="task-list-horizontal"
+          use:dndzone={{
+            items: priorityTasks,
+            flipDurationMs: dndConfig.flipDurationMs,
+            dropTargetStyle: {},
+            dropTargetClasses: ['dnd-drop-target-active'],
+            type: DND_TYPE
+          }}
+          onconsider={handleDndConsider(priority)}
+          onfinalize={handleDndFinalize(priority)}
+        >
+          {#each priorityTasks as task (task.id)}
+            <div animate:flip={{ duration: dndConfig.flipDurationMs }} class="task-item-horizontal">
+              <TaskCard {task} compact />
+            </div>
+          {/each}
+          {#if priorityTasks.length === 0}
+            <div class="empty-row-hint">{t('zone.dropHere')}</div>
+          {/if}
+        </div>
+      </section>
+    {/each}
 
     <!-- Completed Section -->
     {#if completedTasks.length > 0}
-      <section class="task-section completed-section">
+      <section class="task-row completed-row">
         <button class="completed-toggle" onclick={() => showCompleted = !showCompleted}>
-          <div class="header-left">
-            <span class="toggle-icon" class:rotated={showCompleted}>▶</span>
-            <h3 class="section-title">{t('filter.completed')}</h3>
-          </div>
+          <span class="toggle-icon" class:rotated={showCompleted}>▶</span>
+          <h3 class="row-title">{t('filter.completed')}</h3>
           <span class="count-badge">{completedTasks.length}</span>
         </button>
 
         {#if showCompleted}
-          <div class="task-list" transition:slide>
+          <div class="task-list-horizontal completed-list" transition:slide>
             {#each completedTasks as task (task.id)}
-              <TaskCard {task} compact showPriority />
+              <div class="task-item-horizontal">
+                <TaskCard {task} compact showPriority />
+              </div>
             {/each}
           </div>
         {/if}
@@ -162,18 +158,18 @@
     {/if}
   </div>
 
-  <!-- Idea Pool (E-zone) on the right side -->
+  <!-- Idea Pool (E-zone) - fixed on right side, toggleable -->
   <aside class="idea-pool-panel" class:collapsed={!showIdeaPool} class:drop-target={ui.dropTargetPriority === 'E' || activeDndPriority === 'E'}>
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <div class="pool-header" onclick={() => showIdeaPool = !showIdeaPool}>
-      <div class="header-left">
-        <span class="pool-badge" style:background={PRIORITY_CONFIG.E.color}>💡</span>
+      <span class="pool-badge" style:background={PRIORITY_CONFIG.E.color}>💡</span>
+      {#if showIdeaPool}
         <h3 class="pool-title">{t('inbox.title')}</h3>
-      </div>
-      <span class="pool-count">{dndItemsByPriority['E'].length}</span>
-      <svg class="expand-icon" class:rotated={showIdeaPool} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <polyline points="15 18 9 12 15 6"></polyline>
+        <span class="pool-count">{dndItemsByPriority['E'].length}</span>
+      {/if}
+      <svg class="toggle-icon" class:rotated={!showIdeaPool} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polyline points="9 18 15 12 9 6"></polyline>
       </svg>
     </div>
 
@@ -209,121 +205,123 @@
     display: flex;
     height: 100%;
     overflow: hidden;
-    gap: 16px;
+    gap: 12px;
   }
 
+  /* Main area - fills remaining space, rows stack vertically */
   .list-main {
     flex: 1;
     min-width: 0;
     overflow-y: auto;
-    padding-right: 4px;
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-  }
-
-  /* Responsive grid for A/B/C/D sections */
-  .tasks-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 16px;
-    padding-bottom: 20px;
-  }
-
-  .task-section {
     display: flex;
     flex-direction: column;
     gap: 12px;
+    transition: all 0.3s ease;
+  }
+
+  .list-main.expanded {
+    /* When idea pool is hidden, main area expands */
+  }
+
+  /* Task Row (A/B/C/D) - horizontal rows */
+  .task-row {
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
     background: var(--card-bg);
     border: 1px solid var(--border-subtle);
     border-radius: var(--radius-lg);
-    padding: 14px;
-    min-height: 120px;
+    overflow: hidden;
     transition: all var(--transition-normal);
   }
 
-  .task-section.drop-target {
+  .task-row.drop-target {
     border-color: var(--section-color);
     box-shadow: 0 0 0 2px var(--section-color);
   }
 
-  .section-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding-bottom: 10px;
-    border-bottom: 1px solid var(--border-subtle);
-  }
-
-  .header-left {
+  .row-header {
     display: flex;
     align-items: center;
     gap: 10px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border-subtle);
+    flex-shrink: 0;
   }
 
   .priority-badge {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 26px;
-    height: 26px;
+    width: 24px;
+    height: 24px;
     border-radius: 6px;
     background: var(--section-color);
     color: white;
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 700;
+    flex-shrink: 0;
   }
 
-  .section-title {
-    font-size: 14px;
+  .row-title {
+    font-size: 13px;
     font-weight: 600;
     color: var(--text-primary);
     margin: 0;
+    flex: 1;
   }
 
   .count-badge {
-    font-size: 12px;
+    font-size: 11px;
     color: var(--text-muted);
     font-weight: 500;
     background: var(--bg-secondary);
-    padding: 3px 10px;
+    padding: 2px 8px;
     border-radius: var(--radius-full);
+    flex-shrink: 0;
   }
 
-  .task-list {
+  /* Horizontal task list within each row */
+  .task-list-horizontal {
     display: flex;
-    flex-direction: column;
-    gap: 8px;
-    flex: 1;
-    min-height: 40px;
+    flex-direction: row;
+    gap: 10px;
+    padding: 10px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    min-height: 80px;
+    align-items: flex-start;
   }
 
-  .task-item {
+  .task-item-horizontal {
+    flex-shrink: 0;
+    width: 260px;
     transform-origin: center center;
   }
 
-  .empty-section-hint {
+  .empty-row-hint {
+    display: flex;
+    align-items: center;
+    justify-content: center;
     font-size: 13px;
     color: var(--text-muted);
     font-style: italic;
-    padding: 16px 0;
+    padding: 16px 24px;
     opacity: 0.6;
-    text-align: center;
+    flex: 1;
+    min-width: 200px;
   }
 
-  .completed-section {
+  /* Completed section */
+  .completed-row {
     opacity: 0.8;
-    background: var(--card-bg);
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-lg);
-    padding: 14px;
   }
 
   .completed-toggle {
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    padding-bottom: 8px;
+    gap: 10px;
+    padding: 10px 14px;
     border: none;
     border-bottom: 1px solid var(--border-subtle);
     background: transparent;
@@ -336,15 +334,20 @@
     font-size: 10px;
     transition: transform 0.2s;
     display: inline-block;
+    flex-shrink: 0;
   }
 
   .toggle-icon.rotated {
     transform: rotate(90deg);
   }
 
-  /* Idea Pool (E-zone) panel on right side */
+  .completed-list {
+    flex-wrap: wrap;
+  }
+
+  /* Idea Pool (E-zone) - fixed on right, toggleable */
   .idea-pool-panel {
-    width: 280px;
+    width: 260px;
     flex-shrink: 0;
     background: var(--card-bg);
     border: 1px solid var(--border-subtle);
@@ -352,18 +355,12 @@
     overflow: hidden;
     display: flex;
     flex-direction: column;
-    transition: all var(--transition-normal);
+    transition: all 0.3s ease;
     height: 100%;
-    align-self: stretch;
   }
 
   .idea-pool-panel.collapsed {
     width: 52px;
-  }
-
-  .idea-pool-panel.collapsed .pool-title,
-  .idea-pool-panel.collapsed .pool-count {
-    display: none;
   }
 
   .idea-pool-panel.drop-target {
@@ -414,7 +411,7 @@
     border-radius: var(--radius-full);
   }
 
-  .expand-icon {
+  .toggle-icon {
     width: 16px;
     height: 16px;
     color: var(--text-muted);
@@ -422,8 +419,8 @@
     flex-shrink: 0;
   }
 
-  .expand-icon.rotated {
-    transform: rotate(-90deg);
+  .toggle-icon.rotated {
+    transform: rotate(180deg);
   }
 
   .pool-tasks {
@@ -457,7 +454,10 @@
   /* Responsive */
   @media (max-width: 1200px) {
     .idea-pool-panel {
-      width: 240px;
+      width: 220px;
+    }
+    .task-item-horizontal {
+      width: 220px;
     }
   }
 
@@ -467,27 +467,23 @@
     }
 
     .list-main {
-      flex: none;
-      overflow: visible;
+      flex: 1;
+      min-height: 0;
     }
 
-    .tasks-grid {
-      grid-template-columns: repeat(2, 1fr);
+    .task-item-horizontal {
+      width: 200px;
     }
 
     .idea-pool-panel {
       width: 100%;
-      max-height: 250px;
+      flex-shrink: 0;
+      max-height: 200px;
     }
 
     .idea-pool-panel.collapsed {
       width: 100%;
-    }
-  }
-
-  @media (max-width: 600px) {
-    .tasks-grid {
-      grid-template-columns: 1fr;
+      max-height: 52px;
     }
   }
 </style>
