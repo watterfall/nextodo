@@ -757,32 +757,74 @@ kbd {
    DRAG AND DROP SYSTEM (svelte-dnd-action)
    =========================================== */
 
+/* Base draggable item styling */
+[data-is-dnd-shadow-item="true"] {
+  opacity: 0.4 !important;
+  background: var(--primary-bg) !important;
+  border: 2px dashed var(--primary) !important;
+  border-radius: var(--radius-md) !important;
+}
+
 /* Dragging item - the item being dragged */
-.dnd-dragging {
-  opacity: 0.85 !important;
-  transform: scale(1.02) rotate(1deg) !important;
-  box-shadow: var(--shadow-lg), 0 0 20px rgba(151, 117, 250, 0.2) !important;
-  z-index: 1000 !important;
+.dnd-dragging,
+[aria-grabbed="true"] {
+  opacity: 0.9 !important;
+  transform: scale(1.02) rotate(0.5deg) !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25), 0 0 0 2px var(--primary) !important;
+  z-index: 9999 !important;
   cursor: grabbing !important;
+  pointer-events: auto !important;
+  will-change: transform;
+  backface-visibility: hidden;
 }
 
 /* Drop shadow - placeholder where item will land */
 .dnd-drop-shadow {
-  opacity: 0.4;
+  opacity: 0.35;
   border: 2px dashed var(--primary) !important;
   background: var(--primary-bg) !important;
+  border-radius: var(--radius-md);
 }
 
 /* Drop target zone - container that can receive drops */
 .dnd-drop-target {
-  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: transform, box-shadow;
 }
 
 .dnd-drop-target-active {
-  transform: scale(1.01);
+  transform: scale(1.005);
   border-color: var(--zone-color, var(--primary)) !important;
-  box-shadow: 0 0 0 2px var(--zone-color, var(--primary)), var(--shadow-md) !important;
+  box-shadow: 0 0 0 2px var(--zone-color, var(--primary)), 0 4px 16px rgba(0, 0, 0, 0.1) !important;
   background: var(--zone-bg, var(--primary-bg)) !important;
+}
+
+/* Touch-specific optimizations */
+@media (pointer: coarse) {
+  /* Larger touch targets for dragging */
+  [draggable="true"],
+  .task-row-item,
+  .task-item-wrapper,
+  .pool-task-row,
+  .pool-task-item {
+    touch-action: pan-y;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+    min-height: 48px;
+  }
+
+  /* Prevent scroll interference during drag */
+  .dnd-dragging {
+    touch-action: none !important;
+  }
+}
+
+/* Prevent text selection during drag */
+body.dnd-active {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  cursor: grabbing !important;
 }
 
 /* Drag handle styling */
@@ -811,6 +853,11 @@ kbd {
 *:hover > .drag-handle,
 .drag-handle:focus-visible {
   opacity: 1;
+}
+
+/* Smooth transitions for reordering */
+.flip-list-move {
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* ===========================================

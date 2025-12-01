@@ -79,7 +79,20 @@ export const dndConfig = {
   // Drag preview opacity
   dragPreviewOpacity: 0.9,
   // Drop zone highlight scale
-  dropZoneHighlightScale: 1.02
+  dropZoneHighlightScale: 1.02,
+  // Center dragged item on cursor for better UX
+  centreDraggedOnCursor: true,
+  // Morphing duration for smoother transitions
+  morphDisabled: false,
+  // Enable transform drag to reduce layout thrashing
+  transformDraggedElement: (el: HTMLElement | undefined) => {
+    if (el) {
+      el.style.boxShadow = '0 8px 24px rgba(0, 0, 0, 0.25)';
+      el.style.transform = 'scale(1.02) rotate(1deg)';
+      el.style.cursor = 'grabbing';
+      el.style.zIndex = '9999';
+    }
+  }
 } as const;
 
 // CSS transition strings for common animations

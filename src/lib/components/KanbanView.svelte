@@ -298,7 +298,7 @@
         role="region"
         aria-label={t(`priority.${priority}`)}
       >
-        <div class="column-header" title={config.description}>
+        <div class="column-header" title={t(`priority.tooltip.${priority}`)}>
           <span class="column-letter" style:background={config.color}>{priority}</span>
           <span class="column-name">{t(`priority.${priority}`)}</span>
           <span class="column-count">{counts[priority]}</span>
@@ -362,7 +362,7 @@
     ondrop={(e) => handleDrop(e, 'F')}
   >
     <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="pool-header" onclick={() => showQuickAction = !showQuickAction}>
+    <div class="pool-header" onclick={() => showQuickAction = !showQuickAction} title={t('priority.tooltip.F')}>
       <span class="pool-badge" style:background={PRIORITY_CONFIG.F.color}>💡</span>
       {#if showQuickAction}
         <span class="pool-title">{t('inbox.title')}</span>

@@ -4,6 +4,7 @@
   import { getI18nStore } from '$lib/i18n';
   import type { Task } from '$lib/types';
   import { PRIORITY_CONFIG } from '$lib/types';
+  import { onMount } from 'svelte';
 
   interface Props {
     onClose: () => void;
@@ -15,40 +16,63 @@
   const i18n = getI18nStore();
   const t = i18n.t;
 
+  // Track if component is mounted
+  let isMounted = $state(false);
+
+  onMount(() => {
+    isMounted = true;
+    return () => { isMounted = false; };
+  });
+
   // Tabs
   type TabType = 'trash' | 'completed' | 'archived';
   let activeTab = $state<TabType>('trash');
 
   // Get trash items with age calculation (with defensive null check)
   const trashItems = $derived.by(() => {
-    const trash = tasks.trash ?? [];
-    return trash.map(task => {
-      const deletedAt = task.completedAt ? new Date(task.completedAt) : new Date(task.createdAt);
-      const now = new Date();
-      const ageInDays = Math.floor((now.getTime() - deletedAt.getTime()) / (1000 * 60 * 60 * 24));
-      const daysRemaining = Math.max(0, 7 - ageInDays);
-      return { ...task, ageInDays, daysRemaining };
-    }).sort((a, b) => b.ageInDays - a.ageInDays);
+    if (!isMounted) return [];
+    try {
+      const trash = tasks.trash ?? [];
+      return trash.map(task => {
+        const deletedAt = task.completedAt ? new Date(task.completedAt) : new Date(task.createdAt);
+        const now = new Date();
+        const ageInDays = Math.floor((now.getTime() - deletedAt.getTime()) / (1000 * 60 * 60 * 24));
+        const daysRemaining = Math.max(0, 7 - ageInDays);
+        return { ...task, ageInDays, daysRemaining };
+      }).sort((a, b) => b.ageInDays - a.ageInDays);
+    } catch {
+      return [];
+    }
   });
 
   // Get completed tasks (not yet archived)
   const completedItems = $derived.by(() => {
-    const allTasks = tasks.tasks ?? [];
-    return allTasks.filter(task => task.completed).sort((a, b) => {
-      const dateA = a.completedAt ? new Date(a.completedAt).getTime() : 0;
-      const dateB = b.completedAt ? new Date(b.completedAt).getTime() : 0;
-      return dateB - dateA;
-    });
+    if (!isMounted) return [];
+    try {
+      const allTasks = tasks.tasks ?? [];
+      return allTasks.filter(task => task.completed).sort((a, b) => {
+        const dateA = a.completedAt ? new Date(a.completedAt).getTime() : 0;
+        const dateB = b.completedAt ? new Date(b.completedAt).getTime() : 0;
+        return dateB - dateA;
+      });
+    } catch {
+      return [];
+    }
   });
 
   // Get archived tasks (with defensive null check)
   const archivedItems = $derived.by(() => {
-    const archive = tasks.archive ?? [];
-    return [...archive].sort((a, b) => {
-      const dateA = a.completedAt ? new Date(a.completedAt).getTime() : 0;
-      const dateB = b.completedAt ? new Date(b.completedAt).getTime() : 0;
-      return dateB - dateA;
-    });
+    if (!isMounted) return [];
+    try {
+      const archive = tasks.archive ?? [];
+      return [...archive].sort((a, b) => {
+        const dateA = a.completedAt ? new Date(a.completedAt).getTime() : 0;
+        const dateB = b.completedAt ? new Date(b.completedAt).getTime() : 0;
+        return dateB - dateA;
+      });
+    } catch {
+      return [];
+    }
   });
 
   function handleRestore(taskId: string) {
