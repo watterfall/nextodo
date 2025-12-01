@@ -11,7 +11,7 @@ export default {
     today: '今日',
     inbox: '待处理',
     projects: '项目',
-    contexts: '场景',
+    contexts: '状态',
     tags: '标签',
     calendar: '日历',
     archive: '归档',
@@ -121,7 +121,7 @@ export default {
     biweekly: '每两周',
     monthly: '每月',
     keyboardHint: '按 Ctrl+Enter 快速添加',
-    syntaxHint: '支持语法: !A-F +项目 @情境 #标签 ~日期 thr:延后日期 🍅数量',
+    syntaxHint: '支持语法: !A-F +项目 @状态 #标签 ~日期 thr:延后日期 🍅数量',
   },
 
   // Inbox Panel (Idea Pool)
@@ -141,7 +141,7 @@ export default {
   // Task
   task: {
     add: '添加任务',
-    addPlaceholder: '快速添加任务 (+项目 @情境 #标签 !A-F ~日期 🍅数量)',
+    addPlaceholder: '快速添加任务 (+项目 @状态 #标签 !A-F ~日期 🍅数量)',
     edit: '编辑任务',
     delete: '删除任务',
     complete: '完成任务',
@@ -305,7 +305,7 @@ export default {
     todayCompleted: '今日完成',
     allTasks: '全部任务',
     projects: '项目',
-    contexts: '情境',
+    contexts: '状态',
     tags: '标签',
     dueDates: '截止日期',
     recurring: '重复任务',
@@ -315,7 +315,7 @@ export default {
     dailyRecurring: '每日',
     weeklyRecurring: '每周',
     noProjects: '暂无项目',
-    noContexts: '暂无情境',
+    noContexts: '暂无状态',
     collapse: '收起侧边栏',
     showAll: '显示全部',
   },
@@ -384,7 +384,7 @@ export default {
   syntax: {
     title: '输入语法',
     project: '项目',
-    context: '情境',
+    context: '状态',
     tag: '标签',
     priority: '优先级',
     dueDate: '截止日',

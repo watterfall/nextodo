@@ -52,11 +52,12 @@
 
   // Syntax patterns for highlighting
   const syntaxPatterns = $derived([
-    { pattern: '+', label: t('syntax.project'), color: '#b197fc' },
-    { pattern: '@', label: t('taskForm.mood'), color: '#74c0fc' },
-    { pattern: '#', label: t('syntax.tag'), color: '#63e6be' },
-    { pattern: 'due:', label: t('syntax.dueDate'), color: '#fcc419' },
-    { pattern: 't:', label: t('syntax.threshold'), color: '#a9a9a9' },
+    { pattern: '!A-F', label: t('syntax.priority'), color: '#ff7b7b' },
+    { pattern: '+', label: t('syntax.project'), color: '#9384bc' },
+    { pattern: '@', label: t('syntax.context'), color: '#6b9cbc' },
+    { pattern: '#', label: t('syntax.tag'), color: '#6ca88c' },
+    { pattern: 'due:', label: t('syntax.dueDate'), color: '#d4a84a' },
+    { pattern: 't:', label: t('syntax.threshold'), color: '#8a8a8a' },
   ]);
 
   function buildTaskString(): string {
@@ -162,6 +163,8 @@
   let detectedPatterns = $derived(
     syntaxPatterns.filter(p =>
       content.includes(p.pattern) ||
+      (p.pattern === '!A-F' && /![A-Fa-f]/.test(content)) ||
+      (p.pattern === '!A-F' && selectedPriority !== 'F') ||
       (p.pattern === '+' && project.trim()) ||
       (p.pattern === '@' && mood) ||
       (p.pattern === '#' && tags.trim()) ||

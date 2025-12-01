@@ -277,7 +277,7 @@
                   class:active={tasks.filter.project === project}
                   onclick={() => handleProjectFilter(project)}
                 >
-                  <span class="badge-text">+{project}</span>
+                  <span class="badge-text">{project}</span>
                   {#if count > 0}
                     <span class="badge-sup">{count}</span>
                   {/if}
@@ -306,7 +306,7 @@
                   class:active={tasks.filter.context === context}
                   onclick={() => handleContextFilter(context)}
                 >
-                  <span class="badge-text">@{context}</span>
+                  <span class="badge-text">{context}</span>
                   {#if count > 0}
                     <span class="badge-sup">{count}</span>
                   {/if}
@@ -335,7 +335,7 @@
                   class:active={tasks.filter.tag === tag}
                   onclick={() => handleTagFilter(tag)}
                 >
-                  <span class="badge-text">#{tag}</span>
+                  <span class="badge-text">{tag}</span>
                   {#if count > 0}
                     <span class="badge-sup">{count}</span>
                   {/if}
@@ -683,15 +683,15 @@
   }
 
   .filter-item.project .item-icon {
-    color: #b197fc;
+    color: #9384bc;
   }
 
   .filter-item.context .item-icon {
-    color: #74c0fc;
+    color: #6b9cbc;
   }
 
   .filter-item.tag .item-icon {
-    color: #63e6be;
+    color: #6ca88c;
   }
 
   /* Badge count for items */
@@ -714,18 +714,18 @@
   }
 
   .filter-item.project .item-badge {
-    background: rgba(177, 151, 252, 0.15);
-    color: #b197fc;
+    background: rgba(147, 132, 188, 0.18);
+    color: #9384bc;
   }
 
   .filter-item.context .item-badge {
-    background: rgba(116, 192, 252, 0.15);
-    color: #74c0fc;
+    background: rgba(107, 156, 188, 0.18);
+    color: #6b9cbc;
   }
 
   .filter-item.tag .item-badge {
-    background: rgba(99, 230, 190, 0.15);
-    color: #63e6be;
+    background: rgba(108, 168, 140, 0.18);
+    color: #6ca88c;
   }
 
   .filter-item.active .item-badge {
@@ -1067,45 +1067,45 @@
   }
 
   .tag-badge-btn.project {
-    background: rgba(177, 151, 252, 0.12);
-    color: #b197fc;
+    background: rgba(147, 132, 188, 0.15);
+    color: #9384bc;
   }
 
   .tag-badge-btn.project:hover {
-    background: rgba(177, 151, 252, 0.2);
+    background: rgba(147, 132, 188, 0.22);
   }
 
   .tag-badge-btn.project.active {
-    background: rgba(177, 151, 252, 0.25);
-    box-shadow: 0 0 0 1px #b197fc;
+    background: rgba(147, 132, 188, 0.28);
+    box-shadow: 0 0 0 1px #9384bc;
   }
 
   .tag-badge-btn.context {
-    background: rgba(116, 192, 252, 0.12);
-    color: #74c0fc;
+    background: rgba(107, 156, 188, 0.15);
+    color: #6b9cbc;
   }
 
   .tag-badge-btn.context:hover {
-    background: rgba(116, 192, 252, 0.2);
+    background: rgba(107, 156, 188, 0.22);
   }
 
   .tag-badge-btn.context.active {
-    background: rgba(116, 192, 252, 0.25);
-    box-shadow: 0 0 0 1px #74c0fc;
+    background: rgba(107, 156, 188, 0.28);
+    box-shadow: 0 0 0 1px #6b9cbc;
   }
 
   .tag-badge-btn.tag {
-    background: rgba(99, 230, 190, 0.12);
-    color: #63e6be;
+    background: rgba(108, 168, 140, 0.15);
+    color: #6ca88c;
   }
 
   .tag-badge-btn.tag:hover {
-    background: rgba(99, 230, 190, 0.2);
+    background: rgba(108, 168, 140, 0.22);
   }
 
   .tag-badge-btn.tag.active {
-    background: rgba(99, 230, 190, 0.25);
-    box-shadow: 0 0 0 1px #63e6be;
+    background: rgba(108, 168, 140, 0.28);
+    box-shadow: 0 0 0 1px #6ca88c;
   }
 
   .badge-text {
@@ -1131,15 +1131,14 @@
   }
 
   .tag-badge-btn.project .badge-sup {
-    background: #b197fc;
+    background: #9384bc;
   }
 
   .tag-badge-btn.context .badge-sup {
-    background: #74c0fc;
+    background: #6b9cbc;
   }
 
   .tag-badge-btn.tag .badge-sup {
-    background: #63e6be;
-    color: #1a1a1a;
+    background: #6ca88c;
   }
 </style>
