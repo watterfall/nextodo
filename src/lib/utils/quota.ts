@@ -200,7 +200,7 @@ export function getPomodoroHint(priority: Priority): string {
   const { min, max, recommended } = config.pomodoroRange;
 
   if (priority === 'F') {
-    return '暂无建议';
+    return '无番茄限制';
   }
 
   if (min === 0 && max === 1) {
@@ -211,5 +211,5 @@ export function getPomodoroHint(priority: Priority): string {
     return `建议 ${min}+ 个番茄`;
   }
 
-  return `建议 ${min}-${max} 个番茄，推荐 ${recommended} 个`;
+  return `建议 ${min}-${max} 个番茄 🍅`;
 }

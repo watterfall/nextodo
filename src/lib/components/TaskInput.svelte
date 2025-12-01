@@ -13,11 +13,11 @@
   }
 
   let {
-    defaultPriority = 'E',
+    defaultPriority = 'F',
     onSubmit,
     onCancel,
     autoFocus = false,
-    placeholder = '输入任务... (+项目 @上下文 #标签 !优先级 ~日期 🍅数量)'
+    placeholder = '输入任务... (+项目 @上下文 #标签 !A-F ~日期 🍅数量)'
   }: Props = $props();
 
   let inputValue = $state('');
@@ -41,7 +41,7 @@
 
     // Add default priority if not specified
     let finalInput = inputValue;
-    if (!finalInput.match(/![ABCDE]/i)) {
+    if (!finalInput.match(/![ABCDEF]/i)) {
       finalInput = `${finalInput} !${defaultPriority}`;
     }
 
@@ -117,7 +117,7 @@
         <span class="hint-item project">+项目</span>
         <span class="hint-item context">@上下文</span>
         <span class="hint-item tag">#标签</span>
-        <span class="hint-item priority">!A-E</span>
+        <span class="hint-item priority">!A-F</span>
         <span class="hint-item due">~日期</span>
         <span class="hint-item pomodoro">🍅数量</span>
       </div>

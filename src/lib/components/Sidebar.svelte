@@ -5,7 +5,8 @@
   import { getPomodoroStore } from '$lib/stores/pomodoro.svelte';
   import { getI18nStore, setLanguage } from '$lib/i18n';
   import PomodoroTimer from './PomodoroTimer.svelte';
-  import type { Language } from '$lib/types';
+  import type { Language, Priority } from '$lib/types';
+  import { PRIORITY_CONFIG } from '$lib/types';
 
   // Get translation function from store to ensure stable reference
   const i18n = getI18nStore();
@@ -25,10 +26,60 @@
   const ui = getUIStore();
   const settings = getSettingsStore();
 
+  // Priority list for filtering
+  const priorities: Priority[] = ['A', 'B', 'C', 'D', 'E', 'F'];
+
   // Extract unique projects, contexts, and tags from tasks
   let allProjects = $derived([...new Set(tasks.tasks.flatMap(task => task.projects))].sort());
   let allContexts = $derived([...new Set(tasks.tasks.flatMap(task => task.contexts))].sort());
   let allTags = $derived([...new Set(tasks.tasks.flatMap(task => task.customTags))].sort());
+
+  // Count active tasks per priority
+  function getPriorityCount(priority: Priority): number {
+    return tasks.tasks.filter(task => !task.completed && task.priority === priority).length;
+  }
+
+  // Get unique due dates and their counts
+  let dueDateGroups = $derived(() => {
+    const groups: { date: string; count: number }[] = [];
+    const dateMap = new Map<string, number>();
+
+    tasks.tasks.forEach(task => {
+      if (!task.completed && task.dueDate) {
+        dateMap.set(task.dueDate, (dateMap.get(task.dueDate) || 0) + 1);
+      }
+    });
+
+    // Sort by date
+    [...dateMap.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .forEach(([date, count]) => {
+        groups.push({ date, count });
+      });
+
+    return groups;
+  });
+
+  // Get pomodoro count groups
+  let pomodoroGroups = $derived(() => {
+    const groups: { pomodoros: number; count: number }[] = [];
+    const pomoMap = new Map<number, number>();
+
+    tasks.tasks.forEach(task => {
+      if (!task.completed && task.pomodoros.estimated > 0) {
+        pomoMap.set(task.pomodoros.estimated, (pomoMap.get(task.pomodoros.estimated) || 0) + 1);
+      }
+    });
+
+    // Sort by pomodoro count
+    [...pomoMap.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .forEach(([pomodoros, count]) => {
+        groups.push({ pomodoros, count });
+      });
+
+    return groups;
+  });
 
   // Count tasks per project/context/tag
   function getProjectCount(project: string): number {
@@ -41,10 +92,41 @@
     return tasks.tasks.filter(task => !task.completed && task.customTags.includes(tag)).length;
   }
 
+  let priorityExpanded = $state(true);
+  let dueDatesExpanded = $state(true);
+  let pomodorosExpanded = $state(true);
   let projectsExpanded = $state(true);
   let contextsExpanded = $state(true);
   let tagsExpanded = $state(false);
-  let dueDatesExpanded = $state(false);
+
+  // Priority filter state
+  let selectedPriority = $state<Priority | null>(null);
+
+  function handlePriorityFilter(priority: Priority) {
+    if (selectedPriority === priority) {
+      selectedPriority = null;
+      setFilter({ priority: null });
+    } else {
+      selectedPriority = priority;
+      setFilter({ priority });
+    }
+  }
+
+  // Due date filter
+  function handleDueDateFilter(date: string) {
+    // Toggle filter
+    if (tasks.filter.dueFilter === date) {
+      setFilter({ dueFilter: null });
+    } else {
+      setFilter({ dueFilter: date as any });
+    }
+  }
+
+  // Pomodoro filter
+  function handlePomodoroFilter(pomodoros: number) {
+    // Custom filter by pomodoro count - just a UI indication for now
+    // Could implement actual filtering if needed
+  }
 
   function handleProjectFilter(project: string) {
     if (tasks.filter.project === project) {
@@ -99,8 +181,14 @@
     tasks.filter.project !== null ||
     tasks.filter.context !== null ||
     tasks.filter.tag !== null ||
-    tasks.filter.dueFilter !== null
+    tasks.filter.dueFilter !== null ||
+    tasks.filter.priority !== null
   );
+
+  // Sync selectedPriority with filter state
+  $effect(() => {
+    selectedPriority = tasks.filter.priority ?? null;
+  });
 </script>
 
 <aside class="sidebar" class:collapsed={ui.sidebarCollapsed}>
@@ -124,7 +212,85 @@
 
   {#if !ui.sidebarCollapsed}
     <div class="sidebar-content">
-      <!-- Removed View Navigation for Minimalism -->
+      <!-- Priority Section - Badge style -->
+      <div class="nav-section">
+        <button class="section-header" onclick={() => priorityExpanded = !priorityExpanded}>
+          <svg class="section-icon" class:rotated={priorityExpanded} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="9 18 15 12 9 6"></polyline>
+          </svg>
+          <span class="section-label">{t('sidebar.priority') || '优先级'}</span>
+        </button>
+        {#if priorityExpanded}
+          <div class="badge-group">
+            {#each priorities as priority}
+              {@const config = PRIORITY_CONFIG[priority]}
+              {@const count = getPriorityCount(priority)}
+              {#if count > 0}
+                <button
+                  class="priority-badge-btn"
+                  class:active={selectedPriority === priority}
+                  style:--badge-color={config.color}
+                  onclick={() => handlePriorityFilter(priority)}
+                  title={config.name}
+                >
+                  <span class="badge-letter">{priority}</span>
+                  {#if count > 0}
+                    <span class="badge-count">{count}</span>
+                  {/if}
+                </button>
+              {/if}
+            {/each}
+          </div>
+        {/if}
+      </div>
+
+      <!-- Due Dates Section - Date chips with counts -->
+      {#if dueDateGroups().length > 0}
+        <div class="nav-section">
+          <button class="section-header" onclick={() => dueDatesExpanded = !dueDatesExpanded}>
+            <svg class="section-icon" class:rotated={dueDatesExpanded} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="9 18 15 12 9 6"></polyline>
+            </svg>
+            <span class="section-label">{t('sidebar.dueDate') || '截止日期'}</span>
+          </button>
+          {#if dueDatesExpanded}
+            <div class="badge-group date-badges">
+              {#each dueDateGroups() as { date, count }}
+                <button
+                  class="date-badge-btn"
+                  onclick={() => handleDueDateFilter(date)}
+                >
+                  <span class="date-text">{date}</span>
+                  <span class="badge-count">{count}</span>
+                </button>
+              {/each}
+            </div>
+          {/if}
+        </div>
+      {/if}
+
+      <!-- Pomodoro Section - Pomodoro chips with counts -->
+      {#if pomodoroGroups().length > 0}
+        <div class="nav-section">
+          <button class="section-header" onclick={() => pomodorosExpanded = !pomodorosExpanded}>
+            <svg class="section-icon" class:rotated={pomodorosExpanded} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="9 18 15 12 9 6"></polyline>
+            </svg>
+            <span class="section-label">{t('sidebar.pomodoro') || '番茄工作法'}</span>
+          </button>
+          {#if pomodorosExpanded}
+            <div class="badge-group pomodoro-badges">
+              {#each pomodoroGroups() as { pomodoros, count }}
+                <button class="pomodoro-badge-btn">
+                  <span class="pomodoro-icon">🍅</span>
+                  <span class="pomodoro-num">{pomodoros}</span>
+                  <span class="badge-count">{count}</span>
+                </button>
+              {/each}
+            </div>
+          {/if}
+        </div>
+      {/if}
 
       <!-- Projects Section -->
       {#if allProjects.length > 0}
@@ -555,6 +721,162 @@
 
   .filter-item.tag .item-icon {
     color: #63e6be;
+  }
+
+  /* Badge Group Styles - Like the reference image */
+  .badge-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 8px 6px;
+  }
+
+  /* Priority Badge Button */
+  .priority-badge-btn {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border: none;
+    border-radius: 10px;
+    background: var(--badge-color);
+    color: white;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+  }
+
+  .priority-badge-btn:hover {
+    transform: scale(1.08);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  }
+
+  .priority-badge-btn.active {
+    box-shadow: 0 0 0 3px var(--badge-color), 0 0 0 5px var(--bg-secondary);
+  }
+
+  .priority-badge-btn .badge-letter {
+    font-size: 16px;
+    font-weight: 700;
+  }
+
+  .priority-badge-btn .badge-count {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    font-size: 11px;
+    font-weight: 600;
+    background: var(--error, #ff6b6b);
+    color: white;
+    border-radius: 9px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  }
+
+  /* Date Badge Button */
+  .date-badges {
+    gap: 6px;
+  }
+
+  .date-badge-btn {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 10px;
+    border: none;
+    border-radius: 6px;
+    background: var(--bg-tertiary, rgba(100, 100, 100, 0.15));
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    font-size: 12px;
+    font-weight: 500;
+  }
+
+  .date-badge-btn:hover {
+    background: var(--hover-bg);
+    color: var(--text-primary);
+  }
+
+  .date-badge-btn .date-text {
+    font-weight: 500;
+  }
+
+  .date-badge-btn .badge-count {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    font-size: 10px;
+    font-weight: 600;
+    background: var(--primary, #ff6b6b);
+    color: white;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  }
+
+  /* Pomodoro Badge Button */
+  .pomodoro-badges {
+    gap: 6px;
+  }
+
+  .pomodoro-badge-btn {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    padding: 6px 10px;
+    border: none;
+    border-radius: 6px;
+    background: var(--error-bg, rgba(255, 107, 107, 0.12));
+    color: var(--error, #ff6b6b);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    font-size: 12px;
+    font-weight: 500;
+  }
+
+  .pomodoro-badge-btn:hover {
+    background: var(--error, #ff6b6b);
+    color: white;
+  }
+
+  .pomodoro-badge-btn .pomodoro-icon {
+    font-size: 12px;
+  }
+
+  .pomodoro-badge-btn .pomodoro-num {
+    font-weight: 600;
+  }
+
+  .pomodoro-badge-btn .badge-count {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    font-size: 10px;
+    font-weight: 600;
+    background: var(--text-muted, #888);
+    color: white;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
   }
 
   .action-btn {

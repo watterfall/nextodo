@@ -195,7 +195,7 @@
               <button
                 class="task-checkbox"
                 class:checked={task.completed}
-                onclick={() => handleCheck(task)}
+                onclick={(e) => { e.stopPropagation(); handleCheck(task); }}
                 aria-label={task.completed ? '标记未完成' : '标记完成'}
               >
                 {#if task.completed}
@@ -224,7 +224,7 @@
                     class="pomodoro-badge"
                     class:active={isActive}
                     class:warning={pomodoroCheck.outOfRange}
-                    onclick={() => handleStartPomodoro(task)}
+                    onclick={(e) => { e.stopPropagation(); handleStartPomodoro(task); }}
                     title={pomodoroCheck.warning || "开始番茄钟"}
                     aria-label={`${task.pomodoros.estimated} 番茄${pomodoroCheck.outOfRange ? '，' + pomodoroCheck.warning : ''}`}
                   >
@@ -237,9 +237,6 @@
               </div>
             </div>
           {/each}
-          {#if priorityTasks.length === 0}
-            <div class="empty-hint">{t('zone.dropHere')}</div>
-          {/if}
         </div>
       </section>
     {/each}
@@ -321,7 +318,7 @@
             <button
               class="task-checkbox"
               class:checked={task.completed}
-              onclick={() => handleCheck(task)}
+              onclick={(e) => { e.stopPropagation(); handleCheck(task); }}
             >
               {#if task.completed}
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
@@ -342,9 +339,6 @@
             </div>
           </div>
         {/each}
-        {#if ideaPoolTasks.length === 0}
-          <div class="pool-empty">{t('inbox.empty')}</div>
-        {/if}
       </div>
     {/if}
   </aside>
@@ -446,6 +440,14 @@
     display: flex;
     flex-direction: column;
     gap: 2px;
+    min-height: 50px;
+    padding: 4px;
+    border-radius: var(--radius-md);
+    transition: background 0.15s ease;
+  }
+
+  .task-list:empty::before {
+    content: '';
     min-height: 40px;
   }
 
@@ -460,6 +462,9 @@
     transition: all var(--transition-fast);
     cursor: grab;
     position: relative;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: manipulation;
   }
 
   .task-row-item:hover {
@@ -468,6 +473,18 @@
 
   .task-row-item:active {
     cursor: grabbing;
+  }
+
+  /* DnD active states - from svelte-dnd-action */
+  :global(.task-row-item[data-is-dnd-shadow-item]) {
+    opacity: 0.5;
+    background: var(--primary-bg);
+    border: 2px dashed var(--primary);
+  }
+
+  :global(.dnd-drop-target-active) {
+    background: var(--hover-bg);
+    border-radius: var(--radius-md);
   }
 
   .task-row-item.active {
@@ -504,6 +521,7 @@
     width: 3px;
     background: var(--priority-color);
     border-radius: 2px;
+    pointer-events: none; /* Prevent interference with drag */
   }
 
   /* Checkbox - Circular style like sleek */
@@ -762,10 +780,24 @@
     border-radius: var(--radius-md);
     transition: all var(--transition-fast);
     cursor: grab;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: manipulation;
   }
 
   .pool-task-row:hover {
     background: var(--hover-bg);
+  }
+
+  .pool-task-row:active {
+    cursor: grabbing;
+  }
+
+  /* DnD shadow item for pool */
+  :global(.pool-task-row[data-is-dnd-shadow-item]) {
+    opacity: 0.5;
+    background: var(--primary-bg);
+    border: 2px dashed var(--primary);
   }
 
   .pool-task-row .task-checkbox {
