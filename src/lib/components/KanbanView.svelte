@@ -9,6 +9,7 @@
   import { getI18nStore } from '$lib/i18n';
   import { dndzone, TRIGGERS, SHADOW_ITEM_MARKER_PROPERTY_NAME } from 'svelte-dnd-action';
   import { flip } from 'svelte/animate';
+  import { slide } from 'svelte/transition';
   import { dndConfig, areTaskArraysEqual, type DndConsiderEvent, type DndFinalizeEvent } from '$lib/utils/motion';
   import { onMount, tick } from 'svelte';
 
@@ -18,8 +19,13 @@
   const i18n = getI18nStore();
   const t = i18n.t;
 
+  // Main priorities (A-D) shown as columns, E shown separately at top
+  const mainPriorities: Priority[] = ['A', 'B', 'C', 'D'];
   const priorities: Priority[] = ['A', 'B', 'C', 'D', 'E'];
   const counts = $derived(countActiveByPriority(tasks.tasks));
+
+  // Idea Pool expand state
+  let isIdeaPoolExpanded = $state(true);
 
   // Focus mode check
   const isFocusMode = $derived(pomodoro.state === 'work' && pomodoro.activeTaskId !== null);
@@ -258,90 +264,264 @@
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="kanban-view" onclick={handleContainerClick}>
-  {#each priorities as priority}
-    {@const config = PRIORITY_CONFIG[priority]}
-    {@const activeTasks = dndItemsByPriority[priority]}
-    {@const completedTasks = getCompletedForPriority(priority)}
-    {@const isDropTarget = ui.dropTargetPriority === priority || activeDndColumn === priority}
-    {@const isFull = priority !== 'E' && counts[priority] >= config.quota}
-    {@const isDimmed = isFocusMode && !hasActiveTaskInColumn(priority)}
+<div class="kanban-container" onclick={handleContainerClick}>
+  <!-- Idea Pool (E zone) at top as horizontal strip -->
+  {@const ideaPoolTasks = dndItemsByPriority['E']}
+  {@const ideaPoolDropTarget = ui.dropTargetPriority === 'E' || activeDndColumn === 'E'}
+  {@const ideaPoolDimmed = isFocusMode && !hasActiveTaskInColumn('E')}
 
-    <div
-      class="kanban-column"
-      class:drop-target={isDropTarget}
-      class:is-full={isFull}
-      class:focus-dimmed={isDimmed}
-      style:--column-color={config.color}
-      ondragover={(e) => handleDragOver(e, priority)}
-      ondragleave={handleDragLeave}
-      ondrop={(e) => handleDrop(e, priority)}
-      role="region"
-      aria-label={t(`priority.${priority}`)}
-    >
-      <div class="column-header" title={config.description}>
-        <span class="column-letter" style:background={config.color}>{priority}</span>
-        <span class="column-name">{t(`priority.${priority}`)}</span>
-        <span class="column-count">{counts[priority]}/{config.quota === Infinity ? '∞' : config.quota}</span>
-      </div>
+  <div
+    class="idea-pool-strip"
+    class:expanded={isIdeaPoolExpanded}
+    class:drop-target={ideaPoolDropTarget}
+    class:focus-dimmed={ideaPoolDimmed}
+    ondragover={(e) => handleDragOver(e, 'E')}
+    ondragleave={handleDragLeave}
+    ondrop={(e) => handleDrop(e, 'E')}
+  >
+    <button class="pool-header" onclick={() => isIdeaPoolExpanded = !isIdeaPoolExpanded}>
+      <span class="pool-badge" style:background={PRIORITY_CONFIG.E.color}>💡</span>
+      <span class="pool-title">{t('inbox.title')}</span>
+      <span class="pool-count">{ideaPoolTasks.length}</span>
+      <svg class="expand-icon" class:rotated={isIdeaPoolExpanded} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polyline points="6 9 12 15 18 9"></polyline>
+      </svg>
+    </button>
 
+    {#if isIdeaPoolExpanded}
       <div
-        class="column-tasks"
+        class="pool-tasks"
+        transition:slide={{ duration: 200 }}
         use:dndzone={{
-          items: activeTasks,
+          items: ideaPoolTasks,
           flipDurationMs: dndConfig.flipDurationMs,
           dropTargetStyle: {},
           dropTargetClasses: ['dnd-drop-target-active'],
-          dragDisabled: isDimmed
+          dragDisabled: ideaPoolDimmed
         }}
-        onconsider={handleDndConsider(priority)}
-        onfinalize={handleDndFinalize(priority)}
+        onconsider={handleDndConsider('E')}
+        onfinalize={handleDndFinalize('E')}
       >
-        {#if activeTasks.length > 0}
-          {#each activeTasks as task, index (task.id)}
-            <div 
-              animate:flip={{ duration: dndConfig.flipDurationMs }} 
-              class="task-item-wrapper"
-              id={`task-${task.id}`}
-              tabindex={focusedTaskId === task.id ? 0 : -1}
-            >
-              <TaskCard 
-                {task} 
-                compact={priority === 'D' || priority === 'E'} 
-                isFocused={focusedTaskId === task.id}
-              />
+        {#if ideaPoolTasks.length > 0}
+          {#each ideaPoolTasks as task (task.id)}
+            <div animate:flip={{ duration: dndConfig.flipDurationMs }} class="pool-task-item">
+              <TaskCard {task} compact />
             </div>
           {/each}
         {:else}
-          <div class="empty-column" class:very-subtle={!isDropTarget}>
-            <span class="empty-text">{t('zone.dropHere')}</span>
+          <div class="pool-empty">{t('inbox.empty')}</div>
+        {/if}
+      </div>
+    {/if}
+  </div>
+
+  <!-- Main priority columns (A-D) -->
+  <div class="kanban-columns">
+    {#each mainPriorities as priority}
+      {@const config = PRIORITY_CONFIG[priority]}
+      {@const activeTasks = dndItemsByPriority[priority]}
+      {@const completedTasks = getCompletedForPriority(priority)}
+      {@const isDropTarget = ui.dropTargetPriority === priority || activeDndColumn === priority}
+      {@const isFull = counts[priority] >= config.quota}
+      {@const isDimmed = isFocusMode && !hasActiveTaskInColumn(priority)}
+
+      <div
+        class="kanban-column"
+        class:drop-target={isDropTarget}
+        class:is-full={isFull}
+        class:focus-dimmed={isDimmed}
+        style:--column-color={config.color}
+        ondragover={(e) => handleDragOver(e, priority)}
+        ondragleave={handleDragLeave}
+        ondrop={(e) => handleDrop(e, priority)}
+        role="region"
+        aria-label={t(`priority.${priority}`)}
+      >
+        <div class="column-header" title={config.description}>
+          <span class="column-letter" style:background={config.color}>{priority}</span>
+          <span class="column-name">{t(`priority.${priority}`)}</span>
+          <span class="column-count">{counts[priority]}/{config.quota}</span>
+        </div>
+
+        <div
+          class="column-tasks"
+          use:dndzone={{
+            items: activeTasks,
+            flipDurationMs: dndConfig.flipDurationMs,
+            dropTargetStyle: {},
+            dropTargetClasses: ['dnd-drop-target-active'],
+            dragDisabled: isDimmed
+          }}
+          onconsider={handleDndConsider(priority)}
+          onfinalize={handleDndFinalize(priority)}
+        >
+          {#if activeTasks.length > 0}
+            {#each activeTasks as task, index (task.id)}
+              <div
+                animate:flip={{ duration: dndConfig.flipDurationMs }}
+                class="task-item-wrapper"
+                id={`task-${task.id}`}
+                tabindex={focusedTaskId === task.id ? 0 : -1}
+              >
+                <TaskCard
+                  {task}
+                  compact={priority === 'D'}
+                  isFocused={focusedTaskId === task.id}
+                />
+              </div>
+            {/each}
+          {:else}
+            <div class="empty-column" class:very-subtle={!isDropTarget}>
+              <span class="empty-text">{t('zone.dropHere')}</span>
+            </div>
+          {/if}
+        </div>
+
+        {#if completedTasks.length > 0}
+          <div class="completed-section">
+            <span class="completed-label">{t('filter.completed')} ({completedTasks.length})</span>
+            {#each completedTasks.slice(0, 3) as task (task.id)}
+              <TaskCard {task} compact={true} />
+            {/each}
+            {#if completedTasks.length > 3}
+              <span class="more-count">+{completedTasks.length - 3} more</span>
+            {/if}
           </div>
         {/if}
       </div>
-
-      {#if completedTasks.length > 0}
-        <div class="completed-section">
-          <span class="completed-label">{t('filter.completed')} ({completedTasks.length})</span>
-          {#each completedTasks.slice(0, 3) as task (task.id)}
-            <TaskCard {task} compact={true} />
-          {/each}
-          {#if completedTasks.length > 3}
-            <span class="more-count">+{completedTasks.length - 3} more</span>
-          {/if}
-        </div>
-      {/if}
-    </div>
-  {/each}
+    {/each}
+  </div>
 </div>
 
 <style>
-  .kanban-view {
+  .kanban-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    gap: 16px;
+    overflow: hidden;
+    outline: none;
+  }
+
+  /* Idea Pool Strip at top */
+  .idea-pool-strip {
+    flex-shrink: 0;
+    background: var(--card-bg);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    transition: all var(--transition-normal);
+    opacity: 0.7;
+  }
+
+  .idea-pool-strip:hover,
+  .idea-pool-strip.expanded {
+    opacity: 1;
+  }
+
+  .idea-pool-strip.drop-target {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px var(--primary);
+    opacity: 1;
+  }
+
+  .idea-pool-strip.focus-dimmed {
+    opacity: 0.3;
+    filter: grayscale(0.4) blur(0.5px);
+    pointer-events: none;
+  }
+
+  .pool-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    width: 100%;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    transition: background 0.15s;
+    color: var(--text-primary);
+  }
+
+  .pool-header:hover {
+    background: var(--hover-bg);
+  }
+
+  .pool-badge {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    font-size: 13px;
+    flex-shrink: 0;
+  }
+
+  .pool-title {
+    font-size: 14px;
+    font-weight: 600;
+    flex: 1;
+    text-align: left;
+  }
+
+  .pool-count {
+    padding: 3px 10px;
+    font-size: 12px;
+    font-weight: 600;
+    background: var(--primary-bg);
+    color: var(--primary);
+    border-radius: var(--radius-full);
+  }
+
+  .expand-icon {
+    width: 16px;
+    height: 16px;
+    color: var(--text-muted);
+    transition: transform 0.2s;
+  }
+
+  .expand-icon.rotated {
+    transform: rotate(180deg);
+  }
+
+  .pool-tasks {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 0 16px 14px;
+    max-height: 180px;
+    overflow-y: auto;
+  }
+
+  .pool-task-item {
+    opacity: 0.7;
+    transition: opacity 0.15s;
+    flex: 1;
+    min-width: 200px;
+    max-width: 300px;
+  }
+
+  .pool-task-item:hover {
+    opacity: 1;
+  }
+
+  .pool-empty {
+    color: var(--text-muted);
+    font-size: 13px;
+    font-style: italic;
+    padding: 8px 0;
+    width: 100%;
+    text-align: center;
+  }
+
+  /* Main kanban columns area */
+  .kanban-columns {
     display: flex;
     gap: 12px;
-    height: 100%;
+    flex: 1;
     overflow-x: auto;
     padding-bottom: 8px;
-    outline: none;
   }
 
   .kanban-column {

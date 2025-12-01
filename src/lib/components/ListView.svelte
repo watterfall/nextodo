@@ -9,7 +9,8 @@
   const i18n = getI18nStore();
   const t = i18n.t;
 
-  const priorities: Priority[] = ['A', 'B', 'C', 'D', 'E'];
+  // Main priorities (A-D), E is handled separately as Idea Pool
+  const mainPriorities: Priority[] = ['A', 'B', 'C', 'D'];
 
   // Group tasks by priority
   const groupedTasks = $derived({
@@ -22,12 +23,14 @@
 
   const completedTasks = $derived(tasks.tasks.filter(task => task.completed));
   let showCompleted = $state(false);
+  let showIdeaPool = $state(true);
 </script>
 
 <div class="list-view-container">
-  <div class="list-content">
+  <!-- Main tasks area -->
+  <div class="list-main">
     <div class="tasks-container">
-      {#each priorities as priority}
+      {#each mainPriorities as priority}
         {@const priorityTasks = groupedTasks[priority]}
         <section class="task-section" class:priority-section={true} style:--section-color={PRIORITY_CONFIG[priority].color}>
           <div class="section-header">
@@ -61,7 +64,7 @@
             </div>
             <span class="count-badge">{completedTasks.length}</span>
           </button>
-          
+
           {#if showCompleted}
             <div class="task-list" transition:slide>
               {#each completedTasks as task (task.id)}
@@ -73,6 +76,30 @@
       {/if}
     </div>
   </div>
+
+  <!-- Idea Pool (E-zone) on the right side -->
+  <aside class="idea-pool-panel" class:dimmed={!showIdeaPool}>
+    <div class="pool-header" onclick={() => showIdeaPool = !showIdeaPool}>
+      <div class="header-left">
+        <span class="pool-badge" style:background={PRIORITY_CONFIG.E.color}>💡</span>
+        <h3 class="pool-title">{t('inbox.title')}</h3>
+      </div>
+      <span class="pool-count">{groupedTasks.E.length}</span>
+    </div>
+
+    {#if showIdeaPool}
+      <div class="pool-tasks" transition:slide>
+        {#each groupedTasks.E as task (task.id)}
+          <div class="pool-task-item">
+            <TaskCard {task} compact />
+          </div>
+        {/each}
+        {#if groupedTasks.E.length === 0}
+          <div class="pool-empty">{t('inbox.empty')}</div>
+        {/if}
+      </div>
+    {/if}
+  </aside>
 </div>
 
 <style>
@@ -80,9 +107,10 @@
     display: flex;
     height: 100%;
     overflow: hidden;
+    gap: 20px;
   }
 
-  .list-content {
+  .list-main {
     flex: 1;
     overflow-y: auto;
     padding-right: 4px;
@@ -186,5 +214,104 @@
     transform: rotate(90deg);
   }
 
+  /* Idea Pool (E-zone) panel on right side */
+  .idea-pool-panel {
+    width: 280px;
+    flex-shrink: 0;
+    background: var(--card-bg);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    transition: all 0.3s ease;
+  }
+
+  .idea-pool-panel.dimmed {
+    opacity: 0.5;
+  }
+
+  .idea-pool-panel:hover {
+    opacity: 1;
+  }
+
+  .pool-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border-subtle);
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+
+  .pool-header:hover {
+    background: var(--hover-bg);
+  }
+
+  .pool-badge {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+
+  .pool-title {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+
+  .pool-count {
+    padding: 3px 10px;
+    font-size: 12px;
+    font-weight: 600;
+    background: var(--primary-bg);
+    color: var(--primary);
+    border-radius: var(--radius-full);
+  }
+
+  .pool-tasks {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .pool-task-item {
+    opacity: 0.7;
+    transition: opacity 0.15s;
+  }
+
+  .pool-task-item:hover {
+    opacity: 1;
+  }
+
+  .pool-empty {
+    text-align: center;
+    padding: 24px;
+    color: var(--text-muted);
+    font-size: 13px;
+    font-style: italic;
+  }
+
+  /* Responsive */
+  @media (max-width: 900px) {
+    .list-view-container {
+      flex-direction: column;
+    }
+
+    .idea-pool-panel {
+      width: 100%;
+      max-height: 250px;
+    }
+  }
 </style>
 
