@@ -110,6 +110,40 @@ export async function saveArchiveData(data: ArchiveData): Promise<void> {
 }
 
 /**
+ * Append tasks to archive (optimized for performance)
+ */
+export async function appendArchiveTasks(tasks: Task[]): Promise<void> {
+  if (tasks.length === 0) return;
+
+  if (isTauri()) {
+    beginSave();
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('append_archive_tasks', {
+        newTasksJson: JSON.stringify(tasks)
+      });
+    } catch (error) {
+      console.error('Failed to append to archive:', error);
+      throw error;
+    } finally {
+      endSave();
+    }
+  } else {
+    // Web fallback: read, append, write
+    try {
+      const archiveStr = localStorage.getItem(STORAGE_KEYS.archive);
+      const archive = archiveStr ? JSON.parse(archiveStr) as ArchiveData : createDefaultArchiveData();
+      archive.tasks = [...archive.tasks, ...tasks];
+      archive.lastModified = new Date().toISOString();
+      localStorage.setItem(STORAGE_KEYS.archive, JSON.stringify(archive));
+    } catch (error) {
+      console.error('Failed to append to archive (web):', error);
+      throw error;
+    }
+  }
+}
+
+/**
  * Save only pomodoro history
  */
 export async function savePomodoroHistoryData(data: PomodoroHistoryData): Promise<void> {
@@ -194,6 +228,7 @@ function loadFromLocalStorage(): AppData {
     const pomodoroStr = localStorage.getItem(STORAGE_KEYS.pomodoroHistory);
 
     const active = activeStr ? JSON.parse(activeStr) as ActiveData : createDefaultActiveData();
+    // In web mode, we still load archive to be consistent, but in Tauri we skip it
     const archive = archiveStr ? JSON.parse(archiveStr) as ArchiveData : createDefaultArchiveData();
     const pomodoro = pomodoroStr ? JSON.parse(pomodoroStr) as PomodoroHistoryData : createDefaultPomodoroHistoryData();
 
@@ -270,11 +305,12 @@ async function loadFromTauri(): Promise<AppData> {
 
     // Read separated files
     const activeContent = await invoke<string | null>('read_data_file', { fileType: 'active' });
-    const archiveContent = await invoke<string | null>('read_data_file', { fileType: 'archive' });
+    // OPTIMIZATION: Do NOT load archive data into memory on startup
+    // const archiveContent = await invoke<string | null>('read_data_file', { fileType: 'archive' });
     const pomodoroContent = await invoke<string | null>('read_data_file', { fileType: 'pomodoro_history' });
 
     const active = activeContent ? JSON.parse(activeContent) as ActiveData : createDefaultActiveData();
-    const archive = archiveContent ? JSON.parse(archiveContent) as ArchiveData : createDefaultArchiveData();
+    // const archive = archiveContent ? JSON.parse(archiveContent) as ArchiveData : createDefaultArchiveData();
     const pomodoro = pomodoroContent ? JSON.parse(pomodoroContent) as PomodoroHistoryData : createDefaultPomodoroHistoryData();
 
     // Combine into AppData
@@ -282,7 +318,7 @@ async function loadFromTauri(): Promise<AppData> {
       version: active.version || '3.0',
       lastModified: active.lastModified,
       tasks: migrateTasks(active.tasks || []),
-      archive: migrateTasks(archive.tasks || []),
+      archive: [], // Empty archive in memory to save RAM
       trash: migrateTasks(active.trash || []),
       reviews: active.reviews || [],
       customTagGroups: active.customTagGroups || {
@@ -319,11 +355,14 @@ async function saveToTauri(data: AppData): Promise<void> {
       settings: data.settings
     };
 
-    const archive: ArchiveData = {
-      version: data.version,
-      lastModified: data.lastModified,
-      tasks: data.archive
-    };
+    // NOTE: We no longer save archive here because it's managed via appendArchiveTasks
+    // But if we ever need to update the whole archive, we should use a dedicated method
+    
+    // However, if data.archive contains something (e.g. from web fallback or full load),
+    // we might inadvertently overwrite the file with partial data if we are not careful.
+    // In the new "offload" model, appData.archive is expected to be EMPTY.
+    // If it is NOT empty, it means we might have loaded it.
+    // For safety, we will NOT write archive.json here. Archive updates should be append-only.
 
     const pomodoroHistory: PomodoroHistoryData = {
       version: data.version,
@@ -337,10 +376,7 @@ async function saveToTauri(data: AppData): Promise<void> {
         fileType: 'active',
         content: JSON.stringify(active, null, 2)
       }),
-      invoke('atomic_write_file', {
-        fileType: 'archive',
-        content: JSON.stringify(archive, null, 2)
-      }),
+      // SKIP archive write
       invoke('atomic_write_file', {
         fileType: 'pomodoro_history',
         content: JSON.stringify(pomodoroHistory, null, 2)

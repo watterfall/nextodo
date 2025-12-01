@@ -8,6 +8,7 @@ let activeTask = $state<Task | null>(null);
 let sessionCount = $state(0);
 let isRunning = $state(false);
 let interruptionCount = $state(0); // Current session interruption counter
+let currentInterruptionReasons = $state<string[]>([]); // Current session reasons
 
 // Settings (will be synced from main store)
 let workDuration = $state(25);
@@ -52,6 +53,7 @@ export function startPomodoro(task: Task): void {
   timeRemaining = workDuration * 60;
   isRunning = true;
   interruptionCount = 0; // Reset interruption counter for new session
+  currentInterruptionReasons = [];
   startTimer();
 }
 
@@ -81,11 +83,14 @@ export function togglePomodoro(): void {
   }
 }
 
-// Record an interruption during work session (without stopping timer)
-export function recordInterruption(): void {
+// Record an interruption during work session
+export function recordInterruption(reason?: string): void {
   if (state === 'work') {
     interruptionCount++;
-    console.log('Interruption recorded:', interruptionCount);
+    if (reason) {
+      currentInterruptionReasons = [...currentInterruptionReasons, reason];
+    }
+    console.log('Interruption recorded:', interruptionCount, reason);
   }
 }
 
@@ -141,11 +146,13 @@ function handleSessionComplete(): void {
       startedAt: new Date(Date.now() - workDuration * 60 * 1000).toISOString(),
       duration: workDuration,
       completed: true,
-      interruptions: interruptionCount
+      interruptions: interruptionCount,
+      interruptionReasons: currentInterruptionReasons
     };
     sessions = [...sessions, session];
     sessionCount++;
     interruptionCount = 0; // Reset for next session
+    currentInterruptionReasons = [];
 
     // Dispatch event for task store to increment pomodoro count
     if (typeof window !== 'undefined') {
@@ -267,6 +274,7 @@ export function getPomodoroStore() {
     get sessions() { return sessions; },
     get todaySessions() { return getTodaySessions(); },
     get todayCount() { return getTodaySessions().length; },
-    get interruptionCount() { return interruptionCount; }
+    get interruptionCount() { return interruptionCount; },
+    get currentInterruptionReasons() { return currentInterruptionReasons; }
   };
 }

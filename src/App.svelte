@@ -3,6 +3,8 @@
   import Sidebar from '$lib/components/Sidebar.svelte';
   import ZoneContainer from '$lib/components/ZoneContainer.svelte';
   import KanbanView from '$lib/components/KanbanView.svelte';
+  import TodayView from '$lib/components/TodayView.svelte'; // NEW
+  import WeekView from '$lib/components/WeekView.svelte';   // NEW
   import TaskForm from '$lib/components/TaskForm.svelte';
   import InboxPanel from '$lib/components/InboxPanel.svelte';
   import PomodoroTimer from '$lib/components/PomodoroTimer.svelte';
@@ -12,6 +14,7 @@
   import SettingsModal from '$lib/components/SettingsModal.svelte';
   import Confetti from '$lib/components/Confetti.svelte';
   import ImmersivePomodoro from '$lib/components/ImmersivePomodoro.svelte';
+  import BadgesModal from '$lib/components/BadgesModal.svelte';
 
   import {
     initializeData,
@@ -27,7 +30,8 @@
     hideToast,
     closeSearch,
     exitImmersiveMode,
-    enterImmersiveMode
+    enterImmersiveMode,
+    setViewMode // Import this
   } from '$lib/stores/ui.svelte';
   import {
     initPomodoro,
@@ -56,7 +60,9 @@
   let unlistenFileWatcher: (() => void) | null = null;
   let isSettingsOpen = $state(false);
   let isReviewOpen = $state(false);
-  let viewMode = $state<ViewMode>('zones');
+  let isBadgesOpen = $state(false);
+  // Remove local viewMode state, use ui store
+  // let viewMode = $state<ViewMode>('zones');
 
   onMount(async () => {
     // Initialize i18n first
@@ -173,6 +179,7 @@
   <Sidebar
     onOpenSettings={() => isSettingsOpen = true}
     onOpenReview={() => isReviewOpen = true}
+    onOpenBadges={() => isBadgesOpen = true}
   />
 
   <main class="main-content">
@@ -200,8 +207,35 @@
         <div class="view-toggle">
           <button
             class="view-btn"
-            class:active={viewMode === 'zones'}
-            onclick={() => viewMode = 'zones'}
+            class:active={ui.viewMode === 'today'}
+            onclick={() => setViewMode('today')}
+            title="今日视图"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+              <line x1="16" y1="2" x2="16" y2="6"></line>
+              <line x1="8" y1="2" x2="8" y2="6"></line>
+              <line x1="3" y1="10" x2="21" y2="10"></line>
+              <path d="M8 14h.01"></path>
+            </svg>
+          </button>
+          <button
+            class="view-btn"
+            class:active={ui.viewMode === 'week'}
+            onclick={() => setViewMode('week')}
+            title="本周概览"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="18" height="18" rx="2"></rect>
+              <path d="M3 9h18"></path>
+              <path d="M9 21V9"></path>
+              <path d="M15 21V9"></path>
+            </svg>
+          </button>
+          <button
+            class="view-btn"
+            class:active={ui.viewMode === 'zones'}
+            onclick={() => setViewMode('zones')}
             title={t('view.zones')}
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -213,8 +247,8 @@
           </button>
           <button
             class="view-btn"
-            class:active={viewMode === 'list'}
-            onclick={() => viewMode = 'list'}
+            class:active={ui.viewMode === 'list'}
+            onclick={() => setViewMode('list')}
             title={t('view.kanban')}
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -254,13 +288,13 @@
       </div>
     </header>
 
-    <!-- Task Form at Top -->
+    <!-- Task Form at Top (Always visible except in Review maybe?) -->
     <div class="task-form-container">
       <TaskForm />
     </div>
 
-    <!-- Main Layout: Zones or Kanban -->
-    {#if viewMode === 'zones'}
+    <!-- Main Layout Switcher -->
+    {#if ui.viewMode === 'zones'}
       <div class="content-layout">
         <!-- Left: Priority Zones (A-D) -->
         <div class="zones-panel">
@@ -284,7 +318,7 @@
           <InboxPanel />
         </div>
       </div>
-    {:else}
+    {:else if ui.viewMode === 'list'}
       <div class="content-layout kanban-layout">
         <div class="kanban-panel">
           <KanbanView />
@@ -294,6 +328,21 @@
         <div class="timer-section-kanban">
           <PomodoroTimer onEnterImmersive={handleImmersiveMode} />
         </div>
+      </div>
+    {:else if ui.viewMode === 'today'}
+      <!-- Today View -->
+      <div class="content-layout today-layout">
+        <TodayView />
+        
+        <!-- Optional: Floating Pomodoro or minimized -->
+        <div class="timer-floating">
+          <PomodoroTimer onEnterImmersive={handleImmersiveMode} />
+        </div>
+      </div>
+    {:else if ui.viewMode === 'week'}
+      <!-- Week View -->
+      <div class="content-layout week-layout">
+        <WeekView />
       </div>
     {/if}
   </main>
@@ -357,6 +406,11 @@
     isOpen={isSettingsOpen}
     onClose={() => isSettingsOpen = false}
   />
+
+  <!-- Badges Modal -->
+  {#if isBadgesOpen}
+    <BadgesModal onClose={() => isBadgesOpen = false} />
+  {/if}
 
   <!-- Review Modal -->
   {#if isReviewOpen}
@@ -522,6 +576,28 @@
     overflow: hidden;
     gap: 20px;
     padding: 0 20px 20px;
+  }
+
+  /* Today View Layout */
+  .content-layout.today-layout {
+    position: relative;
+    justify-content: center;
+  }
+
+  .timer-floating {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    width: 280px;
+    z-index: 10;
+    box-shadow: var(--shadow-lg);
+    border-radius: var(--radius-lg);
+  }
+
+  /* Week View Layout */
+  .content-layout.week-layout {
+    flex-direction: column;
+    overflow: hidden;
   }
 
   .zones-panel {

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { getTasksStore, setFilter, clearFilters } from '$lib/stores/tasks.svelte';
-  import { getUIStore, toggleSidebar } from '$lib/stores/ui.svelte';
+  import { getUIStore, toggleSidebar, setViewMode } from '$lib/stores/ui.svelte';
   import { getSettingsStore, toggleTheme } from '$lib/stores/settings.svelte';
   import { t, setLanguage, currentLanguage } from '$lib/i18n';
   import type { Language } from '$lib/types';
@@ -8,9 +8,10 @@
   interface Props {
     onOpenSettings?: () => void;
     onOpenReview?: () => void;
+    onOpenBadges?: () => void; // New prop
   }
 
-  let { onOpenSettings, onOpenReview }: Props = $props();
+  let { onOpenSettings, onOpenReview, onOpenBadges }: Props = $props();
 
   const tasks = getTasksStore();
   const ui = getUIStore();
@@ -108,14 +109,45 @@
 
   {#if !ui.sidebarCollapsed}
     <div class="sidebar-content">
-      <!-- Stats Overview -->
-      <div class="stats-card">
-        <div class="stat-row">
-          <span class="stat-icon">🍅</span>
-          <span class="stat-label">{t('sidebar.todayCompleted')}</span>
-          <span class="stat-value">{tasks.completedTodayCount}</span>
-        </div>
+      <!-- Main Views Navigation -->
+      <div class="nav-section main-views">
+        <button 
+          class="nav-item" 
+          class:active={ui.viewMode === 'today'}
+          onclick={() => setViewMode('today')}
+        >
+          <span class="item-icon">☀️</span>
+          <span class="item-text">今日聚焦</span>
+          <span class="item-count">{tasks.dueTodayCount}</span>
+        </button>
+        <button 
+          class="nav-item" 
+          class:active={ui.viewMode === 'week'}
+          onclick={() => setViewMode('week')}
+        >
+          <span class="item-icon">📅</span>
+          <span class="item-text">本周概览</span>
+          <span class="item-count">{tasks.dueThisWeekCount}</span>
+        </button>
+        <button 
+          class="nav-item" 
+          class:active={ui.viewMode === 'zones'}
+          onclick={() => setViewMode('zones')}
+        >
+          <span class="item-icon">🎯</span>
+          <span class="item-text">四象限看板</span>
+        </button>
+        <button 
+          class="nav-item" 
+          class:active={ui.viewMode === 'list'}
+          onclick={() => setViewMode('list')}
+        >
+          <span class="item-icon">📋</span>
+          <span class="item-text">全景列表</span>
+        </button>
       </div>
+
+      <div class="divider"></div>
 
       <!-- Projects Section -->
       {#if allProjects.length > 0}
@@ -201,51 +233,6 @@
         </div>
       {/if}
 
-      <!-- Due Dates Section (de-emphasized) -->
-      <div class="nav-section muted">
-        <button class="section-header" onclick={() => dueDatesExpanded = !dueDatesExpanded}>
-          <svg class="section-icon" class:rotated={dueDatesExpanded} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="9 18 15 12 9 6"></polyline>
-          </svg>
-          <span class="section-label">{t('sidebar.dueDates')}</span>
-        </button>
-        {#if dueDatesExpanded}
-          <div class="filter-list">
-            <button
-              class="filter-item"
-              class:active={tasks.filter.dueFilter === 'today'}
-              onclick={() => handleDueFilter('today')}
-            >
-              <span class="item-icon">📅</span>
-              <span class="item-text">{t('sidebar.dueToday')}</span>
-              <span class="item-count">{tasks.dueTodayCount}</span>
-            </button>
-
-            <button
-              class="filter-item"
-              class:active={tasks.filter.dueFilter === 'thisWeek'}
-              onclick={() => handleDueFilter('thisWeek')}
-            >
-              <span class="item-icon">📆</span>
-              <span class="item-text">{t('sidebar.dueThisWeek')}</span>
-              <span class="item-count">{tasks.dueThisWeekCount}</span>
-            </button>
-
-            {#if tasks.overdueCount > 0}
-              <button
-                class="filter-item warning"
-                class:active={tasks.filter.dueFilter === 'overdue'}
-                onclick={() => handleDueFilter('overdue')}
-              >
-                <span class="item-icon">⚠️</span>
-                <span class="item-text">{t('sidebar.overdue')}</span>
-                <span class="item-count warning">{tasks.overdueCount}</span>
-              </button>
-            {/if}
-          </div>
-        {/if}
-      </div>
-
       <!-- Review Button -->
       <button class="action-btn review-btn" onclick={onOpenReview}>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -306,6 +293,11 @@
         {/if}
       </button>
 
+      <!-- Badges Button -->
+      <button class="footer-btn" onclick={onOpenBadges} title="成就">
+        <span>🏆</span>
+      </button>
+
       <!-- Settings Button -->
       <button class="footer-btn primary" onclick={onOpenSettings} title={t('settings.title')}>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -322,6 +314,9 @@
           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
           <polyline points="14 2 14 8 20 8"></polyline>
         </svg>
+      </button>
+      <button class="collapsed-btn" onclick={onOpenBadges} title="成就">
+        <span>🏆</span>
       </button>
       <button class="collapsed-btn" onclick={onOpenSettings} title={t('settings.title')}>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -410,44 +405,62 @@
     gap: 16px;
   }
 
-  .stats-card {
-    background: var(--card-bg);
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-md);
-    padding: 14px;
+  .divider {
+    height: 1px;
+    background: var(--border-subtle);
+    margin: 4px 0;
   }
 
-  .stat-row {
+  /* Nav Items */
+  .nav-item {
     display: flex;
     align-items: center;
-    gap: 10px;
-  }
-
-  .stat-icon {
-    font-size: 18px;
-  }
-
-  .stat-label {
-    flex: 1;
-    font-size: 13px;
-    font-weight: 500;
+    gap: 12px;
+    width: 100%;
+    padding: 10px 12px;
+    border: none;
+    border-radius: var(--radius-md);
+    background: transparent;
     color: var(--text-secondary);
+    cursor: pointer;
+    text-align: left;
+    transition: all var(--transition-fast);
+    font-size: 14px;
+    font-weight: 500;
   }
 
-  .stat-value {
-    font-size: 18px;
-    font-weight: 700;
-    color: var(--success);
+  .nav-item:hover {
+    background: var(--hover-bg);
+    color: var(--text-primary);
+  }
+
+  .nav-item.active {
+    background: var(--primary-bg);
+    color: var(--primary);
+  }
+
+  .item-icon {
+    font-size: 16px;
+    width: 20px;
+    text-align: center;
+  }
+
+  .item-text {
+    flex: 1;
+  }
+
+  .item-count {
+    font-size: 11px;
+    color: var(--text-muted);
+    background: var(--hover-bg);
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
   }
 
   /* Navigation Sections */
   .nav-section {
     display: flex;
     flex-direction: column;
-  }
-
-  .nav-section.muted {
-    opacity: 0.8;
   }
 
   .section-header {
@@ -528,7 +541,7 @@
     color: var(--primary);
   }
 
-  .item-icon {
+  .filter-item .item-icon {
     font-size: 12px;
     font-weight: 600;
     width: 16px;
@@ -546,26 +559,6 @@
 
   .filter-item.tag .item-icon {
     color: #63e6be;
-  }
-
-  .item-text {
-    flex: 1;
-    font-weight: 500;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .item-count {
-    font-size: 11px;
-    color: var(--text-muted);
-    min-width: 16px;
-    text-align: right;
-  }
-
-  .item-count.warning {
-    color: var(--error);
-    font-weight: 600;
   }
 
   .action-btn {

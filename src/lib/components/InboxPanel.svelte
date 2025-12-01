@@ -14,6 +14,12 @@
   const pomodoro = getPomodoroStore();
   const ui = getUIStore();
 
+  interface Props {
+    isDrawer?: boolean; // New prop to style as drawer
+  }
+
+  let { isDrawer = false }: Props = $props();
+
   // Focus mode - dim inbox when pomodoro is active on non-inbox task
   let isFocusMode = $derived(pomodoro.state === 'work' && pomodoro.activeTaskId !== null);
   let hasActiveTask = $derived(tasks.tasksByPriority['E'].some(t => t.id === pomodoro.activeTaskId));
@@ -86,21 +92,23 @@
   }
 </script>
 
-<div class="inbox-panel" class:focus-dimmed={isFocusMode && !hasActiveTask}>
+<div class="inbox-panel" class:focus-dimmed={isFocusMode && !hasActiveTask} class:drawer-mode={isDrawer}>
   <!-- Header with Sleek-style badge -->
   <div class="panel-header">
     <div class="header-main">
       <div class="inbox-badge" style:background={PRIORITY_CONFIG.E.color}>E</div>
       <div class="header-info">
         <h3 class="title-text">{t('inbox.title')}</h3>
-        <span class="subtitle">{t('inbox.subtitle')}</span>
+        {#if !isDrawer}
+          <span class="subtitle">{t('inbox.subtitle')}</span>
+        {/if}
       </div>
       <span class="task-count">{inboxTasks.length}</span>
     </div>
   </div>
 
-  <!-- Drag Drop Targets - Expanded when dragging -->
-  {#if isDragging || inboxTasks.length > 0}
+  <!-- Drag Drop Targets - Expanded when dragging (Hidden in Drawer mode) -->
+  {#if !isDrawer && (isDragging || inboxTasks.length > 0)}
     <div class="drag-targets" class:active={isDragging} class:expanded={isDragging}>
       <div class="drag-hint" class:visible={isDragging}>{t('inbox.dragHint')}</div>
       <div class="target-row">
@@ -132,7 +140,8 @@
           flipDurationMs: dndConfig.flipDurationMs,
           dropTargetStyle: {},
           dropTargetClasses: ['dnd-drop-target-active'],
-          dragDisabled: isFocusMode && !hasActiveTask
+          dragDisabled: isFocusMode && !hasActiveTask,
+          type: isDrawer ? 'inbox-source' : undefined // Distinct type for cross-view DnD if needed
         }}
         onconsider={handleDndConsider}
         onfinalize={handleDndFinalize}
@@ -141,19 +150,21 @@
           <div animate:flip={{ duration: dndConfig.flipDurationMs }} class="task-wrapper">
             <TaskCard {task} compact={true} />
 
-            <!-- Quick Priority Buttons (shown on hover) -->
-            <div class="priority-actions">
-              {#each priorityTargets as target}
-                <button
-                  class="priority-btn"
-                  style:--btn-color={target.color}
-                  onclick={() => handleMoveToPriority(task.id, target.priority)}
-                  title={`${t('inbox.moveTo')} ${target.label} (${target.time})`}
-                >
-                  {target.priority}
-                </button>
-              {/each}
-            </div>
+            <!-- Quick Priority Buttons (shown on hover, hidden in drawer) -->
+            {#if !isDrawer}
+              <div class="priority-actions">
+                {#each priorityTargets as target}
+                  <button
+                    class="priority-btn"
+                    style:--btn-color={target.color}
+                    onclick={() => handleMoveToPriority(task.id, target.priority)}
+                    title={`${t('inbox.moveTo')} ${target.label} (${target.time})`}
+                  >
+                    {target.priority}
+                  </button>
+                {/each}
+              </div>
+            {/if}
           </div>
         {/each}
       </div>
@@ -205,6 +216,13 @@
     /* Glassmorphism */
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
+  }
+
+  .inbox-panel.drawer-mode {
+    border-radius: 0;
+    border: none;
+    border-left: 1px solid var(--border-subtle);
+    background: var(--bg-secondary);
   }
 
   .inbox-panel.focus-dimmed {

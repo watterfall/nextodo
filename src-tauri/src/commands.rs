@@ -305,3 +305,89 @@ pub fn trigger_reload(app_handle: tauri::AppHandle, file_type: String) -> Result
 
     Ok(())
 }
+
+/// Append tasks to archive.json atomically
+#[tauri::command]
+pub fn append_archive_tasks(
+    app_handle: tauri::AppHandle,
+    new_tasks_json: String,
+) -> Result<(), String> {
+    let data_dir = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|e| e.to_string())?;
+
+    // Ensure directory exists
+    if !data_dir.exists() {
+        fs::create_dir_all(&data_dir).map_err(|e| e.to_string())?;
+    }
+
+    let archive_path = data_dir.join(DataFileType::Archive.filename());
+    let temp_path = data_dir.join(DataFileType::Archive.temp_filename());
+
+    // Parse new tasks
+    let new_tasks: Vec<serde_json::Value> = serde_json::from_str(&new_tasks_json)
+        .map_err(|e| format!("Failed to parse new tasks: {}", e))?;
+    
+    if new_tasks.is_empty() {
+        return Ok(());
+    }
+
+    // Read existing archive or create default
+    let mut archive_data = if archive_path.exists() {
+        let content = fs::read_to_string(&archive_path)
+            .map_err(|e| format!("Failed to read archive file: {}", e))?;
+        serde_json::from_str::<serde_json::Value>(&content)
+            .map_err(|e| format!("Failed to parse archive file: {}", e))?
+    } else {
+        serde_json::json!({
+            "version": "2.0",
+            "lastModified": Local::now().to_rfc3339(),
+            "tasks": []
+        })
+    };
+
+    // Update last modified
+    if let Some(obj) = archive_data.as_object_mut() {
+        obj.insert("lastModified".to_string(), serde_json::json!(Local::now().to_rfc3339()));
+        
+        // Append tasks
+        if let Some(tasks) = obj.get_mut("tasks").and_then(|t| t.as_array_mut()) {
+            tasks.extend(new_tasks);
+        } else {
+            // Tasks array doesn't exist, create it
+            obj.insert("tasks".to_string(), serde_json::json!(new_tasks));
+        }
+    } else {
+        // Root is not an object? Re-initialize
+        archive_data = serde_json::json!({
+            "version": "2.0",
+            "lastModified": Local::now().to_rfc3339(),
+            "tasks": new_tasks
+        });
+    }
+
+    // Write to temp file
+    {
+        let content = serde_json::to_string_pretty(&archive_data)
+            .map_err(|e| format!("Failed to serialize archive data: {}", e))?;
+
+        let mut temp_file = fs::File::create(&temp_path)
+            .map_err(|e| format!("Failed to create temp file: {}", e))?;
+
+        temp_file
+            .write_all(content.as_bytes())
+            .map_err(|e| format!("Failed to write to temp file: {}", e))?;
+
+        // Ensure data is flushed to disk
+        temp_file
+            .sync_all()
+            .map_err(|e| format!("Failed to sync temp file: {}", e))?;
+    }
+
+    // Atomic rename
+    fs::rename(&temp_path, &archive_path)
+        .map_err(|e| format!("Failed to rename temp file: {}", e))?;
+
+    Ok(())
+}

@@ -28,14 +28,5 @@
     "security": {
       "csp": null
     }
-  },
-  "plugins": {
-    "fs": {
-      "all": true,
-      "scope": ["$APPDATA/**", "$APPDATA"]
-    },
-    "notification": {
-      "all": true
-    }
   }
 }

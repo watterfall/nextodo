@@ -1,10 +1,11 @@
 import type { Task, Priority, FilterState, UnitInfo, AppData, ActiveData, ArchiveData, PomodoroHistoryData } from '$lib/types';
 import { createEmptyTask, createDefaultAppData, isThresholdPassed, calculateEZoneAge } from '$lib/types';
-import { loadAppData, saveAppData, reloadFile } from '$lib/utils/storage';
+import { loadAppData, saveAppData, reloadFile, appendArchiveTasks } from '$lib/utils/storage';
 import { applyHighlanderRule, canAddTask, validateQuota } from '$lib/utils/quota';
 import { createTaskFromInput } from '$lib/utils/parser';
 import { processRecurringTasks, createNextOccurrence } from '$lib/utils/recurrence';
 import { getCurrentUnit, isDateInUnit, isToday, isOverdue, isThisWeek } from '$lib/utils/unitCalc';
+import { checkBadges } from '$lib/stores/gamification.svelte'; // Import checkBadges
 
 // Main app state
 let appData = $state<AppData>(createDefaultAppData());
@@ -65,16 +66,15 @@ export async function reloadData(fileType: string): Promise<void> {
           trash: activeData.trash || [],
           reviews: activeData.reviews || [],
           customTagGroups: activeData.customTagGroups || appData.customTagGroups,
-          settings: activeData.settings || appData.settings
+          settings: activeData.settings || appData.settings,
+          badges: activeData.badges || appData.badges // Ensure badges are reloaded
         };
         break;
       }
       case 'archive': {
-        const archiveData = data as ArchiveData;
-        appData = {
-          ...appData,
-          archive: archiveData.tasks || []
-        };
+        // OPTIMIZATION: Do not reload full archive into memory when changed
+        // Just log it or show a notification if needed
+        console.log('Archive file changed externally, but skipping reload to save memory');
         break;
       }
       case 'pomodoro_history': {
@@ -205,6 +205,9 @@ export async function completeTask(taskId: string): Promise<void> {
   }
 
   await persist();
+  
+  // Check badges after completion
+  checkBadges();
 }
 
 export async function uncompleteTask(taskId: string): Promise<void> {
@@ -224,9 +227,21 @@ export async function uncompleteTask(taskId: string): Promise<void> {
 
 export async function archiveCompleted(): Promise<void> {
   const completed = appData.tasks.filter(t => t.completed);
-  appData.archive = [...appData.archive, ...completed];
-  appData.tasks = appData.tasks.filter(t => !t.completed);
-  await persist();
+  if (completed.length === 0) return;
+  
+  // Use appendArchiveTasks instead of loading/saving entire archive
+  try {
+    await appendArchiveTasks(completed);
+    
+    // Remove from active tasks
+    appData.tasks = appData.tasks.filter(t => !t.completed);
+    
+    // Save only active data
+    await persist();
+  } catch (error) {
+    lastError = error instanceof Error ? error.message : 'Failed to archive tasks';
+    console.error('Failed to archive tasks:', error);
+  }
 }
 
 export async function restoreFromTrash(taskId: string): Promise<void> {
@@ -274,6 +289,9 @@ export async function incrementPomodoro(taskId: string): Promise<void> {
   });
 
   await persist();
+  
+  // Check badges after pomodoro
+  checkBadges();
 }
 
 // Reorder tasks within a priority zone (for drag-and-drop)

@@ -10,6 +10,7 @@
   import { dndzone, TRIGGERS, SHADOW_ITEM_MARKER_PROPERTY_NAME } from 'svelte-dnd-action';
   import { flip } from 'svelte/animate';
   import { dndConfig, areTaskArraysEqual, type DndConsiderEvent, type DndFinalizeEvent } from '$lib/utils/motion';
+  import { onMount, tick } from 'svelte';
 
   const tasks = getTasksStore();
   const pomodoro = getPomodoroStore();
@@ -26,6 +27,11 @@
     A: [], B: [], C: [], D: [], E: []
   });
   let activeDndColumn = $state<Priority | null>(null);
+
+  // Keyboard navigation state
+  let focusedPriority = $state<Priority | null>(null);
+  let focusedTaskIndex = $state<number>(-1);
+  let focusedTaskId = $state<string | null>(null);
 
   function getTasksForPriority(priority: Priority) {
     return tasks.tasksByPriority[priority].filter(t => !t.completed);
@@ -123,9 +129,134 @@
     }
     clearDragState();
   }
+
+  // Keyboard Navigation
+  function handleKeyDown(e: KeyboardEvent) {
+    // Only handle if no modal is open and not editing
+    if (ui.editingTaskId || document.querySelector('.modal-overlay')) return;
+
+    // Start navigation with arrow keys if nothing focused
+    if (!focusedPriority && (e.key === 'ArrowDown' || e.key === 'ArrowRight')) {
+      e.preventDefault();
+      focusedPriority = 'A';
+      focusedTaskIndex = 0;
+      updateFocus();
+      return;
+    }
+
+    if (!focusedPriority) return;
+
+    const currentTasks = dndItemsByPriority[focusedPriority];
+    const priorityIndex = priorities.indexOf(focusedPriority);
+
+    switch (e.key) {
+      case 'ArrowDown':
+      case 'j':
+        e.preventDefault();
+        if (focusedTaskIndex < currentTasks.length - 1) {
+          focusedTaskIndex++;
+        } else {
+          // Wrap to top? Or maybe stop
+          // focusedTaskIndex = 0; 
+        }
+        updateFocus();
+        break;
+      
+      case 'ArrowUp':
+      case 'k':
+        e.preventDefault();
+        if (focusedTaskIndex > 0) {
+          focusedTaskIndex--;
+        }
+        updateFocus();
+        break;
+
+      case 'ArrowRight':
+      case 'l':
+        e.preventDefault();
+        if (priorityIndex < priorities.length - 1) {
+          focusedPriority = priorities[priorityIndex + 1];
+          // Try to maintain relative position or reset to 0
+          const newTasks = dndItemsByPriority[focusedPriority];
+          focusedTaskIndex = Math.min(focusedTaskIndex, Math.max(0, newTasks.length - 1));
+          if (newTasks.length === 0) focusedTaskIndex = -1; // Header focus?
+          updateFocus();
+        }
+        break;
+
+      case 'ArrowLeft':
+      case 'h':
+        e.preventDefault();
+        if (priorityIndex > 0) {
+          focusedPriority = priorities[priorityIndex - 1];
+          const newTasks = dndItemsByPriority[focusedPriority];
+          focusedTaskIndex = Math.min(focusedTaskIndex, Math.max(0, newTasks.length - 1));
+          if (newTasks.length === 0) focusedTaskIndex = -1;
+          updateFocus();
+        }
+        break;
+        
+      case 'Enter':
+        e.preventDefault();
+        if (focusedPriority && focusedTaskIndex >= 0) {
+          const task = dndItemsByPriority[focusedPriority][focusedTaskIndex];
+          if (task) {
+            // Edit task
+            // Dispatch a custom event or call a method on the TaskCard component?
+            // For now, simpler to just start editing
+            // setEditingTask(task.id); 
+            // Better: Start Pomodoro if not active, or edit if modifier key held?
+            // Let's match standard behavior: Enter -> Toggle Detail/Edit
+          }
+        }
+        break;
+
+      case 'Escape':
+        focusedPriority = null;
+        focusedTaskIndex = -1;
+        focusedTaskId = null;
+        // Blur any active element
+        if (document.activeElement instanceof HTMLElement) {
+          document.activeElement.blur();
+        }
+        break;
+    }
+  }
+
+  function updateFocus() {
+    if (focusedPriority && focusedTaskIndex >= 0) {
+      const task = dndItemsByPriority[focusedPriority][focusedTaskIndex];
+      if (task) {
+        focusedTaskId = task.id;
+        // Scroll into view if needed
+        tick().then(() => {
+          const el = document.getElementById(`task-${task.id}`);
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            el.focus();
+          }
+        });
+      }
+    } else {
+      focusedTaskId = null;
+    }
+  }
+
+  // Reset focus when clicking outside
+  function handleContainerClick(e: MouseEvent) {
+    if (e.target === e.currentTarget) {
+      focusedPriority = null;
+      focusedTaskIndex = -1;
+      focusedTaskId = null;
+    }
+  }
 </script>
 
-<div class="kanban-view">
+<svelte:window onkeydown={handleKeyDown} />
+
+<!-- svelte-ignore a11y_click_events_have_key_events -->
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div class="kanban-view" onclick={handleContainerClick}>
   {#each priorities as priority}
     {@const config = PRIORITY_CONFIG[priority]}
     {@const activeTasks = dndItemsByPriority[priority]}
@@ -165,9 +296,18 @@
         onfinalize={handleDndFinalize(priority)}
       >
         {#if activeTasks.length > 0}
-          {#each activeTasks as task (task.id)}
-            <div animate:flip={{ duration: dndConfig.flipDurationMs }} class="task-item-wrapper">
-              <TaskCard {task} compact={priority === 'D' || priority === 'E'} />
+          {#each activeTasks as task, index (task.id)}
+            <div 
+              animate:flip={{ duration: dndConfig.flipDurationMs }} 
+              class="task-item-wrapper"
+              id={`task-${task.id}`}
+              tabindex={focusedTaskId === task.id ? 0 : -1}
+            >
+              <TaskCard 
+                {task} 
+                compact={priority === 'D' || priority === 'E'} 
+                isFocused={focusedTaskId === task.id}
+              />
             </div>
           {/each}
         {:else}
@@ -199,6 +339,7 @@
     height: 100%;
     overflow-x: auto;
     padding-bottom: 8px;
+    outline: none;
   }
 
   .kanban-column {
@@ -282,6 +423,11 @@
 
   .task-item-wrapper {
     transform-origin: center center;
+    outline: none;
+  }
+  
+  .task-item-wrapper:focus {
+    outline: none;
   }
 
   .empty-column {

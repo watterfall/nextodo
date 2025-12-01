@@ -65,6 +65,26 @@ export interface PomodoroSession {
   duration: number;
   completed: boolean;
   interruptions?: number; // Number of interruptions recorded during this session
+  // NEW: Reasons for interruptions
+  interruptionReasons?: string[];
+}
+
+// Gamification: Badge types
+export type BadgeId = 
+  | 'planner_novice' 
+  | 'flow_master' 
+  | 'early_bird' 
+  | 'challenger' 
+  | 'consistency_3'
+  | 'consistency_7'
+  | 'deep_diver';
+
+export interface Badge {
+  id: BadgeId;
+  name: string;
+  description: string;
+  icon: string;
+  unlockedAt?: string; // ISO date string if unlocked
 }
 
 // Custom tag groups
@@ -105,6 +125,8 @@ export interface ActiveData {
   trash: Task[];
   reviews: UnitReview[];
   customTagGroups: CustomTagGroups;
+  // NEW: Earned badges
+  badges: Badge[];
   settings: Settings;
 }
 
@@ -132,6 +154,8 @@ export interface AppData {
   reviews: UnitReview[];
   customTagGroups: CustomTagGroups;
   pomodoroHistory: PomodoroSession[];
+  // NEW: Earned badges
+  badges: Badge[];
   settings: Settings;
 }
 
@@ -209,7 +233,7 @@ export interface FilterState {
 }
 
 // View mode
-export type ViewMode = 'zones' | 'list' | 'calendar';
+export type ViewMode = 'zones' | 'list' | 'calendar' | 'today' | 'week';
 
 // Pomodoro state
 export type PomodoroState = 'idle' | 'work' | 'shortBreak' | 'longBreak';
@@ -267,6 +291,7 @@ export function createDefaultActiveData(): ActiveData {
       energy: ['⚡高能量', '😴低能量', '☕中等'],
       type: ['📞电话', '💻编码', '✍️写作', '🤝会议']
     },
+    badges: [],
     settings: createDefaultSettings()
   };
 }
@@ -303,6 +328,7 @@ export function createDefaultAppData(): AppData {
       type: ['📞电话', '💻编码', '✍️写作', '🤝会议']
     },
     pomodoroHistory: [],
+    badges: [],
     settings: createDefaultSettings()
   };
 }

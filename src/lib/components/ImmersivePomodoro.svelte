@@ -1,6 +1,7 @@
 <script lang="ts">
   import { getPomodoroStore, pausePomodoro, resumePomodoro, stopPomodoro, skipSession, recordInterruption } from '$lib/stores/pomodoro.svelte';
   import { t } from '$lib/i18n';
+  import { scale, fade } from 'svelte/transition';
 
   interface Props {
     onClose: () => void;
@@ -9,6 +10,8 @@
   let { onClose }: Props = $props();
 
   const pomodoro = getPomodoroStore();
+  let showInterruptionInput = $state(false);
+  let interruptionReason = $state('');
 
   // Calculate progress ring
   const RADIUS = 140;
@@ -43,6 +46,8 @@
   }
 
   function handleKeydown(e: KeyboardEvent) {
+    if (showInterruptionInput) return; // Don't handle shortcuts while typing reason
+
     if (e.key === 'Escape') {
       onClose();
     } else if (e.key === ' ') {
@@ -54,8 +59,30 @@
       }
     } else if (e.key === 'i' || e.key === 'I') {
       // Press 'i' to record interruption
-      recordInterruption();
+      openInterruptionInput();
     }
+  }
+
+  function openInterruptionInput() {
+    showInterruptionInput = true;
+    interruptionReason = '';
+    // Pause timer while logging interruption
+    if (pomodoro.isRunning) {
+      pausePomodoro();
+    }
+  }
+
+  function submitInterruption() {
+    recordInterruption(interruptionReason || 'Unspecified');
+    showInterruptionInput = false;
+    interruptionReason = '';
+    // Resume timer
+    resumePomodoro();
+  }
+
+  function cancelInterruption() {
+    showInterruptionInput = false;
+    resumePomodoro();
   }
 </script>
 
@@ -144,7 +171,7 @@
       </button>
 
       {#if pomodoro.state === 'work'}
-        <button class="control-btn interrupt" onclick={recordInterruption} title="记录中断 (I)">
+        <button class="control-btn interrupt" onclick={openInterruptionInput} title="记录中断 (I)">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="10"></circle>
             <line x1="12" y1="8" x2="12" y2="12"></line>
@@ -172,6 +199,26 @@
       <kbd>Esc</kbd> 退出
     </div>
   </div>
+
+  <!-- Interruption Input Modal -->
+  {#if showInterruptionInput}
+    <div class="interruption-modal" transition:fade={{ duration: 150 }}>
+      <div class="modal-card" transition:scale={{ start: 0.95, duration: 200 }}>
+        <h3>记录中断原因</h3>
+        <input 
+          type="text" 
+          bind:value={interruptionReason} 
+          placeholder="例如：老板电话、同事询问..." 
+          onkeydown={(e) => e.key === 'Enter' && submitInterruption()}
+          autofocus
+        />
+        <div class="modal-actions">
+          <button class="btn-cancel" onclick={cancelInterruption}>取消</button>
+          <button class="btn-confirm" onclick={submitInterruption}>记录</button>
+        </div>
+      </div>
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -394,13 +441,79 @@
     font-size: 11px;
   }
 
-  /* Animation for progress color change */
-  @keyframes pulse {
-    0%, 100% {
-      opacity: 1;
-    }
-    50% {
-      opacity: 0.7;
-    }
+  /* Interruption Modal */
+  .interruption-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 1100;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(4px);
+  }
+
+  .modal-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 24px;
+    width: 320px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    box-shadow: var(--shadow-lg);
+  }
+
+  .modal-card h3 {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+
+  .modal-card input {
+    width: 100%;
+    padding: 10px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-color);
+    background: var(--input-bg);
+    color: var(--text-primary);
+    font-size: 14px;
+  }
+
+  .modal-card input:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px var(--primary-bg);
+  }
+
+  .modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+  }
+
+  .btn-cancel, .btn-confirm {
+    padding: 8px 16px;
+    border-radius: var(--radius-md);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+
+  .btn-cancel {
+    background: transparent;
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+  }
+
+  .btn-confirm {
+    background: var(--primary);
+    color: white;
+    border: none;
+  }
+
+  .btn-confirm:hover {
+    background: var(--primary-hover);
   }
 </style>

@@ -29,7 +29,8 @@ fn main() {
             commands::backup_data,
             commands::migrate_legacy_data,
             commands::get_system_info,
-            commands::trigger_reload
+            commands::trigger_reload,
+            commands::append_archive_tasks
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

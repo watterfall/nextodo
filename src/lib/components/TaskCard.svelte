@@ -11,9 +11,10 @@
     task: Task;
     compact?: boolean;
     showPriority?: boolean;
+    isFocused?: boolean;
   }
 
-  let { task, compact = false, showPriority = false }: Props = $props();
+  let { task, compact = false, showPriority = false, isFocused = false }: Props = $props();
 
   const ui = getUIStore();
   const pomodoro = getPomodoroStore();
@@ -25,6 +26,14 @@
   let isFocusDimmed = $derived(isFocusMode && !isActive);
   let editContent = $state(task.content);
   let isHovered = $state(false);
+
+  // Derived energy level
+  const energyTag = $derived(task.customTags.find(t => ['⚡高能量', '😴低能量', '☕中等'].includes(t)));
+  const energyLevel = $derived(
+    energyTag === '⚡高能量' ? 'high' :
+    energyTag === '😴低能量' ? 'low' :
+    energyTag === '☕中等' ? 'medium' : null
+  );
 
   function handleCheck() {
     if (task.completed) {
@@ -104,6 +113,7 @@
   class:focus-dimmed={isFocusDimmed}
   class:focus-spotlight={isActive && isFocusMode}
   class:hovered={isHovered}
+  class:keyboard-focused={isFocused}
   style:--priority-color={config.color}
   style:--priority-bg={config.bgColor}
   style:--priority-border={config.borderColor}
@@ -148,6 +158,7 @@
           bind:value={editContent}
           onkeydown={handleKeydown}
           onblur={handleSaveEdit}
+          autoFocus
         />
       {:else}
         <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -171,8 +182,17 @@
               <span class="meta-tag context">{context}</span>
             {/each}
             {#each task.customTags as tag}
-              <span class="meta-tag custom">{tag}</span>
+              {#if !['⚡高能量', '😴低能量', '☕中等'].includes(tag)}
+                <span class="meta-tag custom">{tag}</span>
+              {/if}
             {/each}
+            
+            <!-- Energy Level Visualization -->
+            {#if energyLevel}
+              <span class="meta-tag energy {energyLevel}" title="能量消耗: {energyTag}">
+                {#if energyLevel === 'high'}⚡{:else if energyLevel === 'medium'}☕{:else}😴{/if}
+              </span>
+            {/if}
           </div>
         {/if}
       {/if}
@@ -208,7 +228,7 @@
   {/if}
 
   <!-- Action buttons - hover reveal -->
-  <div class="task-actions" class:visible={isHovered}>
+  <div class="task-actions" class:visible={isHovered || isFocused}>
     {#if !task.completed && !compact}
       <button
         class="action-btn play"
@@ -260,6 +280,14 @@
   .task-card:hover {
     background: var(--card-hover-bg);
     border-color: var(--border-color);
+  }
+
+  /* Keyboard focus state - distinct from hover but similar */
+  .task-card.keyboard-focused {
+    background: var(--card-hover-bg);
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px var(--primary-bg);
+    z-index: 5;
   }
 
   .task-card:focus-within {
@@ -367,7 +395,8 @@
   }
 
   .task-card:hover .drag-handle,
-  .task-card.hovered .drag-handle {
+  .task-card.hovered .drag-handle,
+  .task-card.keyboard-focused .drag-handle {
     opacity: 0.5;
   }
 
@@ -494,6 +523,21 @@
     background: rgba(99, 230, 190, 0.12);
     color: #63e6be;
   }
+  
+  .meta-tag.energy.high {
+    background: rgba(255, 107, 107, 0.12);
+    color: #ff6b6b;
+  }
+  
+  .meta-tag.energy.medium {
+    background: rgba(255, 146, 43, 0.12);
+    color: #ff922b;
+  }
+  
+  .meta-tag.energy.low {
+    background: rgba(81, 207, 102, 0.12);
+    color: #51cf66;
+  }
 
   .pomodoro-indicator {
     flex-shrink: 0;
@@ -566,6 +610,7 @@
     padding: 2px;
     border-radius: var(--radius-sm);
     pointer-events: none;
+    z-index: 20;
   }
 
   .task-actions.visible {
