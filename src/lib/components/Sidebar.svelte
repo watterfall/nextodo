@@ -305,6 +305,7 @@
           {#if projectsExpanded}
             <div class="filter-list">
               {#each allProjects as project}
+                {@const count = getProjectCount(project)}
                 <button
                   class="filter-item project"
                   class:active={tasks.filter.project === project}
@@ -312,7 +313,9 @@
                 >
                   <span class="item-icon">+</span>
                   <span class="item-text">{project}</span>
-                  <span class="item-count">{getProjectCount(project)}</span>
+                  {#if count > 0}
+                    <span class="item-badge">{count}</span>
+                  {/if}
                 </button>
               {/each}
             </div>
@@ -333,6 +336,7 @@
           {#if contextsExpanded}
             <div class="filter-list">
               {#each allContexts as context}
+                {@const count = getContextCount(context)}
                 <button
                   class="filter-item context"
                   class:active={tasks.filter.context === context}
@@ -340,7 +344,9 @@
                 >
                   <span class="item-icon">@</span>
                   <span class="item-text">{context}</span>
-                  <span class="item-count">{getContextCount(context)}</span>
+                  {#if count > 0}
+                    <span class="item-badge">{count}</span>
+                  {/if}
                 </button>
               {/each}
             </div>
@@ -361,6 +367,7 @@
           {#if tagsExpanded}
             <div class="filter-list">
               {#each allTags as tag}
+                {@const count = getTagCount(tag)}
                 <button
                   class="filter-item tag"
                   class:active={tasks.filter.tag === tag}
@@ -368,7 +375,9 @@
                 >
                   <span class="item-icon">#</span>
                   <span class="item-text">{tag}</span>
-                  <span class="item-count">{getTagCount(tag)}</span>
+                  {#if count > 0}
+                    <span class="item-badge">{count}</span>
+                  {/if}
                 </button>
               {/each}
             </div>
@@ -678,6 +687,7 @@
   }
 
   .filter-item {
+    position: relative;
     display: flex;
     align-items: center;
     gap: 8px;
@@ -721,6 +731,45 @@
 
   .filter-item.tag .item-icon {
     color: #63e6be;
+  }
+
+  /* Badge count for items */
+  .item-badge {
+    position: absolute;
+    right: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    font-size: 10px;
+    font-weight: 600;
+    background: var(--bg-tertiary, rgba(100, 100, 100, 0.2));
+    color: var(--text-muted);
+    border-radius: 9px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .filter-item.project .item-badge {
+    background: rgba(177, 151, 252, 0.15);
+    color: #b197fc;
+  }
+
+  .filter-item.context .item-badge {
+    background: rgba(116, 192, 252, 0.15);
+    color: #74c0fc;
+  }
+
+  .filter-item.tag .item-badge {
+    background: rgba(99, 230, 190, 0.15);
+    color: #63e6be;
+  }
+
+  .filter-item.active .item-badge {
+    background: var(--primary-bg);
+    color: var(--primary);
   }
 
   /* Badge Group Styles - Like the reference image */

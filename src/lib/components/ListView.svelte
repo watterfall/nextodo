@@ -72,7 +72,7 @@
   }
 
   function handleDndFinalize(priority: Priority) {
-    return (e: DndFinalizeEvent) => {
+    return async (e: DndFinalizeEvent) => {
       const { items, info } = e.detail;
       const cleanItems = items.filter(item => !item[SHADOW_ITEM_MARKER_PROPERTY_NAME as keyof Task]);
       dndItemsByPriority[priority] = cleanItems;
@@ -80,15 +80,20 @@
       if (info.trigger === TRIGGERS.DROPPED_INTO_ZONE) {
         const droppedTask = cleanItems.find(task => task.id === info.id);
         if (droppedTask && droppedTask.priority !== priority) {
-          changePriority(info.id, priority);
+          // Await the priority change before clearing drag state
+          const result = await changePriority(info.id, priority);
+          if (!result.success) {
+            // Revert if failed
+            dndItemsByPriority[priority] = getTasksForPriority(priority);
+          }
         } else {
-          const newOrder = cleanItems.map(task => task.id);
-          reorderTask(priority, newOrder);
+          await reorderTask(priority, cleanItems.map(task => task.id));
         }
       } else if (info.trigger === TRIGGERS.DROPPED_OUTSIDE_OF_ANY) {
         dndItemsByPriority[priority] = getTasksForPriority(priority);
       }
 
+      // Clear drag state after async operations complete
       activeDndPriority = null;
       clearDragState();
     };
@@ -154,9 +159,30 @@
         class:has-tasks={priorityTasks.length > 0}
         style:--section-color={config.color}
       >
-        <!-- Priority Header - Sleek badge style -->
+        <!-- Priority Header - Sleek badge style with full name and tooltip -->
         <div class="section-header">
           <span class="priority-badge" style:background={config.color}>{priority}</span>
+          <span class="priority-name">{t(`priority.${priority}`)}</span>
+          <div class="priority-info-wrapper">
+            <button class="priority-info-btn" aria-label="查看优先级说明">?</button>
+            <div class="priority-tooltip">
+              <div class="tooltip-title">{priority} · {t(`priority.${priority}`)}</div>
+              <div class="tooltip-row">
+                <span class="tooltip-label">配额</span>
+                <span class="tooltip-value">{t(`priority.quota.${priority}`)}</span>
+              </div>
+              <div class="tooltip-row">
+                <span class="tooltip-label">难度</span>
+                <span class="tooltip-value">{t(`priority.difficulty.${priority}`)}</span>
+              </div>
+              <div class="tooltip-row">
+                <span class="tooltip-label">时间</span>
+                <span class="tooltip-value">{t(`priority.time.${priority}`)}</span>
+              </div>
+              <div class="tooltip-desc">{t(`priority.description.${priority}`)}</div>
+            </div>
+          </div>
+          <span class="priority-count">{priorityTasks.length}</span>
         </div>
 
         <!-- Task List - Clean horizontal list items -->
@@ -413,6 +439,132 @@
     flex-shrink: 0;
   }
 
+  .priority-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+
+  .priority-count {
+    margin-left: auto;
+    padding: 2px 8px;
+    font-size: 12px;
+    font-weight: 500;
+    background: var(--bg-secondary);
+    color: var(--text-muted);
+    border-radius: var(--radius-full);
+  }
+
+  /* Priority Info Tooltip */
+  .priority-info-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+
+  .priority-info-btn {
+    width: 18px;
+    height: 18px;
+    border: 1px solid var(--border-color);
+    border-radius: 50%;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
+  }
+
+  .priority-info-btn:hover {
+    background: var(--hover-bg);
+    color: var(--text-primary);
+    border-color: var(--text-muted);
+  }
+
+  .priority-tooltip {
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    width: 200px;
+    padding: 12px;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+    z-index: 1000;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.15s ease, visibility 0.15s ease;
+    pointer-events: none;
+  }
+
+  .priority-info-wrapper:hover .priority-tooltip,
+  .priority-info-btn:focus + .priority-tooltip {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+  }
+
+  .priority-tooltip::before {
+    content: '';
+    position: absolute;
+    top: -6px;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 6px solid transparent;
+    border-bottom-color: var(--border-color);
+  }
+
+  .priority-tooltip::after {
+    content: '';
+    position: absolute;
+    top: -5px;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 5px solid transparent;
+    border-bottom-color: var(--card-bg);
+  }
+
+  .tooltip-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .tooltip-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+  }
+
+  .tooltip-label {
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  .tooltip-value {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-secondary);
+  }
+
+  .tooltip-desc {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 8px;
+    padding-top: 6px;
+    border-top: 1px solid var(--border-subtle);
+    line-height: 1.4;
+  }
+
   .toggle-arrow {
     font-size: 10px;
     color: var(--text-muted);
@@ -448,7 +600,7 @@
 
   .task-list:empty::before {
     content: '';
-    min-height: 40px;
+    min-height: 20px;
   }
 
   /* Task Row Item - Sleek horizontal row style */
@@ -843,18 +995,56 @@
     .list-main {
       flex: 1;
       min-height: 0;
-      gap: 20px;
+      gap: 16px;
+      overflow-y: auto;
     }
 
     .idea-pool-panel {
       width: 100%;
       flex-shrink: 0;
-      max-height: 250px;
+      max-height: 180px;
+      position: relative;
+      order: 1; /* Put at the end on mobile */
     }
 
     .idea-pool-panel.collapsed {
       width: 100%;
-      max-height: 52px;
+      max-height: 44px;
+    }
+
+    .list-main {
+      order: 0; /* Main content first */
+    }
+
+    .pool-tasks {
+      max-height: 120px;
+    }
+
+    .priority-tooltip {
+      left: 0;
+      transform: translateX(0);
+    }
+
+    .priority-tooltip::before,
+    .priority-tooltip::after {
+      left: 20px;
+      transform: none;
+    }
+  }
+
+  @media (max-width: 600px) {
+    .section-header {
+      gap: 8px;
+    }
+
+    .priority-name {
+      font-size: 13px;
+    }
+
+    .priority-info-btn {
+      width: 16px;
+      height: 16px;
+      font-size: 10px;
     }
   }
 </style>
