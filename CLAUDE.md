@@ -28,9 +28,9 @@
 /
 ├── src/                          # Frontend (Svelte/TypeScript)
 │   ├── lib/
-│   │   ├── components/           # Svelte components (20 files)
+│   │   ├── components/           # Svelte components (21 files)
 │   │   ├── stores/               # Svelte 5 runes state management (6 stores)
-│   │   ├── utils/                # Business logic utilities (7 files)
+│   │   ├── utils/                # Business logic utilities (6 files)
 │   │   ├── types/                # TypeScript type definitions
 │   │   └── i18n/                 # Internationalization (4 files)
 │   ├── App.svelte                # Root component
@@ -62,7 +62,8 @@
 | `TaskForm.svelte` | Quick task input form |
 | `TaskInput.svelte` | Syntax-highlighted task input |
 | `InboxPanel.svelte` | E-zone (inbox) task panel |
-| `KanbanView.svelte` | Alternative kanban board view |
+| `KanbanView.svelte` | Kanban board view with priority columns |
+| `ListView.svelte` | List view with tasks grouped by priority |
 | `TodayView.svelte` | Today-focused task view with due/overdue tasks |
 | `WeekView.svelte` | 7-day calendar view with DnD scheduling |
 | `PomodoroTimer.svelte` | Pomodoro timer controls |
@@ -161,7 +162,7 @@ All types are centralized in `src/lib/types/index.ts`. Key types:
 - **FilterState** - Current filter criteria
 - **UnitReview** - Bi-daily unit review data
 - **Badge** / **BadgeId** - Gamification achievement types
-- **ViewMode** - `'zones' | 'list' | 'calendar' | 'today' | 'week'`
+- **ViewMode** - `'kanban' | 'list'` (currently active views)
 
 ### Factory Functions
 
@@ -322,6 +323,9 @@ atomic_write_file(app_handle, file_type: &str, content: &str) -> Result<()>
 backup_data(app_handle) -> Result<String>
 migrate_legacy_data(app_handle) -> Result<bool>
 
+// Archive operations
+append_archive_tasks(app_handle, new_tasks_json: &str) -> Result<()>
+
 // System
 get_system_info() -> SystemInfo
 trigger_reload(app_handle, file_type: &str) -> Result<()>
@@ -461,18 +465,18 @@ Theme is stored in settings and applied via CSS custom properties in `app.css`. 
 
 | File | Purpose | Approx Lines |
 |------|---------|--------------|
-| `src/App.svelte` | Root component, layout, routing | ~770 |
-| `src/lib/stores/tasks.svelte.ts` | Central state management | ~480 |
-| `src/lib/utils/storage.ts` | Data persistence layer | ~580 |
+| `src/App.svelte` | Root component, layout, routing | ~800 |
+| `src/lib/stores/tasks.svelte.ts` | Central state management | ~520 |
+| `src/lib/utils/storage.ts` | Data persistence layer | ~615 |
 | `src/lib/utils/parser.ts` | Task input parsing | ~410 |
 | `src/lib/utils/motion.ts` | Animation configs, DnD types | ~190 |
 | `src/lib/utils/quota.ts` | Priority quota utilities | ~160 |
 | `src/lib/types/index.ts` | Type definitions | ~360 |
-| `src/lib/components/Sidebar.svelte` | Navigation and filters | ~550 |
-| `src/lib/components/TodayView.svelte` | Today-focused view | ~200 |
-| `src/lib/components/WeekView.svelte` | Week calendar view | ~200 |
+| `src/lib/components/Sidebar.svelte` | Navigation and filters | ~690 |
+| `src/lib/components/ListView.svelte` | List view by priority | ~190 |
+| `src/lib/components/KanbanView.svelte` | Kanban board view | ~200 |
 | `src/lib/stores/gamification.svelte.ts` | Badge system | ~115 |
-| `src-tauri/src/commands.rs` | Backend IPC handlers | ~310 |
+| `src-tauri/src/commands.rs` | Backend IPC handlers | ~395 |
 | `src-tauri/src/watcher.rs` | File system watcher | ~80 |
 
 ## Rust Dependencies
