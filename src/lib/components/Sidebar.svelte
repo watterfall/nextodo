@@ -2,8 +2,12 @@
   import { getTasksStore, setFilter, clearFilters } from '$lib/stores/tasks.svelte';
   import { getUIStore, toggleSidebar, setViewMode } from '$lib/stores/ui.svelte';
   import { getSettingsStore, toggleTheme, setAppLanguage } from '$lib/stores/settings.svelte';
-  import { t, setLanguage, currentLanguage } from '$lib/i18n';
+  import { getI18nStore, setLanguage, currentLanguage } from '$lib/i18n';
   import type { Language } from '$lib/types';
+
+  // Get translation function from store to ensure stable reference
+  const i18n = getI18nStore();
+  const t = i18n.t;
 
   interface Props {
     onOpenSettings?: () => void;
@@ -18,19 +22,19 @@
   const settings = getSettingsStore();
 
   // Extract unique projects, contexts, and tags from tasks
-  let allProjects = $derived([...new Set(tasks.tasks.flatMap(t => t.projects))].sort());
-  let allContexts = $derived([...new Set(tasks.tasks.flatMap(t => t.contexts))].sort());
-  let allTags = $derived([...new Set(tasks.tasks.flatMap(t => t.customTags))].sort());
+  let allProjects = $derived([...new Set(tasks.tasks.flatMap(task => task.projects))].sort());
+  let allContexts = $derived([...new Set(tasks.tasks.flatMap(task => task.contexts))].sort());
+  let allTags = $derived([...new Set(tasks.tasks.flatMap(task => task.customTags))].sort());
 
   // Count tasks per project/context/tag
   function getProjectCount(project: string): number {
-    return tasks.tasks.filter(t => !t.completed && t.projects.includes(project)).length;
+    return tasks.tasks.filter(task => !task.completed && task.projects.includes(project)).length;
   }
   function getContextCount(context: string): number {
-    return tasks.tasks.filter(t => !t.completed && t.contexts.includes(context)).length;
+    return tasks.tasks.filter(task => !task.completed && task.contexts.includes(context)).length;
   }
   function getTagCount(tag: string): number {
-    return tasks.tasks.filter(t => !t.completed && t.customTags.includes(tag)).length;
+    return tasks.tasks.filter(task => !task.completed && task.customTags.includes(tag)).length;
   }
 
   let projectsExpanded = $state(true);
