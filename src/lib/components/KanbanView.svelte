@@ -416,9 +416,8 @@
 
   /* Priority Column (A/B/C/D) - vertical kanban columns */
   .priority-column {
-    flex: 1;
-    min-width: 200px;
-    max-width: 350px;
+    flex: 1 1 0;
+    min-width: 180px;
     display: flex;
     flex-direction: column;
     background: var(--card-bg);
@@ -675,7 +674,7 @@
   /* Responsive adjustments */
   @media (max-width: 1200px) {
     .priority-column {
-      min-width: 180px;
+      min-width: 160px;
     }
     .idea-pool-panel {
       width: 220px;
