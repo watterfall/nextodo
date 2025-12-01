@@ -21,7 +21,8 @@
     getTasksStore,
     setSearchQuery,
     incrementPomodoro,
-    reloadData
+    reloadData,
+    setFilter
   } from '$lib/stores/tasks.svelte';
   import {
     getUIStore,
@@ -183,6 +184,24 @@
     <header class="header">
       <div class="header-left">
         <UnitNav />
+
+        <!-- Quick Date Filters -->
+        <div class="date-filter-tabs">
+          <button
+            class="filter-tab"
+            class:active={tasks.filter.dueFilter === 'today'}
+            onclick={() => setFilter({ dueFilter: tasks.filter.dueFilter === 'today' ? null : 'today' })}
+          >
+            {t('filter.today')}
+          </button>
+          <button
+            class="filter-tab"
+            class:active={tasks.filter.dueFilter === 'thisWeek'}
+            onclick={() => setFilter({ dueFilter: tasks.filter.dueFilter === 'thisWeek' ? null : 'thisWeek' })}
+          >
+            {t('filter.thisWeek')}
+          </button>
+        </div>
       </div>
 
       <div class="header-center">
@@ -457,6 +476,40 @@
 
   .header-left {
     flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .date-filter-tabs {
+    display: flex;
+    gap: 4px;
+    background: var(--bg-secondary);
+    padding: 3px;
+    border-radius: var(--radius-md);
+  }
+
+  .filter-tab {
+    padding: 5px 12px;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+  }
+
+  .filter-tab:hover {
+    color: var(--text-primary);
+    background: var(--hover-bg);
+  }
+
+  .filter-tab.active {
+    background: var(--card-bg);
+    color: var(--primary);
+    box-shadow: var(--shadow-sm);
   }
 
   .header-center {

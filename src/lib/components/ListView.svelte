@@ -27,12 +27,12 @@
 </script>
 
 <div class="list-view-container">
-  <!-- Main tasks area -->
+  <!-- Main tasks area with horizontal grid for A/B/C/D -->
   <div class="list-main">
-    <div class="tasks-container">
+    <div class="tasks-grid">
       {#each mainPriorities as priority}
         {@const priorityTasks = groupedTasks[priority]}
-        <section class="task-section" class:priority-section={true} style:--section-color={PRIORITY_CONFIG[priority].color}>
+        <section class="task-section" style:--section-color={PRIORITY_CONFIG[priority].color}>
           <div class="section-header">
             <div class="header-left">
               <span class="priority-badge">{priority}</span>
@@ -53,38 +53,41 @@
           </div>
         </section>
       {/each}
-
-      <!-- Completed Section -->
-      {#if completedTasks.length > 0}
-        <section class="task-section completed-section">
-          <button class="completed-toggle" onclick={() => showCompleted = !showCompleted}>
-            <div class="header-left">
-              <span class="toggle-icon" class:rotated={showCompleted}>▶</span>
-              <h3 class="section-title">{t('filter.completed')}</h3>
-            </div>
-            <span class="count-badge">{completedTasks.length}</span>
-          </button>
-
-          {#if showCompleted}
-            <div class="task-list" transition:slide>
-              {#each completedTasks as task (task.id)}
-                <TaskCard {task} compact showPriority />
-              {/each}
-            </div>
-          {/if}
-        </section>
-      {/if}
     </div>
+
+    <!-- Completed Section -->
+    {#if completedTasks.length > 0}
+      <section class="task-section completed-section">
+        <button class="completed-toggle" onclick={() => showCompleted = !showCompleted}>
+          <div class="header-left">
+            <span class="toggle-icon" class:rotated={showCompleted}>▶</span>
+            <h3 class="section-title">{t('filter.completed')}</h3>
+          </div>
+          <span class="count-badge">{completedTasks.length}</span>
+        </button>
+
+        {#if showCompleted}
+          <div class="task-list" transition:slide>
+            {#each completedTasks as task (task.id)}
+              <TaskCard {task} compact showPriority />
+            {/each}
+          </div>
+        {/if}
+      </section>
+    {/if}
   </div>
 
   <!-- Idea Pool (E-zone) on the right side -->
-  <aside class="idea-pool-panel" class:dimmed={!showIdeaPool}>
+  <aside class="idea-pool-panel" class:collapsed={!showIdeaPool}>
     <div class="pool-header" onclick={() => showIdeaPool = !showIdeaPool}>
       <div class="header-left">
         <span class="pool-badge" style:background={PRIORITY_CONFIG.E.color}>💡</span>
         <h3 class="pool-title">{t('inbox.title')}</h3>
       </div>
       <span class="pool-count">{groupedTasks.E.length}</span>
+      <svg class="expand-icon" class:rotated={showIdeaPool} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polyline points="15 18 9 12 15 6"></polyline>
+      </svg>
     </div>
 
     {#if showIdeaPool}
@@ -107,33 +110,42 @@
     display: flex;
     height: 100%;
     overflow: hidden;
-    gap: 20px;
+    gap: 16px;
   }
 
   .list-main {
     flex: 1;
     overflow-y: auto;
     padding-right: 4px;
-  }
-
-  .tasks-container {
     display: flex;
     flex-direction: column;
-    gap: 24px;
-    padding-bottom: 40px;
+    gap: 20px;
+  }
+
+  /* Grid layout for A/B/C/D sections */
+  .tasks-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+    padding-bottom: 20px;
   }
 
   .task-section {
     display: flex;
     flex-direction: column;
     gap: 12px;
+    background: var(--card-bg);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    padding: 14px;
+    min-height: 120px;
   }
 
   .section-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding-bottom: 8px;
+    padding-bottom: 10px;
     border-bottom: 1px solid var(--border-subtle);
   }
 
@@ -157,7 +169,7 @@
   }
 
   .section-title {
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 600;
     color: var(--text-primary);
     margin: 0;
@@ -176,19 +188,24 @@
     display: flex;
     flex-direction: column;
     gap: 8px;
+    flex: 1;
   }
 
   .empty-section-hint {
     font-size: 13px;
     color: var(--text-muted);
     font-style: italic;
-    padding: 8px 0;
+    padding: 12px 0;
     opacity: 0.6;
+    text-align: center;
   }
 
   .completed-section {
-    margin-top: 20px;
     opacity: 0.8;
+    background: var(--card-bg);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    padding: 14px;
   }
 
   .completed-toggle {
@@ -216,7 +233,7 @@
 
   /* Idea Pool (E-zone) panel on right side */
   .idea-pool-panel {
-    width: 280px;
+    width: 260px;
     flex-shrink: 0;
     background: var(--card-bg);
     border: 1px solid var(--border-subtle);
@@ -225,21 +242,24 @@
     display: flex;
     flex-direction: column;
     transition: all 0.3s ease;
+    height: fit-content;
+    max-height: 100%;
   }
 
-  .idea-pool-panel.dimmed {
-    opacity: 0.5;
+  .idea-pool-panel.collapsed {
+    width: 52px;
   }
 
-  .idea-pool-panel:hover {
-    opacity: 1;
+  .idea-pool-panel.collapsed .pool-title,
+  .idea-pool-panel.collapsed .pool-count {
+    display: none;
   }
 
   .pool-header {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    padding: 14px 16px;
+    gap: 10px;
+    padding: 12px 14px;
     border-bottom: 1px solid var(--border-subtle);
     cursor: pointer;
     transition: background 0.15s;
@@ -253,10 +273,10 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 28px;
-    height: 28px;
-    border-radius: 8px;
-    font-size: 14px;
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    font-size: 13px;
     flex-shrink: 0;
   }
 
@@ -265,6 +285,7 @@
     font-size: 14px;
     font-weight: 600;
     color: var(--text-primary);
+    flex: 1;
   }
 
   .pool-count {
@@ -274,6 +295,18 @@
     background: var(--primary-bg);
     color: var(--primary);
     border-radius: var(--radius-full);
+  }
+
+  .expand-icon {
+    width: 16px;
+    height: 16px;
+    color: var(--text-muted);
+    transition: transform 0.2s;
+    flex-shrink: 0;
+  }
+
+  .expand-icon.rotated {
+    transform: rotate(-90deg);
   }
 
   .pool-tasks {
@@ -296,13 +329,19 @@
 
   .pool-empty {
     text-align: center;
-    padding: 24px;
+    padding: 20px;
     color: var(--text-muted);
     font-size: 13px;
     font-style: italic;
   }
 
   /* Responsive */
+  @media (max-width: 1100px) {
+    .tasks-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
   @media (max-width: 900px) {
     .list-view-container {
       flex-direction: column;
@@ -310,7 +349,11 @@
 
     .idea-pool-panel {
       width: 100%;
-      max-height: 250px;
+      max-height: 200px;
+    }
+
+    .idea-pool-panel.collapsed {
+      width: 100%;
     }
   }
 </style>

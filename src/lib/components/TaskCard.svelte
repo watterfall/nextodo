@@ -100,6 +100,23 @@
   // Check if task is dormant (has threshold date in the future)
   const isDormant = $derived(!isThresholdPassed(task));
   const thresholdLabel = $derived(task.thresholdDate ? getRelativeDayLabel(parseISODate(task.thresholdDate)) : null);
+
+  // Check if task is scheduled too far in advance for its priority
+  // A: current cycle only, B: +1 cycle (4 days), C: within a week, D/E: no restriction
+  const isScheduledTooFar = $derived.by(() => {
+    if (!task.dueDate || task.completed) return false;
+    const dueDate = parseISODate(task.dueDate);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const daysDiff = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+
+    switch (task.priority) {
+      case 'A': return daysDiff > 2;  // A tasks should be within 2 days (current cycle)
+      case 'B': return daysDiff > 4;  // B tasks can be +1 cycle (4 days)
+      case 'C': return daysDiff > 7;  // C tasks within a week
+      default: return false;          // D/E have no restriction
+    }
+  });
 </script>
 
 <div
@@ -110,6 +127,7 @@
   class:dragging={isDragging}
   class:overdue={isTaskOverdue && !task.completed}
   class:dormant={isDormant}
+  class:scheduled-too-far={isScheduledTooFar}
   class:focus-dimmed={isFocusDimmed}
   class:focus-spotlight={isActive && isFocusMode}
   class:hovered={isHovered}
@@ -198,16 +216,19 @@
       {/if}
     </div>
 
-    {#if task.pomodoros.estimated > 0}
-      <button 
-        class="pomodoro-indicator clickable" 
-        title="点击开始专注"
+    {#if !task.completed}
+      <button
+        class="pomodoro-btn"
+        class:has-estimate={task.pomodoros.estimated > 0}
+        class:active={isActive}
+        title={isActive ? '专注进行中' : '点击开始专注'}
         onclick={(e) => { e.stopPropagation(); handleStartPomodoro(); }}
         disabled={isActive}
       >
-        <span class="pomodoro-count">
-          {task.pomodoros.completed}/{task.pomodoros.estimated}
-        </span>
+        <span class="tomato-icon">🍅</span>
+        {#if task.pomodoros.estimated > 0}
+          <span class="pomodoro-count">{task.pomodoros.completed}/{task.pomodoros.estimated}</span>
+        {/if}
       </button>
     {/if}
   </div>
@@ -374,6 +395,26 @@
   .task-card.dormant .checkbox {
     border-color: var(--text-muted);
     opacity: 0.7;
+  }
+
+  /* Scheduled too far in advance for priority level */
+  .task-card.scheduled-too-far {
+    opacity: 0.5;
+    border-left-style: dashed;
+  }
+
+  .task-card.scheduled-too-far:hover {
+    opacity: 0.75;
+  }
+
+  .task-card.scheduled-too-far .due-date {
+    color: var(--warning, #f59f00);
+    font-style: italic;
+  }
+
+  .task-card.scheduled-too-far .due-date::after {
+    content: ' ⚠️';
+    font-size: 10px;
   }
 
   .task-card.compact {
@@ -544,7 +585,7 @@
     color: #51cf66;
   }
 
-  .pomodoro-indicator {
+  .pomodoro-btn {
     flex-shrink: 0;
     display: flex;
     align-items: center;
@@ -552,29 +593,55 @@
     color: var(--text-muted);
     font-size: 12px;
     font-weight: 500;
-    padding: 2px 6px;
-    background: var(--hover-bg);
+    padding: 3px 8px;
+    background: transparent;
     border-radius: var(--radius-sm);
     border: none;
     transition: all var(--transition-fast);
+    cursor: pointer;
+    opacity: 0.5;
   }
 
-  .pomodoro-indicator.clickable:hover:not(:disabled) {
+  .task-card:hover .pomodoro-btn,
+  .task-card.keyboard-focused .pomodoro-btn {
+    opacity: 1;
+  }
+
+  .pomodoro-btn.has-estimate {
+    opacity: 0.8;
+    background: var(--hover-bg);
+  }
+
+  .task-card:hover .pomodoro-btn.has-estimate {
+    opacity: 1;
+  }
+
+  .pomodoro-btn:hover:not(:disabled) {
     background: var(--primary-bg);
     color: var(--primary);
-    cursor: pointer;
-    transform: scale(1.05);
+    transform: scale(1.08);
+    opacity: 1;
   }
 
-  .pomodoro-indicator:disabled {
+  .pomodoro-btn.active {
+    background: var(--primary-bg);
+    color: var(--primary);
+    opacity: 1;
+    animation: subtlePulse 2s ease-in-out infinite;
+  }
+
+  .pomodoro-btn:disabled {
     cursor: default;
-    opacity: 0.7;
   }
 
-  .pomodoro-count::before {
-    content: '🍅';
-    margin-right: 3px;
+  .tomato-icon {
+    font-size: 13px;
+    line-height: 1;
+  }
+
+  .pomodoro-count {
     font-size: 11px;
+    font-weight: 600;
   }
 
   .task-footer {
