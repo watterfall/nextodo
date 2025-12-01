@@ -15,7 +15,30 @@ export default {
     tags: 'Tags',
     calendar: 'Calendar',
     archive: 'Archive',
+    trash: 'Trash',
+    trashArchive: 'Trash & Archive',
     settings: 'Settings',
+  },
+
+  // Trash
+  trash: {
+    title: 'Trash',
+    empty: 'Trash is empty',
+    retentionInfo: 'Items in trash are deleted after 7 days',
+    expiring: 'Expiring soon',
+  },
+
+  // Archive section
+  archiveSection: {
+    title: 'Archive',
+    empty: 'No archived tasks',
+    showingRecent: 'Showing recent 50 records',
+  },
+
+  // Completed section
+  completedSection: {
+    title: 'Completed',
+    empty: 'No completed tasks',
   },
 
   // Priorities - With detailed tooltips
@@ -23,42 +46,42 @@ export default {
     A: 'Core Challenge',
     B: 'Key Progress',
     C: 'Steady Progress',
-    D: 'Quick Action',
-    E: 'Idea Pool',
+    D: 'Ad-hoc Tasks',
+    E: 'Quick Action',
     description: {
       A: 'Deep work, 2+ hours focus',
       B: 'Project milestones, 45-90 min',
       C: 'Steady progress, 20-45 min',
-      D: 'Under 20 minutes',
-      E: 'Ideas, notes, to be sorted',
+      D: 'Unplanned, ad-hoc tasks',
+      E: 'Under 15 minutes',
     },
     tooltip: {
       A: 'Core Challenge · Quota 1/cycle · 2+ hours · High difficulty & value',
       B: 'Key Progress · Quota 2/cycle · 45-90 min · Medium difficulty',
       C: 'Steady Progress · Quota 3/cycle · 20-45 min · Standard difficulty',
-      D: 'Quick Action · Quota 5/cycle · <20 min · Low difficulty',
-      E: 'Idea Pool · No quota limit · To be sorted',
+      D: 'Ad-hoc Tasks · Quota 4/cycle · Unplanned · Stay flexible',
+      E: 'Quick Action · Quota 5/cycle · <15 min · Fast completion',
     },
     quota: {
       A: '1/cycle',
       B: '2/cycle',
       C: '3/cycle',
-      D: '5/cycle',
-      E: 'Unlimited',
+      D: '4/cycle',
+      E: '5/cycle',
     },
     difficulty: {
       A: 'High',
       B: 'Medium',
       C: 'Standard',
-      D: 'Low',
-      E: 'TBD',
+      D: 'Ad-hoc',
+      E: 'Low',
     },
     time: {
       A: '2+ hours',
       B: '45-90 min',
       C: '20-45 min',
-      D: '<20 min',
-      E: 'TBD',
+      D: 'Varies',
+      E: '<15 min',
     },
   },
 

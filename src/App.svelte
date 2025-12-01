@@ -12,6 +12,7 @@
   import Confetti from '$lib/components/Confetti.svelte';
   import ImmersivePomodoro from '$lib/components/ImmersivePomodoro.svelte';
   import BadgesModal from '$lib/components/BadgesModal.svelte';
+  import TrashArchiveModal from '$lib/components/TrashArchiveModal.svelte';
 
   import {
     initializeData,
@@ -61,6 +62,7 @@
   let isSettingsOpen = $state(false);
   let isReviewOpen = $state(false);
   let isBadgesOpen = $state(false);
+  let isTrashOpen = $state(false);
   // Remove local viewMode state, use ui store
   // let viewMode = $state<ViewMode>('zones');
 
@@ -174,6 +176,7 @@
     onOpenSettings={() => isSettingsOpen = true}
     onOpenReview={() => isReviewOpen = true}
     onOpenBadges={() => isBadgesOpen = true}
+    onOpenTrash={() => isTrashOpen = true}
   />
 
   <main class="main-content">
@@ -181,24 +184,6 @@
     <header class="header">
       <div class="header-left">
         <UnitNav />
-
-        <!-- Quick Date Filters -->
-        <div class="date-filter-tabs">
-          <button
-            class="filter-tab"
-            class:active={tasks.filter.dueFilter === 'today'}
-            onclick={() => setFilter({ dueFilter: tasks.filter.dueFilter === 'today' ? null : 'today' })}
-          >
-            {t('filter.today')}
-          </button>
-          <button
-            class="filter-tab"
-            class:active={tasks.filter.dueFilter === 'thisWeek'}
-            onclick={() => setFilter({ dueFilter: tasks.filter.dueFilter === 'thisWeek' ? null : 'thisWeek' })}
-          >
-            {t('filter.thisWeek')}
-          </button>
-        </div>
       </div>
 
       <div class="header-center">
@@ -358,6 +343,11 @@
     <BadgesModal onClose={() => isBadgesOpen = false} />
   {/if}
 
+  <!-- Trash/Archive Modal -->
+  {#if isTrashOpen}
+    <TrashArchiveModal onClose={() => isTrashOpen = false} />
+  {/if}
+
   <!-- Review Modal -->
   {#if isReviewOpen}
     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
@@ -468,37 +458,6 @@
     display: flex;
     align-items: center;
     gap: 16px;
-  }
-
-  .date-filter-tabs {
-    display: flex;
-    gap: 4px;
-    background: var(--bg-secondary);
-    padding: 3px;
-    border-radius: var(--radius-md);
-  }
-
-  .filter-tab {
-    padding: 5px 12px;
-    border: none;
-    border-radius: var(--radius-sm);
-    background: transparent;
-    color: var(--text-muted);
-    font-size: 12px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all var(--transition-fast);
-  }
-
-  .filter-tab:hover {
-    color: var(--text-primary);
-    background: var(--hover-bg);
-  }
-
-  .filter-tab.active {
-    background: var(--card-bg);
-    color: var(--primary);
-    box-shadow: var(--shadow-sm);
   }
 
   .header-center {

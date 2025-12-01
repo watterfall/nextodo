@@ -30,10 +30,10 @@
   // Focus mode check
   const isFocusMode = $derived(pomodoro.state === 'work' && pomodoro.activeTaskId !== null);
 
-  // Idea Pool (E zone) derived values
-  const ideaPoolTasks = $derived(dndItemsByPriority['E']);
-  const ideaPoolDropTarget = $derived(ui.dropTargetPriority === 'E' || activeDndColumn === 'E');
-  const ideaPoolDimmed = $derived(isFocusMode && !hasActiveTaskInColumn('E'));
+  // Quick Action (E zone) derived values
+  const quickActionTasks = $derived(dndItemsByPriority['E']);
+  const quickActionDropTarget = $derived(ui.dropTargetPriority === 'E' || activeDndColumn === 'E');
+  const quickActionDimmed = $derived(isFocusMode && !hasActiveTaskInColumn('E'));
 
   // DnD state for each column
   let dndItemsByPriority = $state<Record<Priority, Task[]>>({
@@ -46,8 +46,8 @@
   let focusedTaskIndex = $state<number>(-1);
   let focusedTaskId = $state<string | null>(null);
 
-  // Idea Pool toggle state
-  let showIdeaPool = $state(true);
+  // Quick Action panel toggle state
+  let showQuickAction = $state(true);
 
   function getTasksForPriority(priority: Priority) {
     return tasks.tasksByPriority[priority].filter(task => !task.completed);
@@ -263,7 +263,7 @@
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div class="kanban-container" onclick={handleContainerClick}>
   <!-- Main priority columns (A-D) as horizontal kanban columns -->
-  <div class="kanban-main" class:expanded={!showIdeaPool}>
+  <div class="kanban-main" class:expanded={!showQuickAction}>
     {#each mainPriorities as priority}
       {@const config = PRIORITY_CONFIG[priority]}
       {@const activeTasks = dndItemsByPriority[priority]}
@@ -340,51 +340,51 @@
     {/each}
   </div>
 
-  <!-- Idea Pool (E zone) - fixed on right side, toggleable -->
+  <!-- Quick Action (E zone) - fixed on right side, toggleable -->
   <aside
-    class="idea-pool-panel"
-    class:collapsed={!showIdeaPool}
-    class:drop-target={ideaPoolDropTarget}
-    class:focus-dimmed={ideaPoolDimmed}
+    class="quick-action-panel"
+    class:collapsed={!showQuickAction}
+    class:drop-target={quickActionDropTarget}
+    class:focus-dimmed={quickActionDimmed}
     ondragover={(e) => handleDragOver(e, 'E')}
     ondragleave={handleDragLeave}
     ondrop={(e) => handleDrop(e, 'E')}
   >
     <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="pool-header" onclick={() => showIdeaPool = !showIdeaPool}>
-      <span class="pool-badge" style:background={PRIORITY_CONFIG.E.color}>💡</span>
-      {#if showIdeaPool}
-        <span class="pool-title">{t('inbox.title')}</span>
-        <span class="pool-count">{ideaPoolTasks.length}</span>
+    <div class="pool-header" onclick={() => showQuickAction = !showQuickAction}>
+      <span class="pool-badge" style:background={PRIORITY_CONFIG.E.color}>E</span>
+      {#if showQuickAction}
+        <span class="pool-title">{t('priority.E')}</span>
+        <span class="pool-count">{quickActionTasks.length}/{PRIORITY_CONFIG.E.quota}</span>
       {/if}
-      <svg class="toggle-icon" class:rotated={!showIdeaPool} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <svg class="toggle-icon" class:rotated={!showQuickAction} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <polyline points="9 18 15 12 9 6"></polyline>
       </svg>
     </div>
 
-    {#if showIdeaPool}
+    {#if showQuickAction}
       <div
         class="pool-tasks"
         transition:slide
         use:dndzone={{
-          items: ideaPoolTasks,
+          items: quickActionTasks,
           flipDurationMs: dndConfig.flipDurationMs,
           dropTargetStyle: {},
           dropTargetClasses: ['dnd-drop-target-active'],
-          dragDisabled: ideaPoolDimmed,
+          dragDisabled: quickActionDimmed,
           type: DND_TYPE
         }}
         onconsider={handleDndConsider('E')}
         onfinalize={handleDndFinalize('E')}
       >
-        {#if ideaPoolTasks.length > 0}
-          {#each ideaPoolTasks as task (task.id)}
+        {#if quickActionTasks.length > 0}
+          {#each quickActionTasks as task (task.id)}
             <div animate:flip={{ duration: dndConfig.flipDurationMs }} class="pool-task-item">
               <TaskCard {task} compact />
             </div>
           {/each}
         {:else}
-          <div class="pool-empty">{t('inbox.empty')}</div>
+          <div class="pool-empty">{t('zone.dropHere')}</div>
         {/if}
       </div>
     {/if}
@@ -557,8 +557,8 @@
     padding: 4px;
   }
 
-  /* Idea Pool Panel (E zone) - fixed on right, toggleable */
-  .idea-pool-panel {
+  /* Quick Action Panel (E zone) - fixed on right, toggleable */
+  .quick-action-panel {
     width: 260px;
     flex-shrink: 0;
     display: flex;
@@ -572,16 +572,16 @@
     -webkit-backdrop-filter: blur(8px);
   }
 
-  .idea-pool-panel.collapsed {
+  .quick-action-panel.collapsed {
     width: 52px;
   }
 
-  .idea-pool-panel.drop-target {
+  .quick-action-panel.drop-target {
     border-color: var(--primary);
     box-shadow: 0 0 0 2px var(--primary);
   }
 
-  .idea-pool-panel.focus-dimmed {
+  .quick-action-panel.focus-dimmed {
     opacity: 0.3;
     filter: grayscale(0.4) blur(0.5px);
     pointer-events: none;
@@ -673,7 +673,7 @@
     .priority-column {
       min-width: 160px;
     }
-    .idea-pool-panel {
+    .quick-action-panel {
       width: 220px;
     }
   }
@@ -699,13 +699,13 @@
       max-height: 250px;
     }
 
-    .idea-pool-panel {
+    .quick-action-panel {
       width: 100%;
       flex-shrink: 0;
       max-height: 200px;
     }
 
-    .idea-pool-panel.collapsed {
+    .quick-action-panel.collapsed {
       width: 100%;
       max-height: 52px;
     }

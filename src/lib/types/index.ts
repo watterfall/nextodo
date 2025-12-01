@@ -195,17 +195,17 @@ export const PRIORITY_CONFIG: Record<Priority, PriorityConfig> = {
     borderColor: 'var(--priority-c-border, rgba(116, 192, 252, 0.2))'
   },
   D: {
-    name: '快速处理',
-    quota: 5,
-    description: '15分钟内可完成',
+    name: '临时任务',
+    quota: 4,
+    description: '计划外的临时任务',
     color: 'var(--priority-d-color, #868e96)',
     bgColor: 'var(--priority-d-bg, rgba(134, 142, 150, 0.08))',
     borderColor: 'var(--priority-d-border, rgba(134, 142, 150, 0.2))'
   },
   E: {
-    name: '收集箱',
-    quota: Infinity,
-    description: '备忘、想法、无期限',
+    name: '快速处理',
+    quota: 5,
+    description: '15分钟内可完成',
     color: 'var(--priority-e-color, #5c636a)',
     bgColor: 'var(--priority-e-bg, rgba(92, 99, 106, 0.08))',
     borderColor: 'var(--priority-e-border, rgba(92, 99, 106, 0.2))'
