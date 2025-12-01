@@ -22,7 +22,8 @@ let filter = $state<FilterState>({
   tag: null,
   showCompleted: false,
   dueFilter: null,
-  showFutureTasks: false
+  showFutureTasks: false,
+  priority: null
 });
 
 // Search query

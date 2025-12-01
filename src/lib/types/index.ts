@@ -180,11 +180,11 @@ export const PRIORITY_CONFIG: Record<Priority, PriorityConfig> = {
   A: {
     name: '核心挑战',
     quota: 1,
-    description: '深度工作，需 2+ 小时专注',
+    description: '深度工作，需 2.5+ 小时专注',
     color: 'var(--priority-a-color, #da77f2)',
     bgColor: 'var(--priority-a-bg, rgba(218, 119, 242, 0.12))',
     borderColor: 'var(--priority-a-border, rgba(218, 119, 242, 0.25))',
-    pomodoroRange: { min: 4, max: 12, recommended: 6 }  // 2+ hours = 4+ pomodoros
+    pomodoroRange: { min: 5, max: 12, recommended: 8 }  // 2.5-6 hours = 5-12 pomodoros
   },
   B: {
     name: '重要推进',
@@ -193,7 +193,7 @@ export const PRIORITY_CONFIG: Record<Priority, PriorityConfig> = {
     color: 'var(--priority-b-color, #ff922b)',
     bgColor: 'var(--priority-b-bg, rgba(255, 146, 43, 0.12))',
     borderColor: 'var(--priority-b-border, rgba(255, 146, 43, 0.25))',
-    pomodoroRange: { min: 2, max: 4, recommended: 3 }  // 45-90 min = 2-4 pomodoros
+    pomodoroRange: { min: 3, max: 6, recommended: 4 }  // 1.5-3 hours = 3-6 pomodoros
   },
   C: {
     name: '标准任务',
@@ -202,7 +202,7 @@ export const PRIORITY_CONFIG: Record<Priority, PriorityConfig> = {
     color: 'var(--priority-c-color, #74c0fc)',
     bgColor: 'var(--priority-c-bg, rgba(116, 192, 252, 0.08))',
     borderColor: 'var(--priority-c-border, rgba(116, 192, 252, 0.2))',
-    pomodoroRange: { min: 1, max: 2, recommended: 1 }  // 20-45 min = 1-2 pomodoros
+    pomodoroRange: { min: 2, max: 5, recommended: 3 }  // 1-2.5 hours = 2-5 pomodoros
   },
   D: {
     name: '临时任务',
@@ -211,7 +211,7 @@ export const PRIORITY_CONFIG: Record<Priority, PriorityConfig> = {
     color: 'var(--priority-d-color, #868e96)',
     bgColor: 'var(--priority-d-bg, rgba(134, 142, 150, 0.08))',
     borderColor: 'var(--priority-d-border, rgba(134, 142, 150, 0.2))',
-    pomodoroRange: { min: 0, max: 4, recommended: 1 }  // Flexible, varies
+    pomodoroRange: { min: 1, max: 3, recommended: 2 }  // 25-75 min = 1-3 pomodoros
   },
   E: {
     name: '快速处理',
@@ -220,7 +220,7 @@ export const PRIORITY_CONFIG: Record<Priority, PriorityConfig> = {
     color: 'var(--priority-e-color, #51cf66)',
     bgColor: 'var(--priority-e-bg, rgba(81, 207, 102, 0.08))',
     borderColor: 'var(--priority-e-border, rgba(81, 207, 102, 0.2))',
-    pomodoroRange: { min: 0, max: 1, recommended: 0 }  // <15 min = 0 pomodoros
+    pomodoroRange: { min: 0, max: 1, recommended: 0 }  // <15 min = 0-1 pomodoros
   },
   F: {
     name: '灵感收集',
@@ -251,6 +251,8 @@ export interface FilterState {
   dueFilter: 'today' | 'thisWeek' | 'overdue' | null;
   // NEW: Show only future tasks (threshold not reached)
   showFutureTasks: boolean;
+  // NEW: Filter by priority
+  priority: Priority | null;
 }
 
 // View mode
