@@ -6,6 +6,7 @@
     stopPomodoro,
     skipSession
   } from '$lib/stores/pomodoro.svelte';
+  import { getI18nStore } from '$lib/i18n';
 
   interface Props {
     onEnterImmersive?: () => void;
@@ -14,6 +15,7 @@
   let { onEnterImmersive }: Props = $props();
 
   const pomodoro = getPomodoroStore();
+  const i18n = getI18nStore();
 
   // Calculate circle progress
   const circumference = 2 * Math.PI * 90;
@@ -63,7 +65,7 @@
         {pomodoro.formattedTime}
       </div>
       <div class="state-label">
-        {t(`pomodoro.${pomodoro.state}`) === `pomodoro.${pomodoro.state}` ? pomodoro.stateLabel : t(`pomodoro.${pomodoro.state}`)}
+        {i18n.t(`pomodoro.${pomodoro.state}`) === `pomodoro.${pomodoro.state}` ? pomodoro.stateLabel : i18n.t(`pomodoro.${pomodoro.state}`)}
       </div>
       {#if pomodoro.activeTask}
         <div class="active-task" title={pomodoro.activeTask.content}>
@@ -108,16 +110,16 @@
   </div>
 
   <div class="session-count">
-    <span class="count-label">{t('pomodoro.todayCount')}</span>
+    <span class="count-label">{i18n.t('pomodoro.todayCount')}</span>
     <span class="count-value">🍅 ×{pomodoro.todayCount}</span>
   </div>
 
   {#if pomodoro.state !== 'idle' && onEnterImmersive}
-    <button class="immersive-btn" onclick={onEnterImmersive} title={t('pomodoro.immersiveMode')}>
+    <button class="immersive-btn" onclick={onEnterImmersive} title={i18n.t('pomodoro.immersiveMode')}>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path>
       </svg>
-      <span>{t('pomodoro.immersiveMode')}</span>
+      <span>{i18n.t('pomodoro.immersiveMode')}</span>
     </button>
   {/if}
 </div>
