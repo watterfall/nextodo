@@ -100,7 +100,7 @@
   }
 
   function handleDndFinalize(priority: Priority) {
-    return (e: DndFinalizeEvent) => {
+    return async (e: DndFinalizeEvent) => {
       const { items, info } = e.detail;
 
       // Filter out shadow placeholders
@@ -111,17 +111,21 @@
         const droppedTask = cleanItems.find(task => task.id === info.id);
         if (droppedTask && droppedTask.priority !== priority) {
           // Item came from another column - change its priority
-          changePriority(info.id, priority);
+          const result = await changePriority(info.id, priority);
+          if (!result.success) {
+            // Revert if failed
+            dndItemsByPriority[priority] = getTasksForPriority(priority);
+          }
         } else {
           // Reorder within column
-          const newOrder = cleanItems.map(task => task.id);
-          reorderTask(priority, newOrder);
+          await reorderTask(priority, cleanItems.map(task => task.id));
         }
       } else if (info.trigger === TRIGGERS.DROPPED_OUTSIDE_OF_ANY) {
         // Reset
         dndItemsByPriority[priority] = getTasksForPriority(priority);
       }
 
+      // Clear drag state after async operations complete
       activeDndColumn = null;
       clearDragState();
     };
@@ -304,25 +308,22 @@
           onconsider={handleDndConsider(priority)}
           onfinalize={handleDndFinalize(priority)}
         >
-          {#if activeTasks.length > 0}
-            {#each activeTasks as task (task.id)}
-              <div
-                animate:flip={{ duration: dndConfig.flipDurationMs }}
-                class="task-item-wrapper"
-                id={`task-${task.id}`}
-                tabindex={focusedTaskId === task.id ? 0 : -1}
-              >
-                <TaskCard
-                  {task}
-                  compact={priority === 'D'}
-                  isFocused={focusedTaskId === task.id}
-                />
-              </div>
-            {/each}
-          {:else}
-            <div class="empty-column" class:very-subtle={!isDropTarget}>
-              <span class="empty-text">{t('zone.dropHere')}</span>
+          {#each activeTasks as task (task.id)}
+            <div
+              animate:flip={{ duration: dndConfig.flipDurationMs }}
+              class="task-item-wrapper"
+              id={`task-${task.id}`}
+              tabindex={focusedTaskId === task.id ? 0 : -1}
+            >
+              <TaskCard
+                {task}
+                compact={priority === 'D'}
+                isFocused={focusedTaskId === task.id}
+              />
             </div>
+          {/each}
+          {#if activeTasks.length === 0}
+            <div class="empty-column-spacer"></div>
           {/if}
         </div>
 
@@ -378,14 +379,13 @@
         onconsider={handleDndConsider('F')}
         onfinalize={handleDndFinalize('F')}
       >
-        {#if ideaPoolTasks.length > 0}
-          {#each ideaPoolTasks as task (task.id)}
-            <div animate:flip={{ duration: dndConfig.flipDurationMs }} class="pool-task-item">
-              <TaskCard {task} compact />
-            </div>
-          {/each}
-        {:else}
-          <div class="pool-empty">{t('zone.dropHere')}</div>
+        {#each ideaPoolTasks as task (task.id)}
+          <div animate:flip={{ duration: dndConfig.flipDurationMs }} class="pool-task-item">
+            <TaskCard {task} compact />
+          </div>
+        {/each}
+        {#if ideaPoolTasks.length === 0}
+          <div class="pool-empty-spacer"></div>
         {/if}
       </div>
     {/if}
@@ -503,32 +503,13 @@
     outline: none;
   }
 
-  .empty-column {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 24px;
-    border: 1px dashed var(--border-color);
-    border-radius: var(--radius-md);
-    min-height: 60px;
+  .empty-column-spacer {
+    min-height: 40px;
     flex: 1;
-    transition: all var(--transition-normal);
   }
 
-  .empty-column.very-subtle {
-    opacity: 0.2;
-    border-color: transparent;
-  }
-
-  .priority-column:hover .empty-column.very-subtle {
-    opacity: 0.5;
-    border-color: var(--border-color);
-  }
-
-  .empty-text {
-    font-size: 12px;
-    color: var(--text-muted);
-    font-style: italic;
+  .pool-empty-spacer {
+    min-height: 40px;
   }
 
   .completed-section {
@@ -659,14 +640,6 @@
 
   .pool-task-item:hover {
     opacity: 1;
-  }
-
-  .pool-empty {
-    color: var(--text-muted);
-    font-size: 13px;
-    font-style: italic;
-    padding: 20px;
-    text-align: center;
   }
 
   /* Responsive adjustments */
