@@ -281,22 +281,19 @@
     flex-shrink: 0;
   }
 
-  /* Horizontal task list within each row */
+  /* Horizontal task list within each row - uses grid to fill available width */
   .task-list-horizontal {
-    display: flex;
-    flex-direction: row;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
     gap: 10px;
     padding: 10px;
-    overflow-x: auto;
-    overflow-y: hidden;
     min-height: 80px;
-    align-items: flex-start;
+    align-items: start;
   }
 
   .task-item-horizontal {
-    flex-shrink: 0;
-    width: 260px;
     transform-origin: center center;
+    min-width: 0;
   }
 
   .empty-row-hint {
@@ -308,8 +305,7 @@
     font-style: italic;
     padding: 16px 24px;
     opacity: 0.6;
-    flex: 1;
-    min-width: 200px;
+    grid-column: 1 / -1;
   }
 
   /* Completed section */
@@ -342,7 +338,7 @@
   }
 
   .completed-list {
-    flex-wrap: wrap;
+    /* Inherits grid from .task-list-horizontal */
   }
 
   /* Idea Pool (E-zone) - fixed on right, toggleable */
@@ -456,8 +452,8 @@
     .idea-pool-panel {
       width: 220px;
     }
-    .task-item-horizontal {
-      width: 220px;
+    .task-list-horizontal {
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
     }
   }
 
@@ -471,8 +467,8 @@
       min-height: 0;
     }
 
-    .task-item-horizontal {
-      width: 200px;
+    .task-list-horizontal {
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
     }
 
     .idea-pool-panel {
