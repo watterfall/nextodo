@@ -92,7 +92,6 @@
     return tasks.tasks.filter(task => !task.completed && task.customTags.includes(tag)).length;
   }
 
-  let priorityExpanded = $state(true);
   let dueDatesExpanded = $state(true);
   let pomodorosExpanded = $state(true);
   let projectsExpanded = $state(true);
@@ -212,38 +211,6 @@
 
   {#if !ui.sidebarCollapsed}
     <div class="sidebar-content">
-      <!-- Priority Section - Badge style -->
-      <div class="nav-section">
-        <button class="section-header" onclick={() => priorityExpanded = !priorityExpanded}>
-          <svg class="section-icon" class:rotated={priorityExpanded} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="9 18 15 12 9 6"></polyline>
-          </svg>
-          <span class="section-label">{t('sidebar.priority') || '优先级'}</span>
-        </button>
-        {#if priorityExpanded}
-          <div class="badge-group">
-            {#each priorities as priority}
-              {@const config = PRIORITY_CONFIG[priority]}
-              {@const count = getPriorityCount(priority)}
-              {#if count > 0}
-                <button
-                  class="priority-badge-btn"
-                  class:active={selectedPriority === priority}
-                  style:--badge-color={config.color}
-                  onclick={() => handlePriorityFilter(priority)}
-                  title={config.name}
-                >
-                  <span class="badge-letter">{priority}</span>
-                  {#if count > 0}
-                    <span class="badge-count">{count}</span>
-                  {/if}
-                </button>
-              {/if}
-            {/each}
-          </div>
-        {/if}
-      </div>
-
       <!-- Due Dates Section - Date chips with counts -->
       {#if dueDateGroups().length > 0}
         <div class="nav-section">
@@ -292,7 +259,7 @@
         </div>
       {/if}
 
-      <!-- Projects Section -->
+      <!-- Projects Section - Badge style with superscript counts -->
       {#if allProjects.length > 0}
         <div class="nav-section">
           <button class="section-header" onclick={() => projectsExpanded = !projectsExpanded}>
@@ -300,21 +267,19 @@
               <polyline points="9 18 15 12 9 6"></polyline>
             </svg>
             <span class="section-label">{t('sidebar.projects')}</span>
-            <span class="section-count">{allProjects.length}</span>
           </button>
           {#if projectsExpanded}
-            <div class="filter-list">
+            <div class="badge-group tag-badges">
               {#each allProjects as project}
                 {@const count = getProjectCount(project)}
                 <button
-                  class="filter-item project"
+                  class="tag-badge-btn project"
                   class:active={tasks.filter.project === project}
                   onclick={() => handleProjectFilter(project)}
                 >
-                  <span class="item-icon">+</span>
-                  <span class="item-text">{project}</span>
+                  <span class="badge-text">+{project}</span>
                   {#if count > 0}
-                    <span class="item-badge">{count}</span>
+                    <span class="badge-sup">{count}</span>
                   {/if}
                 </button>
               {/each}
@@ -323,7 +288,7 @@
         </div>
       {/if}
 
-      <!-- Contexts Section -->
+      <!-- Contexts Section - Badge style with superscript counts -->
       {#if allContexts.length > 0}
         <div class="nav-section">
           <button class="section-header" onclick={() => contextsExpanded = !contextsExpanded}>
@@ -331,21 +296,19 @@
               <polyline points="9 18 15 12 9 6"></polyline>
             </svg>
             <span class="section-label">{t('sidebar.contexts')}</span>
-            <span class="section-count">{allContexts.length}</span>
           </button>
           {#if contextsExpanded}
-            <div class="filter-list">
+            <div class="badge-group tag-badges">
               {#each allContexts as context}
                 {@const count = getContextCount(context)}
                 <button
-                  class="filter-item context"
+                  class="tag-badge-btn context"
                   class:active={tasks.filter.context === context}
                   onclick={() => handleContextFilter(context)}
                 >
-                  <span class="item-icon">@</span>
-                  <span class="item-text">{context}</span>
+                  <span class="badge-text">@{context}</span>
                   {#if count > 0}
-                    <span class="item-badge">{count}</span>
+                    <span class="badge-sup">{count}</span>
                   {/if}
                 </button>
               {/each}
@@ -354,7 +317,7 @@
         </div>
       {/if}
 
-      <!-- Tags Section -->
+      <!-- Tags Section - Badge style with superscript counts -->
       {#if allTags.length > 0}
         <div class="nav-section">
           <button class="section-header" onclick={() => tagsExpanded = !tagsExpanded}>
@@ -362,21 +325,19 @@
               <polyline points="9 18 15 12 9 6"></polyline>
             </svg>
             <span class="section-label">{t('sidebar.tags')}</span>
-            <span class="section-count">{allTags.length}</span>
           </button>
           {#if tagsExpanded}
-            <div class="filter-list">
+            <div class="badge-group tag-badges">
               {#each allTags as tag}
                 {@const count = getTagCount(tag)}
                 <button
-                  class="filter-item tag"
+                  class="tag-badge-btn tag"
                   class:active={tasks.filter.tag === tag}
                   onclick={() => handleTagFilter(tag)}
                 >
-                  <span class="item-icon">#</span>
-                  <span class="item-text">{tag}</span>
+                  <span class="badge-text">#{tag}</span>
                   {#if count > 0}
-                    <span class="item-badge">{count}</span>
+                    <span class="badge-sup">{count}</span>
                   {/if}
                 </button>
               {/each}
@@ -1072,5 +1033,113 @@
   .collapsed-btn svg {
     width: 18px;
     height: 18px;
+  }
+
+  /* Tag Badge Styles - Compact with superscript counts */
+  .tag-badges {
+    gap: 6px;
+  }
+
+  .tag-badge-btn {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 5px 10px;
+    border: none;
+    border-radius: 6px;
+    background: var(--bg-tertiary, rgba(100, 100, 100, 0.12));
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    font-size: 12px;
+    font-weight: 500;
+  }
+
+  .tag-badge-btn:hover {
+    background: var(--hover-bg);
+    color: var(--text-primary);
+  }
+
+  .tag-badge-btn.active {
+    background: var(--primary-bg);
+    color: var(--primary);
+  }
+
+  .tag-badge-btn.project {
+    background: rgba(177, 151, 252, 0.12);
+    color: #b197fc;
+  }
+
+  .tag-badge-btn.project:hover {
+    background: rgba(177, 151, 252, 0.2);
+  }
+
+  .tag-badge-btn.project.active {
+    background: rgba(177, 151, 252, 0.25);
+    box-shadow: 0 0 0 1px #b197fc;
+  }
+
+  .tag-badge-btn.context {
+    background: rgba(116, 192, 252, 0.12);
+    color: #74c0fc;
+  }
+
+  .tag-badge-btn.context:hover {
+    background: rgba(116, 192, 252, 0.2);
+  }
+
+  .tag-badge-btn.context.active {
+    background: rgba(116, 192, 252, 0.25);
+    box-shadow: 0 0 0 1px #74c0fc;
+  }
+
+  .tag-badge-btn.tag {
+    background: rgba(99, 230, 190, 0.12);
+    color: #63e6be;
+  }
+
+  .tag-badge-btn.tag:hover {
+    background: rgba(99, 230, 190, 0.2);
+  }
+
+  .tag-badge-btn.tag.active {
+    background: rgba(99, 230, 190, 0.25);
+    box-shadow: 0 0 0 1px #63e6be;
+  }
+
+  .badge-text {
+    font-weight: 500;
+  }
+
+  .badge-sup {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    font-size: 10px;
+    font-weight: 600;
+    background: var(--text-muted);
+    color: white;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  }
+
+  .tag-badge-btn.project .badge-sup {
+    background: #b197fc;
+  }
+
+  .tag-badge-btn.context .badge-sup {
+    background: #74c0fc;
+  }
+
+  .tag-badge-btn.tag .badge-sup {
+    background: #63e6be;
+    color: #1a1a1a;
   }
 </style>

@@ -19,9 +19,10 @@
   type TabType = 'trash' | 'completed' | 'archived';
   let activeTab = $state<TabType>('trash');
 
-  // Get trash items with age calculation
+  // Get trash items with age calculation (with defensive null check)
   const trashItems = $derived.by(() => {
-    return tasks.trash.map(task => {
+    const trash = tasks.trash ?? [];
+    return trash.map(task => {
       const deletedAt = task.completedAt ? new Date(task.completedAt) : new Date(task.createdAt);
       const now = new Date();
       const ageInDays = Math.floor((now.getTime() - deletedAt.getTime()) / (1000 * 60 * 60 * 24));
@@ -32,16 +33,18 @@
 
   // Get completed tasks (not yet archived)
   const completedItems = $derived.by(() => {
-    return tasks.tasks.filter(task => task.completed).sort((a, b) => {
+    const allTasks = tasks.tasks ?? [];
+    return allTasks.filter(task => task.completed).sort((a, b) => {
       const dateA = a.completedAt ? new Date(a.completedAt).getTime() : 0;
       const dateB = b.completedAt ? new Date(b.completedAt).getTime() : 0;
       return dateB - dateA;
     });
   });
 
-  // Get archived tasks
+  // Get archived tasks (with defensive null check)
   const archivedItems = $derived.by(() => {
-    return tasks.archive.sort((a, b) => {
+    const archive = tasks.archive ?? [];
+    return [...archive].sort((a, b) => {
       const dateA = a.completedAt ? new Date(a.completedAt).getTime() : 0;
       const dateB = b.completedAt ? new Date(b.completedAt).getTime() : 0;
       return dateB - dateA;

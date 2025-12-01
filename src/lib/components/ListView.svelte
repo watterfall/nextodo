@@ -62,7 +62,8 @@
   function handleDndConsider(priority: Priority) {
     return (e: DndConsiderEvent) => {
       const { items, info } = e.detail;
-      dndItemsByPriority[priority] = items;
+      // Clone the items array to ensure reactivity
+      dndItemsByPriority[priority] = [...items];
 
       if (info.trigger === TRIGGERS.DRAG_STARTED) {
         activeDndPriority = priority;
@@ -74,23 +75,33 @@
   function handleDndFinalize(priority: Priority) {
     return async (e: DndFinalizeEvent) => {
       const { items, info } = e.detail;
-      const cleanItems = items.filter(item => !item[SHADOW_ITEM_MARKER_PROPERTY_NAME as keyof Task]);
-      dndItemsByPriority[priority] = cleanItems;
+      // Filter out shadow items using the correct property access
+      const cleanItems = items.filter(item => !(item as any)[SHADOW_ITEM_MARKER_PROPERTY_NAME]);
+      dndItemsByPriority[priority] = [...cleanItems];
 
       if (info.trigger === TRIGGERS.DROPPED_INTO_ZONE) {
         const droppedTask = cleanItems.find(task => task.id === info.id);
         if (droppedTask && droppedTask.priority !== priority) {
-          // Await the priority change before clearing drag state
+          // Task came from another zone - change its priority
+          const sourcePriority = droppedTask.priority;
           const result = await changePriority(info.id, priority);
           if (!result.success) {
-            // Revert if failed
-            dndItemsByPriority[priority] = getTasksForPriority(priority);
+            // Revert all zones if failed
+            for (const p of allPriorities) {
+              dndItemsByPriority[p] = getTasksForPriority(p);
+            }
+          } else {
+            // Also update the source zone
+            dndItemsByPriority[sourcePriority] = getTasksForPriority(sourcePriority);
           }
         } else {
           await reorderTask(priority, cleanItems.map(task => task.id));
         }
       } else if (info.trigger === TRIGGERS.DROPPED_OUTSIDE_OF_ANY) {
-        dndItemsByPriority[priority] = getTasksForPriority(priority);
+        // Revert all zones
+        for (const p of allPriorities) {
+          dndItemsByPriority[p] = getTasksForPriority(p);
+        }
       }
 
       // Clear drag state after async operations complete
