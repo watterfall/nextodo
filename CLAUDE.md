@@ -19,6 +19,8 @@
 | Build Tool | Vite | ^6.0.5 |
 | Desktop Framework | Tauri 2 | ^2.1.0 |
 | Backend | Rust (2021 edition) | - |
+| Animation | Motion | ^12.23.24 |
+| Drag & Drop | svelte-dnd-action | ^0.9.67 |
 
 ### Directory Structure
 
@@ -26,9 +28,9 @@
 /
 ├── src/                          # Frontend (Svelte/TypeScript)
 │   ├── lib/
-│   │   ├── components/           # Svelte components (15 files)
-│   │   ├── stores/               # Svelte 5 runes state management (5 stores)
-│   │   ├── utils/                # Business logic utilities (5 files)
+│   │   ├── components/           # Svelte components (20 files)
+│   │   ├── stores/               # Svelte 5 runes state management (6 stores)
+│   │   ├── utils/                # Business logic utilities (7 files)
 │   │   ├── types/                # TypeScript type definitions
 │   │   └── i18n/                 # Internationalization (4 files)
 │   ├── App.svelte                # Root component
@@ -55,18 +57,23 @@
 |-----------|---------|
 | `App.svelte` | Root component, layout, routing |
 | `Sidebar.svelte` | Navigation, filters, project/context lists |
-| `ZoneContainer.svelte` | Priority zone container (A-D) |
+| `ZoneContainer.svelte` | Priority zone container (A-D) with DnD support |
 | `TaskCard.svelte` | Individual task display and actions |
 | `TaskForm.svelte` | Quick task input form |
 | `TaskInput.svelte` | Syntax-highlighted task input |
 | `InboxPanel.svelte` | E-zone (inbox) task panel |
 | `KanbanView.svelte` | Alternative kanban board view |
+| `TodayView.svelte` | Today-focused task view with due/overdue tasks |
+| `WeekView.svelte` | 7-day calendar view with DnD scheduling |
 | `PomodoroTimer.svelte` | Pomodoro timer controls |
 | `ImmersivePomodoro.svelte` | Full-screen pomodoro mode |
 | `QuotaMeter.svelte` | Priority quota visualization |
 | `UnitNav.svelte` | Bi-daily unit navigation |
 | `ReviewPanel.svelte` | Unit review interface |
+| `ReviewWizard.svelte` | Step-by-step review wizard with challenge scoring |
 | `SettingsModal.svelte` | Application settings |
+| `BadgesModal.svelte` | Achievement/badge display modal |
+| `FreshStart.svelte` | Stale task cleanup suggestion modal |
 | `TagPicker.svelte` | Tag selection widget |
 | `Confetti.svelte` | Celebration animation |
 
@@ -79,6 +86,18 @@
 | Pomodoro | `pomodoro.svelte.ts` | Timer state, work/break sessions |
 | UI | `ui.svelte.ts` | UI state (modals, search, editing) |
 | Reviews | `reviews.svelte.ts` | Unit review management |
+| Gamification | `gamification.svelte.ts` | Badge/achievement tracking |
+
+### Utility Modules
+
+| Utility | File | Purpose |
+|---------|------|---------|
+| Storage | `storage.ts` | Data persistence, file operations, migrations |
+| Parser | `parser.ts` | Task input syntax parsing |
+| UnitCalc | `unitCalc.ts` | Bi-daily unit calculations |
+| Recurrence | `recurrence.ts` | Recurring task logic |
+| Quota | `quota.ts` | Priority quota validation and management |
+| Motion | `motion.ts` | Animation configs, DnD type definitions |
 
 ## Development Workflow
 
@@ -115,6 +134,9 @@ let filteredTasks = $derived.by(() => { /* ... */ });
 
 // Effects
 $effect(() => { /* runs when dependencies change */ });
+
+// Props (in components)
+let { onClose }: Props = $props();
 ```
 
 ### Path Aliases
@@ -131,13 +153,15 @@ import TaskCard from '$lib/components/TaskCard.svelte';
 
 All types are centralized in `src/lib/types/index.ts`. Key types:
 
-- **Task** - Core task entity with priority, dates, pomodoros, recurrence
+- **Task** - Core task entity with priority, dates, pomodoros, recurrence, threshold dates
 - **Priority** - `'A' | 'B' | 'C' | 'D' | 'E'` (with quotas: 1, 2, 3, 5, Infinity)
 - **AppData** - Combined in-memory data structure
 - **ActiveData** / **ArchiveData** / **PomodoroHistoryData** - Separated file structures
 - **Settings** - Application configuration
 - **FilterState** - Current filter criteria
 - **UnitReview** - Bi-daily unit review data
+- **Badge** / **BadgeId** - Gamification achievement types
+- **ViewMode** - `'zones' | 'list' | 'calendar' | 'today' | 'week'`
 
 ### Factory Functions
 
@@ -152,6 +176,21 @@ createDefaultPomodoroHistoryData(): PomodoroHistoryData
 createDefaultAppData(): AppData
 ```
 
+### Helper Functions
+
+```typescript
+// From types/index.ts
+isThresholdPassed(task: Task): boolean     // Check if threshold date allows visibility
+calculateEZoneAge(task: Task): number      // Days task has been in inbox
+
+// From utils/quota.ts
+countActiveByPriority(tasks: Task[]): Record<Priority, number>
+getRemainingQuota(tasks: Task[]): Record<Priority, number>
+canAddTask(tasks: Task[], priority: Priority): boolean
+validateQuota(tasks: Task[], priority: Priority): string | null
+applyHighlanderRule(tasks: Task[], newTask: Task): Task[]
+```
+
 ## Data Architecture
 
 ### Hot/Cold Data Separation
@@ -160,7 +199,7 @@ Data is split across three JSON files for performance:
 
 | File | Content | Update Frequency |
 |------|---------|------------------|
-| `active.json` | Active tasks, trash, settings, reviews | High (hot data) |
+| `active.json` | Active tasks, trash, settings, reviews, badges | High (hot data) |
 | `archive.json` | Completed/archived tasks | Low (cold data) |
 | `pomodoro_history.json` | Pomodoro session records | Medium |
 
@@ -223,6 +262,8 @@ The Highlander Rule applies - only one A-priority task per unit:
 | D | 5 | Quick tasks (<15 min) |
 | E | ∞ | Inbox/ideas |
 
+Use quota utilities from `src/lib/utils/quota.ts` for validation.
+
 ### Bi-Daily Units
 
 Time is organized into bi-daily units:
@@ -230,6 +271,39 @@ Time is organized into bi-daily units:
 - Saturday (review day)
 
 See `src/lib/utils/unitCalc.ts` for unit calculations.
+
+### Drag and Drop
+
+The app uses `svelte-dnd-action` for drag-and-drop functionality. Type definitions and animation configs are in `src/lib/utils/motion.ts`:
+
+```typescript
+import { dndzone, TRIGGERS } from 'svelte-dnd-action';
+import type { DndConsiderEvent, DndFinalizeEvent } from '$lib/utils/motion';
+import { dndConfig, flipDefaults } from '$lib/utils/motion';
+
+// In component
+<div use:dndzone={{ items, flipDurationMs: dndConfig.flipDurationMs }}>
+```
+
+### Gamification / Badges
+
+Badge system defined in `src/lib/stores/gamification.svelte.ts`:
+
+| Badge ID | Name | Condition |
+|----------|------|-----------|
+| `planner_novice` | 计划新手 | Complete first review |
+| `challenger` | 挑战者 | Complete an A-priority task |
+| `flow_master` | 心流大师 | 4 consecutive pomodoros without interruption |
+| `early_bird` | 早起鸟 | Complete task before 9 AM |
+| `deep_diver` | 深潜者 | 10 hours cumulative deep work |
+| `consistency_3` | 持之以恒 | 3 consecutive days with output |
+| `consistency_7` | 习惯养成 | 7 consecutive days with output |
+
+```typescript
+import { checkBadges, checkReviewBadges } from '$lib/stores/gamification.svelte';
+checkBadges();        // Check task/pomodoro badges
+checkReviewBadges();  // Check review completion badge
+```
 
 ## Tauri IPC Commands
 
@@ -280,6 +354,23 @@ t('sidebar.allTasks'); // Returns translated string
 setLocale('en-US');    // Switch language
 ```
 
+## Animation System
+
+Animation configurations centralized in `src/lib/utils/motion.ts`:
+
+```typescript
+import { springs, durations, easings, transitions } from '$lib/utils/motion';
+
+// Spring presets: snappy, smooth, bouncy, gentle, drag
+// Duration presets: instant (100ms), fast (150ms), normal (200ms), slow (350ms)
+// Easing curves: standard, decelerate, accelerate, bounce, smoothOut
+
+// Helper functions
+createTransition(['opacity', 'transform'], 'fast', 'decelerate');
+staggerDelay(index, 30);  // Staggered list animations
+areTaskArraysEqual(a, b); // DnD optimization helper
+```
+
 ## Testing
 
 **Note:** No test framework is currently configured. When adding tests, consider:
@@ -324,8 +415,9 @@ Theme is stored in settings and applied via CSS custom properties in `app.css`. 
 
 1. Create `src/lib/components/ComponentName.svelte`
 2. Use Svelte 5 runes for state (`$state`, `$derived`, `$effect`)
-3. Import types from `$lib/types`
-4. Add i18n keys to both language files if adding UI text
+3. Use `$props()` for component properties
+4. Import types from `$lib/types`
+5. Add i18n keys to both language files if adding UI text
 
 ### Adding a New Tauri Command
 
@@ -350,6 +442,21 @@ Theme is stored in settings and applied via CSS custom properties in `app.css`. 
 3. Export init function and getter function (e.g., `getStoreNameStore()`)
 4. Initialize in `App.svelte` onMount
 
+### Adding a New View Mode
+
+1. Add to `ViewMode` type in `src/lib/types/index.ts`
+2. Create component in `src/lib/components/`
+3. Add routing logic in `App.svelte`
+4. Add navigation in `Sidebar.svelte`
+5. Add i18n keys for view name
+
+### Adding a New Badge
+
+1. Add badge ID to `BadgeId` type in `src/lib/types/index.ts`
+2. Add badge definition in `BADGE_DEFINITIONS` in `src/lib/stores/gamification.svelte.ts`
+3. Add unlock condition logic in `checkBadges()` or create new check function
+4. Update `BadgesModal.svelte` BADGES array for display
+
 ## File Reference
 
 | File | Purpose | Approx Lines |
@@ -358,8 +465,13 @@ Theme is stored in settings and applied via CSS custom properties in `app.css`. 
 | `src/lib/stores/tasks.svelte.ts` | Central state management | ~480 |
 | `src/lib/utils/storage.ts` | Data persistence layer | ~580 |
 | `src/lib/utils/parser.ts` | Task input parsing | ~410 |
-| `src/lib/types/index.ts` | Type definitions | ~330 |
+| `src/lib/utils/motion.ts` | Animation configs, DnD types | ~190 |
+| `src/lib/utils/quota.ts` | Priority quota utilities | ~160 |
+| `src/lib/types/index.ts` | Type definitions | ~360 |
 | `src/lib/components/Sidebar.svelte` | Navigation and filters | ~550 |
+| `src/lib/components/TodayView.svelte` | Today-focused view | ~200 |
+| `src/lib/components/WeekView.svelte` | Week calendar view | ~200 |
+| `src/lib/stores/gamification.svelte.ts` | Badge system | ~115 |
 | `src-tauri/src/commands.rs` | Backend IPC handlers | ~310 |
 | `src-tauri/src/watcher.rs` | File system watcher | ~80 |
 
@@ -377,3 +489,16 @@ Key dependencies in `src-tauri/Cargo.toml`:
 | `notify` | File system watching |
 | `tokio` | Async runtime |
 | `sys-locale` | System locale detection |
+| `uuid` | UUID generation |
+
+## Frontend Dependencies
+
+Key npm packages:
+
+| Package | Purpose |
+|---------|---------|
+| `@tauri-apps/api` | Tauri frontend bindings |
+| `@tauri-apps/plugin-fs` | File system plugin |
+| `@tauri-apps/plugin-notification` | Notification plugin |
+| `motion` | Animation library |
+| `svelte-dnd-action` | Drag-and-drop functionality |
