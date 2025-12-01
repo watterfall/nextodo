@@ -2,8 +2,18 @@
   import type { UnitInfo } from '$lib/types';
   import { getCurrentUnit, navigateUnit, formatDateShort } from '$lib/utils/unitCalc';
   import { getTasksStore, setCurrentUnit } from '$lib/stores/tasks.svelte';
+  import { getI18nStore } from '$lib/i18n';
 
   const tasks = getTasksStore();
+  const i18n = getI18nStore();
+  const t = i18n.t;
+
+  // Day names for unit display (shorter, more intuitive)
+  const unitDayNames: Record<number, { zh: string; en: string }> = {
+    1: { zh: '日-一', en: 'Sun-Mon' },
+    2: { zh: '二-三', en: 'Tue-Wed' },
+    3: { zh: '四-五', en: 'Thu-Fri' },
+  };
 
   function handlePrev() {
     const newUnit = navigateUnit(tasks.currentUnit, 'prev');
@@ -19,40 +29,46 @@
     setCurrentUnit(getCurrentUnit());
   }
 
-  const isToday = $derived(() => {
+  const isCurrentCycle = $derived(() => {
     const current = getCurrentUnit();
     return tasks.currentUnit.startDate.getTime() === current.startDate.getTime();
+  });
+
+  // Get display label based on language
+  const unitDisplayLabel = $derived(() => {
+    if (tasks.currentUnit.isReviewDay) {
+      return i18n.language === 'zh-CN' ? '周六复盘' : 'Sat Review';
+    }
+    const dayName = unitDayNames[tasks.currentUnit.unitNumber];
+    if (!dayName) return '';
+    return i18n.language === 'zh-CN' ? dayName.zh : dayName.en;
   });
 </script>
 
 <div class="unit-nav">
-  <button class="nav-btn" onclick={handlePrev} title="上一个周期">
+  <button class="nav-btn" onclick={handlePrev} title={t('unit.prev') || '上一个周期'}>
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
       <polyline points="15 18 9 12 15 6"></polyline>
     </svg>
   </button>
 
-  <div class="unit-display">
+  <div class="unit-display" title={`${formatDateShort(tasks.currentUnit.startDate)}-${formatDateShort(tasks.currentUnit.endDate)}`}>
     {#if tasks.currentUnit.isReviewDay}
-      <span class="unit-icon">📊</span>
-      <span class="unit-label">周复盘</span>
+      <span class="unit-label review">{unitDisplayLabel()}</span>
     {:else}
-      <span class="unit-icon">📅</span>
-      <span class="unit-label">
-        Unit {tasks.currentUnit.unitNumber}: {formatDateShort(tasks.currentUnit.startDate)}-{formatDateShort(tasks.currentUnit.endDate)}
-      </span>
+      <span class="unit-label">{unitDisplayLabel()}</span>
     {/if}
   </div>
 
-  <button class="nav-btn" onclick={handleNext} title="下一个周期">
+  <button class="nav-btn" onclick={handleNext} title={t('unit.next') || '下一个周期'}>
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
       <polyline points="9 18 15 12 9 6"></polyline>
     </svg>
   </button>
 
-  {#if !isToday()}
+  {#if !isCurrentCycle()}
     <button class="today-btn" onclick={handleToday}>
-      今天
+      {t('date.today')}
     </button>
   {/if}
 </div>
@@ -61,16 +77,12 @@
   .unit-nav {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 8px 16px;
-    background: var(--card-bg);
-    border-radius: 8px;
-    border: 1px solid var(--border-color);
+    gap: 6px;
   }
 
   .nav-btn {
-    width: 32px;
-    height: 32px;
+    width: 28px;
+    height: 28px;
     border: none;
     border-radius: 6px;
     background: transparent;
@@ -79,7 +91,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 0.2s ease;
+    transition: all 0.15s ease;
   }
 
   .nav-btn:hover {
@@ -88,43 +100,45 @@
   }
 
   .nav-btn svg {
-    width: 18px;
-    height: 18px;
+    width: 16px;
+    height: 16px;
   }
 
   .unit-display {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 4px 12px;
-    background: var(--primary-bg);
+    padding: 6px 14px;
+    background: var(--bg-secondary);
     border-radius: 6px;
-  }
-
-  .unit-icon {
-    font-size: 16px;
+    cursor: help;
   }
 
   .unit-label {
     font-size: 14px;
-    font-weight: 500;
+    font-weight: 600;
     color: var(--text-primary);
+    letter-spacing: 0.02em;
+  }
+
+  .unit-label.review {
+    color: var(--primary);
   }
 
   .today-btn {
-    padding: 6px 12px;
-    border: 1px solid var(--primary);
+    padding: 5px 10px;
+    border: 1px solid var(--border-color);
     border-radius: 6px;
     background: transparent;
-    color: var(--primary);
+    color: var(--text-secondary);
     cursor: pointer;
     font-size: 12px;
     font-weight: 500;
-    transition: all 0.2s ease;
+    transition: all 0.15s ease;
   }
 
   .today-btn:hover {
     background: var(--primary);
+    border-color: var(--primary);
     color: white;
   }
 </style>
