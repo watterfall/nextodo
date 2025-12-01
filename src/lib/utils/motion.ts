@@ -195,11 +195,13 @@ export function staggerDelay(index: number, baseDelay = 30): number {
   return index * baseDelay;
 }
 
-// Helper for shallow array comparison by ID (for DnD optimization)
+// Helper for shallow array comparison by ID and priority (for DnD optimization)
+// Compares both ID and priority to ensure proper state sync after priority changes
 export function areTaskArraysEqual(a: Task[], b: Task[]): boolean {
   if (a.length !== b.length) return false;
   for (let i = 0; i < a.length; i++) {
-    if (a[i].id !== b[i].id) return false;
+    // Compare both id and priority to detect stale task objects
+    if (a[i].id !== b[i].id || a[i].priority !== b[i].priority) return false;
   }
   return true;
 }
