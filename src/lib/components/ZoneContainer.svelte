@@ -32,7 +32,7 @@
 
   const counts = $derived(countActiveByPriority(tasksStore.tasks));
   const remaining = $derived(config.quota === Infinity ? Infinity : config.quota - counts[priority]);
-  const isFull = $derived(priority !== 'E' && remaining <= 0);
+  const isFull = $derived(priority !== 'F' && config.quota !== Infinity && remaining <= 0);
 
   // Check if pomodoro is actively running on a task
   const isFocusMode = $derived(pomodoro.state === 'work' && pomodoro.activeTaskId !== null);

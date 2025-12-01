@@ -17,13 +17,13 @@
   // Shared DnD type for cross-zone dragging
   const DND_TYPE = 'task-priority-zone';
 
-  // Main priorities (A-D), E is handled separately as Idea Pool
-  const mainPriorities: Priority[] = ['A', 'B', 'C', 'D'];
-  const allPriorities: Priority[] = ['A', 'B', 'C', 'D', 'E'];
+  // Main priorities (A-E with quotas), F is handled separately as Idea Pool
+  const mainPriorities: Priority[] = ['A', 'B', 'C', 'D', 'E'];
+  const allPriorities: Priority[] = ['A', 'B', 'C', 'D', 'E', 'F'];
 
   // DnD state for each priority
   let dndItemsByPriority = $state<Record<Priority, Task[]>>({
-    A: [], B: [], C: [], D: [], E: []
+    A: [], B: [], C: [], D: [], E: [], F: []
   });
   let activeDndPriority = $state<Priority | null>(null);
 
@@ -39,7 +39,8 @@
         B: getTasksForPriority('B'),
         C: getTasksForPriority('C'),
         D: getTasksForPriority('D'),
-        E: getTasksForPriority('E')
+        E: getTasksForPriority('E'),
+        F: getTasksForPriority('F')
       };
       let needsUpdate = false;
       for (const p of allPriorities) {
@@ -93,6 +94,10 @@
   const completedTasks = $derived(tasks.tasks.filter(task => task.completed));
   let showCompleted = $state(false);
   let showIdeaPool = $state(true);
+
+  // Idea Pool (F zone) state
+  const ideaPoolTasks = $derived(dndItemsByPriority['F']);
+  const ideaPoolDropTarget = $derived(ui.dropTargetPriority === 'F' || activeDndPriority === 'F');
 </script>
 
 <div class="list-view-container">
@@ -158,15 +163,15 @@
     {/if}
   </div>
 
-  <!-- Idea Pool (E-zone) - fixed on right side, toggleable -->
-  <aside class="idea-pool-panel" class:collapsed={!showIdeaPool} class:drop-target={ui.dropTargetPriority === 'E' || activeDndPriority === 'E'}>
+  <!-- Idea Pool (F-zone) - fixed on right side, toggleable -->
+  <aside class="idea-pool-panel" class:collapsed={!showIdeaPool} class:drop-target={ideaPoolDropTarget}>
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <div class="pool-header" onclick={() => showIdeaPool = !showIdeaPool}>
-      <span class="pool-badge" style:background={PRIORITY_CONFIG.E.color}>💡</span>
+      <span class="pool-badge" style:background={PRIORITY_CONFIG.F.color}>💡</span>
       {#if showIdeaPool}
         <h3 class="pool-title">{t('inbox.title')}</h3>
-        <span class="pool-count">{dndItemsByPriority['E'].length}</span>
+        <span class="pool-count">{ideaPoolTasks.length}</span>
       {/if}
       <svg class="toggle-icon" class:rotated={!showIdeaPool} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <polyline points="9 18 15 12 9 6"></polyline>
@@ -178,21 +183,21 @@
         class="pool-tasks"
         transition:slide
         use:dndzone={{
-          items: dndItemsByPriority['E'],
+          items: ideaPoolTasks,
           flipDurationMs: dndConfig.flipDurationMs,
           dropTargetStyle: {},
           dropTargetClasses: ['dnd-drop-target-active'],
           type: DND_TYPE
         }}
-        onconsider={handleDndConsider('E')}
-        onfinalize={handleDndFinalize('E')}
+        onconsider={handleDndConsider('F')}
+        onfinalize={handleDndFinalize('F')}
       >
-        {#each dndItemsByPriority['E'] as task (task.id)}
+        {#each ideaPoolTasks as task (task.id)}
           <div animate:flip={{ duration: dndConfig.flipDurationMs }} class="pool-task-item">
             <TaskCard {task} compact />
           </div>
         {/each}
-        {#if dndItemsByPriority['E'].length === 0}
+        {#if ideaPoolTasks.length === 0}
           <div class="pool-empty">{t('inbox.empty')}</div>
         {/if}
       </div>

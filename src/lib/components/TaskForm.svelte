@@ -22,9 +22,13 @@
   let thresholdDate = $state('');
   let estimatedPomodoros = $state<number | null>(null);
   let recurrence = $state('');
+  let selectedPriority = $state<Priority>('F'); // Default to Idea Pool
   let isExpanded = $state(false);
   let showSyntaxHint = $state(false);
   let hasStartedTyping = $state(false);
+
+  // Priority options for selector (A-E have quotas, F is default Idea Pool)
+  const priorityOptions: Priority[] = ['A', 'B', 'C', 'D', 'E', 'F'];
 
   const moodOptions = $derived([
     { value: '', label: t('taskForm.moodPlaceholder'), emoji: '' },
@@ -86,8 +90,8 @@
       parts.push(`est:${estimatedPomodoros}`);
     }
 
-    // Always add to inbox (E priority)
-    parts.push('!E');
+    // Add selected priority
+    parts.push(`!${selectedPriority}`);
 
     return parts.join(' ');
   }
@@ -116,6 +120,7 @@
     thresholdDate = '';
     estimatedPomodoros = null;
     recurrence = '';
+    selectedPriority = 'F';
     hasStartedTyping = false;
   }
 
@@ -326,12 +331,37 @@
         </div>
       </div>
 
+      <!-- Priority Selector -->
+      <div class="form-row priority-row">
+        <div class="field-group priority-selector">
+          <label class="field-label">
+            <span class="label-icon">🎯</span>
+            {t('syntax.priority')}
+          </label>
+          <div class="priority-buttons">
+            {#each priorityOptions as p}
+              <button
+                type="button"
+                class="priority-btn"
+                class:selected={selectedPriority === p}
+                style:--btn-color={PRIORITY_CONFIG[p].color}
+                onclick={() => selectedPriority = p}
+                title={PRIORITY_CONFIG[p].description}
+              >
+                <span class="priority-letter">{p}</span>
+                <span class="priority-name">{PRIORITY_CONFIG[p].name}</span>
+              </button>
+            {/each}
+          </div>
+        </div>
+      </div>
+
       <div class="form-footer">
         <span class="keyboard-hint">
           <kbd>Ctrl</kbd>+<kbd>Enter</kbd> {t('taskForm.keyboardHint').replace('按 Ctrl+Enter', '').replace('Press Ctrl+Enter to', '')}
         </span>
         <span class="destination-hint">
-          → {t('inbox.title')}
+          → {PRIORITY_CONFIG[selectedPriority].name}
         </span>
       </div>
     </div>
@@ -617,6 +647,63 @@
     font-size: 11px;
     color: var(--text-muted);
     font-weight: 500;
+  }
+
+  /* Priority Selector */
+  .priority-row {
+    margin-bottom: 12px;
+  }
+
+  .priority-selector {
+    flex: 1;
+    min-width: 100%;
+  }
+
+  .priority-buttons {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .priority-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 12px;
+    min-width: 60px;
+    border: 2px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--card-bg);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    gap: 2px;
+  }
+
+  .priority-btn:hover {
+    border-color: var(--btn-color);
+    background: var(--hover-bg);
+  }
+
+  .priority-btn.selected {
+    border-color: var(--btn-color);
+    background: var(--btn-color);
+    color: white;
+  }
+
+  .priority-letter {
+    font-size: 14px;
+    font-weight: 700;
+  }
+
+  .priority-name {
+    font-size: 10px;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 60px;
   }
 
   @keyframes slideDown {
