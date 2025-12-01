@@ -19,7 +19,7 @@
 - **Immersive Mode** - Full-screen distraction-free pomodoro sessions
 - **Recurring Tasks** - Daily, weekly, monthly patterns with threshold dates
 - **Smart Parsing** - Quick task input with intuitive syntax
-- **Multiple Views** - Zone, Kanban, Today, and Week views
+- **Multiple Views** - Kanban and List views for different workflows
 - **Drag & Drop** - Intuitive task reordering and scheduling
 - **Gamification** - Achievement badges for productivity milestones
 - **Theme Support** - Dark, light, and system themes
@@ -138,7 +138,7 @@ MIT
 - **沉浸模式** - 全屏无干扰番茄专注
 - **循环任务** - 支持每日、每周、每月模式与阈值日期
 - **智能解析** - 直观的快速输入语法
-- **多视图** - 区域、看板、今日、周视图
+- **多视图** - 看板和列表视图，适应不同工作流
 - **拖拽操作** - 直观的任务排序和日程安排
 - **成就系统** - 生产力里程碑徽章奖励
 - **主题支持** - 深色、浅色和跟随系统
