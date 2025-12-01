@@ -418,7 +418,8 @@ const tasksByPriority = $derived.by(() => {
     B: [],
     C: [],
     D: [],
-    E: []
+    E: [],
+    F: []
   };
 
   for (const task of filteredTasks) {
@@ -496,14 +497,17 @@ const completedTodayCount = $derived(
   appData.tasks.filter(t => t.completed && t.completedAt && isToday(t.completedAt)).length
 );
 
-// E zone aging tasks
-const agingEZoneTasks = $derived.by(() => {
-  const eZoneTasks = appData.tasks.filter(t => t.priority === 'E' && !t.completed);
-  return eZoneTasks.map(task => ({
+// F zone (Idea Pool) aging tasks
+const agingFZoneTasks = $derived.by(() => {
+  const fZoneTasks = appData.tasks.filter(t => t.priority === 'F' && !t.completed);
+  return fZoneTasks.map(task => ({
     ...task,
-    ageInUnits: calculateEZoneAge(task, 7)
+    ageInUnits: calculateEZoneAge(task, 7) // Uses backward-compatible function
   }));
 });
+
+// Backward compatibility alias
+const agingEZoneTasks = $derived(agingFZoneTasks);
 
 // Export store interface
 export function getTasksStore() {

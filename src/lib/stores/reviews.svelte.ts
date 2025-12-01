@@ -25,8 +25,8 @@ export function createReview(
     return taskDate >= start && taskDate <= end;
   });
 
-  const planned: Record<Priority, number> = { A: 0, B: 0, C: 0, D: 0, E: 0 };
-  const completed: Record<Priority, number> = { A: 0, B: 0, C: 0, D: 0, E: 0 };
+  const planned: Record<Priority, number> = { A: 0, B: 0, C: 0, D: 0, E: 0, F: 0 };
+  const completed: Record<Priority, number> = { A: 0, B: 0, C: 0, D: 0, E: 0, F: 0 };
   let pomodorosTotal = 0;
 
   for (const task of unitTasks) {
@@ -87,9 +87,9 @@ export function getCompletionRate(review: UnitReview): number {
 
 // Get priority completion rates
 export function getPriorityRates(review: UnitReview): Record<Priority, number> {
-  const rates: Record<Priority, number> = { A: 0, B: 0, C: 0, D: 0, E: 0 };
+  const rates: Record<Priority, number> = { A: 0, B: 0, C: 0, D: 0, E: 0, F: 0 };
 
-  for (const priority of ['A', 'B', 'C', 'D', 'E'] as Priority[]) {
+  for (const priority of ['A', 'B', 'C', 'D', 'E', 'F'] as Priority[]) {
     const planned = review.stats.planned[priority];
     const completed = review.stats.completed[priority];
 

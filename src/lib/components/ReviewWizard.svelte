@@ -29,8 +29,8 @@
     const getWeight = (p: string) => (p === 'A' ? 3 : p === 'B' ? 2 : 1);
     
     // Consider completed tasks + uncompleted tasks that were "planned" (due today or overdue)
-    // Simplifying: all active non-E tasks + all completed tasks
-    const relevantTasks = tasks.tasks.filter(task => task.priority !== 'E' || task.completed);
+    // Simplifying: all active non-F (Idea Pool) tasks + all completed tasks
+    const relevantTasks = tasks.tasks.filter(task => task.priority !== 'F' || task.completed);
     
     if (relevantTasks.length === 0) return 0;
 

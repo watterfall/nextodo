@@ -5,7 +5,7 @@ import { PRIORITY_CONFIG } from '$lib/types';
  * Count active (non-completed) tasks by priority
  */
 export function countActiveByPriority(tasks: Task[]): Record<Priority, number> {
-  const counts: Record<Priority, number> = { A: 0, B: 0, C: 0, D: 0, E: 0 };
+  const counts: Record<Priority, number> = { A: 0, B: 0, C: 0, D: 0, E: 0, F: 0 };
 
   for (const task of tasks) {
     if (!task.completed) {
@@ -21,11 +21,11 @@ export function countActiveByPriority(tasks: Task[]): Record<Priority, number> {
  */
 export function getRemainingQuota(tasks: Task[]): Record<Priority, number> {
   const counts = countActiveByPriority(tasks);
-  const remaining: Record<Priority, number> = { A: 0, B: 0, C: 0, D: 0, E: 0 };
+  const remaining: Record<Priority, number> = { A: 0, B: 0, C: 0, D: 0, E: 0, F: Infinity };
 
   for (const priority of Object.keys(PRIORITY_CONFIG) as Priority[]) {
     const quota = PRIORITY_CONFIG[priority].quota;
-    remaining[priority] = Math.max(0, quota - counts[priority]);
+    remaining[priority] = quota === Infinity ? Infinity : Math.max(0, quota - counts[priority]);
   }
 
   return remaining;
@@ -35,8 +35,8 @@ export function getRemainingQuota(tasks: Task[]): Record<Priority, number> {
  * Check if adding a task of given priority is allowed
  */
 export function canAddTask(tasks: Task[], priority: Priority): boolean {
-  // E category has unlimited quota
-  if (priority === 'E') return true;
+  // F category (Idea Pool) has unlimited quota
+  if (priority === 'F') return true;
 
   const remaining = getRemainingQuota(tasks);
   return remaining[priority] > 0;
@@ -84,7 +84,7 @@ export function getQuotaSummary(tasks: Task[]): Array<{
 }> {
   const counts = countActiveByPriority(tasks);
 
-  return (['A', 'B', 'C', 'D', 'E'] as Priority[]).map(priority => {
+  return (['A', 'B', 'C', 'D', 'E', 'F'] as Priority[]).map(priority => {
     const config = PRIORITY_CONFIG[priority];
     const used = counts[priority];
     const quota = config.quota;
@@ -94,7 +94,7 @@ export function getQuotaSummary(tasks: Task[]): Array<{
       name: config.name,
       used,
       quota,
-      isFull: priority !== 'E' && used >= quota
+      isFull: priority !== 'F' && quota !== Infinity && used >= quota
     };
   });
 }
@@ -105,20 +105,22 @@ export function getQuotaSummary(tasks: Task[]): Array<{
 export function suggestPriority(tasks: Task[]): Priority {
   const remaining = getRemainingQuota(tasks);
 
-  // Prefer lower priorities first (C, D, then B, A)
+  // Prefer lower priorities first (E, D, C, B, A)
+  if (remaining['E'] > 0) return 'E';
   if (remaining['D'] > 0) return 'D';
   if (remaining['C'] > 0) return 'C';
   if (remaining['B'] > 0) return 'B';
   if (remaining['A'] > 0) return 'A';
 
-  return 'E';
+  // Default to idea pool
+  return 'F';
 }
 
 /**
  * Check if task can be promoted to higher priority
  */
 export function canPromote(tasks: Task[], task: Task): { canPromote: boolean; targetPriority: Priority | null } {
-  const priorities: Priority[] = ['A', 'B', 'C', 'D', 'E'];
+  const priorities: Priority[] = ['A', 'B', 'C', 'D', 'E', 'F'];
   const currentIndex = priorities.indexOf(task.priority);
 
   if (currentIndex === 0) {
@@ -144,7 +146,7 @@ export function canPromote(tasks: Task[], task: Task): { canPromote: boolean; ta
  * Check if task can be demoted to lower priority
  */
 export function canDemote(task: Task): { canDemote: boolean; targetPriority: Priority | null } {
-  const priorities: Priority[] = ['A', 'B', 'C', 'D', 'E'];
+  const priorities: Priority[] = ['A', 'B', 'C', 'D', 'E', 'F'];
   const currentIndex = priorities.indexOf(task.priority);
 
   if (currentIndex === priorities.length - 1) {

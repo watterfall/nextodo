@@ -1,5 +1,6 @@
 // Priority levels
-export type Priority = 'A' | 'B' | 'C' | 'D' | 'E';
+// A-E are work priorities with quotas, F is the Idea Pool (unlimited)
+export type Priority = 'A' | 'B' | 'C' | 'D' | 'E' | 'F';
 
 // Recurrence patterns - extended to support more patterns
 export type RecurrencePattern =
@@ -206,9 +207,17 @@ export const PRIORITY_CONFIG: Record<Priority, PriorityConfig> = {
     name: '快速处理',
     quota: 5,
     description: '15分钟内可完成',
-    color: 'var(--priority-e-color, #5c636a)',
-    bgColor: 'var(--priority-e-bg, rgba(92, 99, 106, 0.08))',
-    borderColor: 'var(--priority-e-border, rgba(92, 99, 106, 0.2))'
+    color: 'var(--priority-e-color, #51cf66)',
+    bgColor: 'var(--priority-e-bg, rgba(81, 207, 102, 0.08))',
+    borderColor: 'var(--priority-e-border, rgba(81, 207, 102, 0.2))'
+  },
+  F: {
+    name: '灵感收集',
+    quota: Infinity,
+    description: '收集想法、待分类任务',
+    color: 'var(--priority-f-color, #5c636a)',
+    bgColor: 'var(--priority-f-bg, rgba(92, 99, 106, 0.08))',
+    borderColor: 'var(--priority-f-border, rgba(92, 99, 106, 0.2))'
   }
 };
 
@@ -239,7 +248,7 @@ export type ViewMode = 'kanban' | 'list';
 export type PomodoroState = 'idle' | 'work' | 'shortBreak' | 'longBreak';
 
 // Create empty task
-export function createEmptyTask(priority: Priority = 'E'): Task {
+export function createEmptyTask(priority: Priority = 'F'): Task {
   const now = new Date().toISOString();
   return {
     id: crypto.randomUUID(),
@@ -345,13 +354,18 @@ export function isThresholdPassed(task: Task): boolean {
   return threshold <= today;
 }
 
-// Calculate E zone aging (how many units the task has been in E zone)
-export function calculateEZoneAge(task: Task, unitDays: number = 7): number {
-  if (task.priority !== 'E') return 0;
+// Calculate F zone (Idea Pool) aging (how many units the task has been in F zone)
+export function calculateFZoneAge(task: Task, unitDays: number = 7): number {
+  if (task.priority !== 'F') return 0;
 
   const created = new Date(task.createdAt);
   const now = new Date();
   const diffDays = Math.floor((now.getTime() - created.getTime()) / (1000 * 60 * 60 * 24));
 
   return Math.floor(diffDays / unitDays);
+}
+
+// Backward compatibility alias
+export function calculateEZoneAge(task: Task, unitDays: number = 7): number {
+  return calculateFZoneAge(task, unitDays);
 }

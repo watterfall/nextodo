@@ -48,12 +48,14 @@ export default {
     C: 'Steady Progress',
     D: 'Ad-hoc Tasks',
     E: 'Quick Action',
+    F: 'Idea Pool',
     description: {
       A: 'Deep work, 2+ hours focus',
       B: 'Project milestones, 45-90 min',
       C: 'Steady progress, 20-45 min',
       D: 'Unplanned, ad-hoc tasks',
       E: 'Under 15 minutes',
+      F: 'Ideas & tasks to sort',
     },
     tooltip: {
       A: 'Core Challenge · Quota 1/cycle · 2+ hours · High difficulty & value',
@@ -61,6 +63,7 @@ export default {
       C: 'Steady Progress · Quota 3/cycle · 20-45 min · Standard difficulty',
       D: 'Ad-hoc Tasks · Quota 4/cycle · Unplanned · Stay flexible',
       E: 'Quick Action · Quota 5/cycle · <15 min · Fast completion',
+      F: 'Idea Pool · Unlimited · Capture ideas · Sort later',
     },
     quota: {
       A: '1/cycle',
@@ -68,6 +71,7 @@ export default {
       C: '3/cycle',
       D: '4/cycle',
       E: '5/cycle',
+      F: 'Unlimited',
     },
     difficulty: {
       A: 'High',
@@ -75,6 +79,7 @@ export default {
       C: 'Standard',
       D: 'Ad-hoc',
       E: 'Low',
+      F: 'To sort',
     },
     time: {
       A: '2+ hours',
@@ -82,6 +87,7 @@ export default {
       C: '20-45 min',
       D: 'Varies',
       E: '<15 min',
+      F: 'Varies',
     },
   },
 
@@ -269,8 +275,9 @@ export default {
         A: 'A (Core Challenge): 1 per cycle, 2+ hours deep focus, high-value tasks',
         B: 'B (Key Progress): 2 per cycle, project milestones, 45-90 min',
         C: 'C (Steady Progress): 3 per cycle, daily work tasks, 20-45 min',
-        D: 'D (Quick Action): 5 per cycle, under 20 minutes',
-        E: 'E (Idea Pool): Unlimited, ideas and tasks to be sorted',
+        D: 'D (Ad-hoc Tasks): 4 per cycle, unplanned ad-hoc tasks',
+        E: 'E (Quick Action): 5 per cycle, under 15 minutes',
+        F: 'F (Idea Pool): Unlimited, ideas and tasks to be sorted',
       },
       highlander: {
         title: 'Highlander Rule',

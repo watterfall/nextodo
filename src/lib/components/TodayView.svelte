@@ -43,7 +43,7 @@
   const groupedTasks = $derived({
     high: todayTasks.filter(task => task.priority === 'A' || task.priority === 'B'),
     standard: todayTasks.filter(task => task.priority === 'C' || task.priority === 'D'),
-    other: todayTasks.filter(task => task.priority === 'E')
+    other: todayTasks.filter(task => task.priority === 'E' || task.priority === 'F')
   });
 
   // Today's Date

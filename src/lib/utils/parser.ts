@@ -26,7 +26,7 @@ interface ParsedTask {
  */
 export function parseTaskInput(input: string): ParsedTask {
   let content = input.trim();
-  let priority: Priority = 'E';
+  let priority: Priority = 'F';
   const projects: string[] = [];
   const contexts: string[] = [];
   const customTags: string[] = [];
@@ -36,10 +36,10 @@ export function parseTaskInput(input: string): ParsedTask {
   let recurrence: Recurrence | null = null;
 
   // Extract priority (!A, !B, etc.)
-  const priorityMatch = content.match(/!([ABCDE])\b/i);
+  const priorityMatch = content.match(/!([ABCDEF])\b/i);
   if (priorityMatch) {
     priority = priorityMatch[1].toUpperCase() as Priority;
-    content = content.replace(/!([ABCDE])\b/i, '').trim();
+    content = content.replace(/!([ABCDEF])\b/i, '').trim();
   }
 
   // Extract projects (+project)
@@ -294,7 +294,7 @@ export function highlightSyntax(input: string): string {
   let html = escapeHtml(input);
 
   // Highlight priority
-  html = html.replace(/!([ABCDE])\b/gi, '<span class="syntax-priority">!$1</span>');
+  html = html.replace(/!([ABCDEF])\b/gi, '<span class="syntax-priority">!$1</span>');
 
   // Highlight projects
   html = html.replace(/(\+\S+)/g, '<span class="syntax-project">$1</span>');
