@@ -4,10 +4,7 @@
   // import ZoneContainer from '$lib/components/ZoneContainer.svelte';
   import KanbanView from '$lib/components/KanbanView.svelte';
   import ListView from '$lib/components/ListView.svelte';
-  // import TodayView from '$lib/components/TodayView.svelte'; 
-  // import WeekView from '$lib/components/WeekView.svelte';
   import TaskForm from '$lib/components/TaskForm.svelte';
-  import InboxPanel from '$lib/components/InboxPanel.svelte';
   import QuotaMeter from '$lib/components/QuotaMeter.svelte';
   import UnitNav from '$lib/components/UnitNav.svelte';
   import ReviewPanel from '$lib/components/ReviewPanel.svelte';
@@ -283,25 +280,17 @@
       <TaskForm />
     </div>
 
-    <!-- Main Layout Switcher -->
-    {#if ui.viewMode === 'kanban'}
-      <div class="content-layout kanban-layout">
-        <div class="kanban-panel">
-          <KanbanView />
-        </div>
-      </div>
-    {:else if ui.viewMode === 'list'}
-      <div class="content-layout list-layout">
+    <!-- Main Layout Switcher - Views fill available space -->
+    <div class="content-layout">
+      {#if ui.viewMode === 'kanban'}
+        <KanbanView />
+      {:else if ui.viewMode === 'list'}
         <ListView />
-      </div>
-    {:else}
-      <!-- Fallback to Kanban if view mode is unknown or legacy -->
-      <div class="content-layout kanban-layout">
-        <div class="kanban-panel">
-          <KanbanView />
-        </div>
-      </div>
-    {/if}
+      {:else}
+        <!-- Fallback to Kanban if view mode is unknown or legacy -->
+        <KanbanView />
+      {/if}
+    </div>
   </main>
 
   <!-- Search Overlay -->
@@ -562,86 +551,11 @@
   }
 
   .content-layout {
-    display: flex;
     flex: 1;
     overflow: hidden;
-    gap: 20px;
     padding: 0 20px 20px;
   }
 
-  /* Today View Layout */
-  .content-layout.today-layout {
-    position: relative;
-    justify-content: center;
-  }
-
-  .timer-floating {
-    position: absolute;
-    bottom: 20px;
-    right: 20px;
-    width: 280px;
-    z-index: 10;
-    box-shadow: var(--shadow-lg);
-    border-radius: var(--radius-lg);
-  }
-
-  /* Week View Layout */
-  .content-layout.week-layout {
-    flex-direction: column;
-    overflow: hidden;
-  }
-
-  .zones-panel {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-    overflow-y: auto;
-    padding-right: 4px;
-  }
-
-  .zones-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 16px;
-    align-items: start;
-  }
-
-  /* Responsive switch for zones grid */
-  @media (max-width: 1100px) {
-    .zones-grid {
-      grid-template-columns: 1fr;
-    }
-  }
-
-  .timer-section {
-    margin-top: auto;
-    padding-top: 16px;
-    border-top: 1px solid var(--border-subtle);
-  }
-
-  .inbox-section {
-    width: 320px;
-    flex-shrink: 0;
-    overflow: hidden;
-  }
-
-  /* Kanban layout */
-  .content-layout.kanban-layout {
-    flex-direction: column;
-  }
-
-  .kanban-panel {
-    flex: 1;
-    overflow: hidden;
-  }
-
-  .timer-section-kanban {
-    flex-shrink: 0;
-    padding-top: 16px;
-    border-top: 1px solid var(--border-subtle);
-    margin-top: 16px;
-  }
 
   /* View toggle */
   .view-toggle {
@@ -813,21 +727,9 @@
   }
 
   /* Responsive */
-  @media (max-width: 1024px) {
-    .inbox-section {
-      width: 280px;
-    }
-  }
-
   @media (max-width: 768px) {
     .content-layout {
-      flex-direction: column;
       padding: 0 16px 16px;
-    }
-
-    .inbox-section {
-      width: 100%;
-      height: 300px;
     }
 
     .header {
