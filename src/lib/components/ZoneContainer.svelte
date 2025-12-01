@@ -67,7 +67,7 @@
     }
   }
 
-  function handleDndFinalize(e: DndFinalizeEvent) {
+  async function handleDndFinalize(e: DndFinalizeEvent) {
     const { items, info } = e.detail;
 
     // Filter out shadow placeholders
@@ -79,11 +79,18 @@
       const droppedTask = cleanItems.find(task => task.id === info.id);
       if (droppedTask && droppedTask.priority !== priority) {
         // Change priority for items from other zones
-        changePriority(info.id, priority);
+        const result = await changePriority(info.id, priority);
+        if (!result.success) {
+          // Revert on failure
+          dndItems = [...activeTasks];
+        } else {
+          // Refresh with fresh data from store
+          dndItems = [...activeTasks];
+        }
       } else {
         // Reorder within same zone
         const newOrder = cleanItems.map(task => task.id);
-        reorderTask(priority, newOrder);
+        await reorderTask(priority, newOrder);
       }
     } else if (info.trigger === TRIGGERS.DROPPED_OUTSIDE_OF_ANY) {
       // Reset if dropped outside

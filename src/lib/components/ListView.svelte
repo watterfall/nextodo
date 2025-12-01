@@ -91,8 +91,9 @@
               dndItemsByPriority[p] = getTasksForPriority(p);
             }
           } else {
-            // Also update the source zone
+            // Update both source and target zones with fresh data from store
             dndItemsByPriority[sourcePriority] = getTasksForPriority(sourcePriority);
+            dndItemsByPriority[priority] = getTasksForPriority(priority);
           }
         } else {
           await reorderTask(priority, cleanItems.map(task => task.id));
