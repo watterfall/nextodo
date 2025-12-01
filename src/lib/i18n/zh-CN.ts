@@ -121,7 +121,7 @@ export default {
     biweekly: '每两周',
     monthly: '每月',
     keyboardHint: '按 Ctrl+Enter 快速添加',
-    syntaxHint: '支持语法: +项目 @状态 #标签 due:日期 t:延后日期',
+    syntaxHint: '支持语法: !A-F +项目 @情境 #标签 ~日期 thr:延后日期 🍅数量',
   },
 
   // Inbox Panel (Idea Pool)
@@ -141,7 +141,7 @@ export default {
   // Task
   task: {
     add: '添加任务',
-    addPlaceholder: '快速添加任务 (+项目 @情境 #标签 !A-E ~日期 🍅数量)',
+    addPlaceholder: '快速添加任务 (+项目 @情境 #标签 !A-F ~日期 🍅数量)',
     edit: '编辑任务',
     delete: '删除任务',
     complete: '完成任务',

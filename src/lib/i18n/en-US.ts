@@ -121,7 +121,7 @@ export default {
     biweekly: 'Biweekly',
     monthly: 'Monthly',
     keyboardHint: 'Press Ctrl+Enter to add quickly',
-    syntaxHint: 'Syntax: +project @mood #tag due:date t:defer',
+    syntaxHint: 'Syntax: !A-F +project @context #tag ~date thr:defer',
   },
 
   // Inbox Panel (Idea Pool)
@@ -141,7 +141,7 @@ export default {
   // Task
   task: {
     add: 'Add Task',
-    addPlaceholder: 'Add task (+project @context #tag !A-E ~date)',
+    addPlaceholder: 'Add task (+project @context #tag !A-F ~date)',
     edit: 'Edit Task',
     delete: 'Delete Task',
     complete: 'Complete',

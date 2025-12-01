@@ -168,6 +168,12 @@ export interface PriorityConfig {
   color: string;
   bgColor: string;
   borderColor: string;
+  // Pomodoro constraints: recommended range for task estimation
+  pomodoroRange: {
+    min: number;
+    max: number;
+    recommended: number;
+  };
 }
 
 export const PRIORITY_CONFIG: Record<Priority, PriorityConfig> = {
@@ -177,7 +183,8 @@ export const PRIORITY_CONFIG: Record<Priority, PriorityConfig> = {
     description: '深度工作，需 2+ 小时专注',
     color: 'var(--priority-a-color, #da77f2)',
     bgColor: 'var(--priority-a-bg, rgba(218, 119, 242, 0.12))',
-    borderColor: 'var(--priority-a-border, rgba(218, 119, 242, 0.25))'
+    borderColor: 'var(--priority-a-border, rgba(218, 119, 242, 0.25))',
+    pomodoroRange: { min: 4, max: 12, recommended: 6 }  // 2+ hours = 4+ pomodoros
   },
   B: {
     name: '重要推进',
@@ -185,7 +192,8 @@ export const PRIORITY_CONFIG: Record<Priority, PriorityConfig> = {
     description: '项目关键节点',
     color: 'var(--priority-b-color, #ff922b)',
     bgColor: 'var(--priority-b-bg, rgba(255, 146, 43, 0.12))',
-    borderColor: 'var(--priority-b-border, rgba(255, 146, 43, 0.25))'
+    borderColor: 'var(--priority-b-border, rgba(255, 146, 43, 0.25))',
+    pomodoroRange: { min: 2, max: 4, recommended: 3 }  // 45-90 min = 2-4 pomodoros
   },
   C: {
     name: '标准任务',
@@ -193,7 +201,8 @@ export const PRIORITY_CONFIG: Record<Priority, PriorityConfig> = {
     description: '日常工作任务',
     color: 'var(--priority-c-color, #74c0fc)',
     bgColor: 'var(--priority-c-bg, rgba(116, 192, 252, 0.08))',
-    borderColor: 'var(--priority-c-border, rgba(116, 192, 252, 0.2))'
+    borderColor: 'var(--priority-c-border, rgba(116, 192, 252, 0.2))',
+    pomodoroRange: { min: 1, max: 2, recommended: 1 }  // 20-45 min = 1-2 pomodoros
   },
   D: {
     name: '临时任务',
@@ -201,7 +210,8 @@ export const PRIORITY_CONFIG: Record<Priority, PriorityConfig> = {
     description: '计划外的临时任务',
     color: 'var(--priority-d-color, #868e96)',
     bgColor: 'var(--priority-d-bg, rgba(134, 142, 150, 0.08))',
-    borderColor: 'var(--priority-d-border, rgba(134, 142, 150, 0.2))'
+    borderColor: 'var(--priority-d-border, rgba(134, 142, 150, 0.2))',
+    pomodoroRange: { min: 0, max: 4, recommended: 1 }  // Flexible, varies
   },
   E: {
     name: '快速处理',
@@ -209,7 +219,8 @@ export const PRIORITY_CONFIG: Record<Priority, PriorityConfig> = {
     description: '15分钟内可完成',
     color: 'var(--priority-e-color, #51cf66)',
     bgColor: 'var(--priority-e-bg, rgba(81, 207, 102, 0.08))',
-    borderColor: 'var(--priority-e-border, rgba(81, 207, 102, 0.2))'
+    borderColor: 'var(--priority-e-border, rgba(81, 207, 102, 0.2))',
+    pomodoroRange: { min: 0, max: 1, recommended: 0 }  // <15 min = 0 pomodoros
   },
   F: {
     name: '灵感收集',
@@ -217,7 +228,8 @@ export const PRIORITY_CONFIG: Record<Priority, PriorityConfig> = {
     description: '收集想法、待分类任务',
     color: 'var(--priority-f-color, #5c636a)',
     bgColor: 'var(--priority-f-bg, rgba(92, 99, 106, 0.08))',
-    borderColor: 'var(--priority-f-border, rgba(92, 99, 106, 0.2))'
+    borderColor: 'var(--priority-f-border, rgba(92, 99, 106, 0.2))',
+    pomodoroRange: { min: 0, max: Infinity, recommended: 0 }  // No constraints
   }
 };
 

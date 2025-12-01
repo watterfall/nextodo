@@ -155,3 +155,61 @@ export function canDemote(task: Task): { canDemote: boolean; targetPriority: Pri
 
   return { canDemote: true, targetPriority: priorities[currentIndex + 1] };
 }
+
+/**
+ * Validate pomodoro estimate against priority constraints
+ * Returns null if valid, or a warning message if out of range
+ */
+export function validatePomodoroEstimate(priority: Priority, estimatedPomodoros: number): {
+  isValid: boolean;
+  warning: string | null;
+  suggestion: string | null;
+} {
+  const config = PRIORITY_CONFIG[priority];
+  const { min, max, recommended } = config.pomodoroRange;
+
+  // F priority has no constraints
+  if (priority === 'F') {
+    return { isValid: true, warning: null, suggestion: null };
+  }
+
+  if (estimatedPomodoros < min) {
+    return {
+      isValid: false,
+      warning: `番茄数过少 (${estimatedPomodoros} < ${min})`,
+      suggestion: `${priority} 类任务建议 ${min}-${max} 个番茄，推荐 ${recommended} 个`
+    };
+  }
+
+  if (estimatedPomodoros > max) {
+    return {
+      isValid: false,
+      warning: `番茄数过多 (${estimatedPomodoros} > ${max})`,
+      suggestion: `${priority} 类任务建议 ${min}-${max} 个番茄，考虑提高优先级或拆分任务`
+    };
+  }
+
+  return { isValid: true, warning: null, suggestion: null };
+}
+
+/**
+ * Get pomodoro estimate hint for a priority level
+ */
+export function getPomodoroHint(priority: Priority): string {
+  const config = PRIORITY_CONFIG[priority];
+  const { min, max, recommended } = config.pomodoroRange;
+
+  if (priority === 'F') {
+    return '暂无建议';
+  }
+
+  if (min === 0 && max === 1) {
+    return '建议 0-1 个番茄 (<15分钟)';
+  }
+
+  if (max === Infinity) {
+    return `建议 ${min}+ 个番茄`;
+  }
+
+  return `建议 ${min}-${max} 个番茄，推荐 ${recommended} 个`;
+}
