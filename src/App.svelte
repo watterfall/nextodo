@@ -46,9 +46,12 @@
   } from '$lib/stores/settings.svelte';
   import { initReviews } from '$lib/stores/reviews.svelte';
   import { saveAppData, setupFileWatcher } from '$lib/utils/storage';
-  import { initI18n, t } from '$lib/i18n';
-
+  import { initI18n, getI18nStore } from '$lib/i18n';
   import type { Priority, ViewMode } from '$lib/types';
+
+  // Get translation function from store to ensure stable reference
+  const i18n = getI18nStore();
+  const t = i18n.t;
 
   const tasks = getTasksStore();
   const ui = getUIStore();
