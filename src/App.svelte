@@ -49,9 +49,8 @@
   import { initI18n, getI18nStore } from '$lib/i18n';
   import type { Priority, ViewMode } from '$lib/types';
 
-  // Get translation function from store to ensure stable reference
-  const i18n = getI18nStore();
-  const t = i18n.t;
+  // Lazy wrapper to ensure t is always available when called
+  const t = (key: string, params?: Record<string, string | number>) => getI18nStore().t(key, params);
 
   const tasks = getTasksStore();
   const ui = getUIStore();
