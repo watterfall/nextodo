@@ -15,10 +15,11 @@
   interface Props {
     onOpenSettings?: () => void;
     onOpenReview?: () => void;
-    onOpenBadges?: () => void; // New prop
+    onOpenBadges?: () => void;
+    onOpenTrash?: () => void;
   }
 
-  let { onOpenSettings, onOpenReview, onOpenBadges }: Props = $props();
+  let { onOpenSettings, onOpenReview, onOpenBadges, onOpenTrash }: Props = $props();
 
   const tasks = getTasksStore();
   const ui = getUIStore();
@@ -275,8 +276,16 @@
       </button>
 
       <!-- Badges Button -->
-      <button class="footer-btn" onclick={onOpenBadges} title="成就">
+      <button class="footer-btn" onclick={onOpenBadges} title={t('nav.badges') || '成就'}>
         <span>🏆</span>
+      </button>
+
+      <!-- Trash Button -->
+      <button class="footer-btn" onclick={onOpenTrash} title={t('nav.trashArchive') || '回收站与归档'}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="3 6 5 6 21 6"></polyline>
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+        </svg>
       </button>
 
       <!-- Settings Button -->
@@ -296,8 +305,14 @@
           <polyline points="14 2 14 8 20 8"></polyline>
         </svg>
       </button>
-      <button class="collapsed-btn" onclick={onOpenBadges} title="成就">
+      <button class="collapsed-btn" onclick={onOpenBadges} title={t('nav.badges') || '成就'}>
         <span>🏆</span>
+      </button>
+      <button class="collapsed-btn" onclick={onOpenTrash} title={t('nav.trashArchive') || '回收站与归档'}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="3 6 5 6 21 6"></polyline>
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+        </svg>
       </button>
       <button class="collapsed-btn" onclick={onOpenSettings} title={t('settings.title')}>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

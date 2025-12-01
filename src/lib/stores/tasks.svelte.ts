@@ -37,8 +37,25 @@ export async function initializeData(): Promise<void> {
 
     // Process recurring tasks
     const newRecurringTasks = processRecurringTasks(appData.tasks);
-    if (newRecurringTasks.length > 0) {
+    let dataChanged = newRecurringTasks.length > 0;
+    if (dataChanged) {
       appData.tasks = [...appData.tasks, ...newRecurringTasks];
+    }
+
+    // Cleanup trash items older than 7 days
+    const now = new Date();
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const trashBefore = appData.trash.length;
+    appData.trash = appData.trash.filter(task => {
+      const deletedAt = task.completedAt ? new Date(task.completedAt) : new Date(task.createdAt);
+      return deletedAt > sevenDaysAgo;
+    });
+    if (appData.trash.length !== trashBefore) {
+      dataChanged = true;
+      console.log(`Cleaned up ${trashBefore - appData.trash.length} expired trash items`);
+    }
+
+    if (dataChanged) {
       await saveAppData(appData);
     }
   } catch (error) {

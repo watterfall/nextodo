@@ -2,6 +2,7 @@
   import { getTasksStore } from '$lib/stores/tasks.svelte';
   import { fade, scale } from 'svelte/transition';
   import { getI18nStore } from '$lib/i18n';
+  import { onMount } from 'svelte';
 
   interface Props {
     onClose: () => void;
@@ -9,14 +10,23 @@
 
   let { onClose }: Props = $props();
 
-  const tasks = getTasksStore();
   const i18n = getI18nStore();
   const t = i18n.t;
+
+  // Use state to ensure safe access after mount
+  let tasksStore: ReturnType<typeof getTasksStore> | null = $state(null);
+
+  onMount(() => {
+    tasksStore = getTasksStore();
+  });
 
   // Safely access badges with defensive fallback
   const badges = $derived.by(() => {
     try {
-      return tasks.appData?.badges ?? [];
+      if (!tasksStore) return [];
+      const appData = tasksStore.appData;
+      if (!appData) return [];
+      return appData.badges ?? [];
     } catch {
       return [];
     }
