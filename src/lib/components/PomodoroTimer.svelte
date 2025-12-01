@@ -63,7 +63,7 @@
         {pomodoro.formattedTime}
       </div>
       <div class="state-label">
-        {pomodoro.stateLabel}
+        {t(`pomodoro.${pomodoro.state}`) === `pomodoro.${pomodoro.state}` ? pomodoro.stateLabel : t(`pomodoro.${pomodoro.state}`)}
       </div>
       {#if pomodoro.activeTask}
         <div class="active-task" title={pomodoro.activeTask.content}>
@@ -108,16 +108,16 @@
   </div>
 
   <div class="session-count">
-    <span class="count-label">今日番茄</span>
+    <span class="count-label">{t('pomodoro.todayCount')}</span>
     <span class="count-value">🍅 ×{pomodoro.todayCount}</span>
   </div>
 
   {#if pomodoro.state !== 'idle' && onEnterImmersive}
-    <button class="immersive-btn" onclick={onEnterImmersive} title="进入沉浸模式">
+    <button class="immersive-btn" onclick={onEnterImmersive} title={t('pomodoro.immersiveMode')}>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path>
       </svg>
-      <span>沉浸模式</span>
+      <span>{t('pomodoro.immersiveMode')}</span>
     </button>
   {/if}
 </div>

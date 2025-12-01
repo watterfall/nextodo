@@ -2,7 +2,7 @@ import type { ViewMode, Priority } from '$lib/types';
 
 // UI State
 let sidebarCollapsed = $state(false);
-let viewMode = $state<ViewMode>('zones');
+  let viewMode = $state<ViewMode>('kanban');
 let activeModal = $state<string | null>(null);
 let modalData = $state<unknown>(null);
 let toastMessage = $state<string | null>(null);

@@ -9,7 +9,7 @@ export default {
   // Navigation
   nav: {
     today: 'Today',
-    inbox: 'Pending',
+    inbox: 'Inbox',
     projects: 'Projects',
     contexts: 'Contexts',
     tags: 'Tags',
@@ -22,9 +22,9 @@ export default {
   priority: {
     A: 'Core Challenge',
     B: 'Key Progress',
-    C: 'Standard Task',
+    C: 'Routine Tasks',
     D: 'Quick Action',
-    E: 'Pending',
+    E: 'Inbox',
     description: {
       A: 'Deep work, 2+ hours focus',
       B: 'Project milestones, 45-90 min',
@@ -35,9 +35,9 @@ export default {
     tooltip: {
       A: 'Core Challenge · Quota 1/cycle · 2+ hours deep focus · High difficulty & value',
       B: 'Key Progress · Quota 2/cycle · 45-90 min · Medium difficulty',
-      C: 'Standard Task · Quota 3/cycle · 15-45 min · Daily work',
+      C: 'Routine Tasks · Quota 3/cycle · 15-45 min · Daily work',
       D: 'Quick Action · Quota 5/cycle · <15 min · Low difficulty',
-      E: 'Pending · No quota limit · To be sorted',
+      E: 'Inbox · No quota limit · To be sorted',
     },
     quota: {
       A: '1/cycle',
@@ -65,7 +65,7 @@ export default {
   // Task Form
   taskForm: {
     placeholder: 'Enter task content...',
-    addToInbox: 'Add to Pending',
+    addToInbox: 'Add to Inbox',
     project: 'Project',
     projectPlaceholder: 'e.g., Work, Study',
     context: 'Context',
@@ -90,15 +90,15 @@ export default {
 
   // Inbox Panel
   inbox: {
-    title: 'Pending',
+    title: 'Inbox',
     subtitle: 'Capture ideas, sort later',
     hint: 'Drag tasks to zones or click quick sort buttons',
     dragHint: 'Drag to A/B/C/D zones to classify',
     moveTo: 'Move to',
-    empty: 'Pending area is empty',
+    empty: 'Inbox is empty',
     emptyHint: 'Add tasks using the input above',
     completed: 'Completed',
-    aging: 'Pending for {days} days',
+    aging: 'In inbox for {days} days',
     agingWarning: 'Consider sorting soon',
   },
 
@@ -220,8 +220,8 @@ export default {
     },
     autoArchive: 'Auto Archive Days',
     autoArchiveDesc: 'Days until completed tasks are auto-archived',
-    eZoneAging: 'Pending Area Aging Alert',
-    eZoneAgingDesc: 'Days until pending tasks show aging warning',
+    eZoneAging: 'Inbox Aging Alert',
+    eZoneAgingDesc: 'Days until inbox tasks show aging warning',
     minutes: 'min',
     days: 'days',
     methodology: {
@@ -238,9 +238,9 @@ export default {
         title: 'Priority Levels',
         A: 'A (Core Challenge): 1 per cycle, 2+ hours deep focus, high-value tasks',
         B: 'B (Key Progress): 2 per cycle, project milestones, 45-90 min',
-        C: 'C (Standard Task): 3 per cycle, daily work tasks, 15-45 min',
+        C: 'C (Routine Tasks): 3 per cycle, daily work tasks, 15-45 min',
         D: 'D (Quick Action): 5 per cycle, under 15 minutes',
-        E: 'E (Pending): Unlimited, ideas and tasks to be sorted',
+        E: 'E (Inbox): Unlimited, ideas and tasks to be sorted',
       },
       highlander: {
         title: 'Highlander Rule',
@@ -292,10 +292,10 @@ export default {
 
   // View modes
   view: {
-    zones: 'Zone View',
-    kanban: 'Kanban View',
-    list: 'List View',
-    hybrid: 'Hybrid View',
+    zones: 'Zones',
+    kanban: 'Kanban',
+    list: 'List',
+    hybrid: 'Hybrid',
   },
 
   // Actions
@@ -327,7 +327,7 @@ export default {
     dataExported: 'Data exported',
     dataImported: 'Data imported',
     backupCreated: 'Backup created',
-    taskAdded: 'Task added to pending area',
+    taskAdded: 'Task added to inbox',
     taskMoved: 'Task moved to {priority} zone',
   },
 

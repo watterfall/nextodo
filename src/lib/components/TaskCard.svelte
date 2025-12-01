@@ -199,11 +199,16 @@
     </div>
 
     {#if task.pomodoros.estimated > 0}
-      <div class="pomodoro-indicator" title="番茄钟进度">
+      <button 
+        class="pomodoro-indicator clickable" 
+        title="点击开始专注"
+        onclick={(e) => { e.stopPropagation(); handleStartPomodoro(); }}
+        disabled={isActive}
+      >
         <span class="pomodoro-count">
           {task.pomodoros.completed}/{task.pomodoros.estimated}
         </span>
-      </div>
+      </button>
     {/if}
   </div>
 
@@ -550,6 +555,20 @@
     padding: 2px 6px;
     background: var(--hover-bg);
     border-radius: var(--radius-sm);
+    border: none;
+    transition: all var(--transition-fast);
+  }
+
+  .pomodoro-indicator.clickable:hover:not(:disabled) {
+    background: var(--primary-bg);
+    color: var(--primary);
+    cursor: pointer;
+    transform: scale(1.05);
+  }
+
+  .pomodoro-indicator:disabled {
+    cursor: default;
+    opacity: 0.7;
   }
 
   .pomodoro-count::before {

@@ -272,10 +272,10 @@
           />
         </div>
 
-        <div class="field-group small">
+        <div class="field-group small-input">
           <label class="field-label">
             <span class="label-icon">🍅</span>
-            Est.
+            {t('taskForm.estimatedPomodoros')}
           </label>
           <input
             type="number"
@@ -287,7 +287,7 @@
           />
         </div>
 
-        <div class="field-group">
+        <div class="field-group recurrence-input">
           <label class="field-label">
             <span class="label-icon">🔄</span>
             {t('taskForm.recurrence')}
@@ -495,9 +495,14 @@
     min-width: 140px;
   }
 
-  .field-group.small {
-    flex: 0 0 70px;
-    min-width: 70px;
+  .field-group.small-input {
+    flex: 0 0 100px;
+    min-width: 100px;
+  }
+
+  .field-group.recurrence-input {
+    flex: 0 0 140px;
+    min-width: 140px;
   }
 
   .field-label {
@@ -516,7 +521,8 @@
 
   .field-input {
     width: 100%;
-    padding: 9px 10px;
+    height: 36px; /* Explicit height for consistency */
+    padding: 0 10px;
     font-size: 13px;
     background: var(--card-bg);
     border: 1px solid var(--border-color);
@@ -524,6 +530,14 @@
     color: var(--text-primary);
     outline: none;
     transition: all var(--transition-fast);
+    box-sizing: border-box; /* Ensure padding doesn't affect width/height */
+  }
+
+  /* Specific fix for file input type date which might behave differently */
+  input[type="date"].field-input {
+    padding-top: 0;
+    padding-bottom: 0;
+    line-height: 34px;
   }
 
   .field-input:focus {

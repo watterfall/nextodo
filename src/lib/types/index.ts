@@ -233,7 +233,7 @@ export interface FilterState {
 }
 
 // View mode
-export type ViewMode = 'zones' | 'list' | 'calendar' | 'today' | 'week';
+export type ViewMode = 'kanban' | 'list';
 
 // Pomodoro state
 export type PomodoroState = 'idle' | 'work' | 'shortBreak' | 'longBreak';

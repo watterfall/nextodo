@@ -1,10 +1,11 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import Sidebar from '$lib/components/Sidebar.svelte';
-  import ZoneContainer from '$lib/components/ZoneContainer.svelte';
+  // import ZoneContainer from '$lib/components/ZoneContainer.svelte';
   import KanbanView from '$lib/components/KanbanView.svelte';
-  import TodayView from '$lib/components/TodayView.svelte'; // NEW
-  import WeekView from '$lib/components/WeekView.svelte';   // NEW
+  import ListView from '$lib/components/ListView.svelte';
+  // import TodayView from '$lib/components/TodayView.svelte'; 
+  // import WeekView from '$lib/components/WeekView.svelte';
   import TaskForm from '$lib/components/TaskForm.svelte';
   import InboxPanel from '$lib/components/InboxPanel.svelte';
   import PomodoroTimer from '$lib/components/PomodoroTimer.svelte';
@@ -195,7 +196,7 @@
             <circle cx="11" cy="11" r="8"></circle>
             <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
           </svg>
-          <span class="search-placeholder">{t('filter.search')}</span>
+          <span class="search-placeholder"></span>
           <kbd>⌘K</kbd>
         </button>
       </div>
@@ -207,54 +208,29 @@
         <div class="view-toggle">
           <button
             class="view-btn"
-            class:active={ui.viewMode === 'today'}
-            onclick={() => setViewMode('today')}
-            title="今日视图"
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-              <line x1="16" y1="2" x2="16" y2="6"></line>
-              <line x1="8" y1="2" x2="8" y2="6"></line>
-              <line x1="3" y1="10" x2="21" y2="10"></line>
-              <path d="M8 14h.01"></path>
-            </svg>
-          </button>
-          <button
-            class="view-btn"
-            class:active={ui.viewMode === 'week'}
-            onclick={() => setViewMode('week')}
-            title="本周概览"
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="3" y="3" width="18" height="18" rx="2"></rect>
-              <path d="M3 9h18"></path>
-              <path d="M9 21V9"></path>
-              <path d="M15 21V9"></path>
-            </svg>
-          </button>
-          <button
-            class="view-btn"
-            class:active={ui.viewMode === 'zones'}
-            onclick={() => setViewMode('zones')}
-            title={t('view.zones')}
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="3" y="3" width="7" height="7"></rect>
-              <rect x="14" y="3" width="7" height="7"></rect>
-              <rect x="3" y="14" width="7" height="7"></rect>
-              <rect x="14" y="14" width="7" height="7"></rect>
-            </svg>
-          </button>
-          <button
-            class="view-btn"
-            class:active={ui.viewMode === 'list'}
-            onclick={() => setViewMode('list')}
+            class:active={ui.viewMode === 'kanban'}
+            onclick={() => setViewMode('kanban')}
             title={t('view.kanban')}
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <rect x="3" y="3" width="5" height="18" rx="1"></rect>
               <rect x="10" y="3" width="5" height="18" rx="1"></rect>
               <rect x="17" y="3" width="5" height="18" rx="1"></rect>
+            </svg>
+          </button>
+          <button
+            class="view-btn"
+            class:active={ui.viewMode === 'list'}
+            onclick={() => setViewMode('list')}
+            title={t('view.list')}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="8" y1="6" x2="21" y2="6"></line>
+              <line x1="8" y1="12" x2="21" y2="12"></line>
+              <line x1="8" y1="18" x2="21" y2="18"></line>
+              <line x1="3" y1="6" x2="3.01" y2="6"></line>
+              <line x1="3" y1="12" x2="3.01" y2="12"></line>
+              <line x1="3" y1="18" x2="3.01" y2="18"></line>
             </svg>
           </button>
         </div>
@@ -294,31 +270,7 @@
     </div>
 
     <!-- Main Layout Switcher -->
-    {#if ui.viewMode === 'zones'}
-      <div class="content-layout">
-        <!-- Left: Priority Zones (A-D) -->
-        <div class="zones-panel">
-          <div class="zones-grid">
-            {#each mainPriorities as priority}
-              <ZoneContainer
-                {priority}
-                tasks={tasks.tasksByPriority[priority]}
-              />
-            {/each}
-          </div>
-
-          <!-- Pomodoro Timer at Bottom -->
-          <div class="timer-section">
-            <PomodoroTimer onEnterImmersive={handleImmersiveMode} />
-          </div>
-        </div>
-
-        <!-- Right: Inbox Panel -->
-        <div class="inbox-section">
-          <InboxPanel />
-        </div>
-      </div>
-    {:else if ui.viewMode === 'list'}
+    {#if ui.viewMode === 'kanban'}
       <div class="content-layout kanban-layout">
         <div class="kanban-panel">
           <KanbanView />
@@ -329,20 +281,19 @@
           <PomodoroTimer onEnterImmersive={handleImmersiveMode} />
         </div>
       </div>
-    {:else if ui.viewMode === 'today'}
-      <!-- Today View -->
-      <div class="content-layout today-layout">
-        <TodayView />
-        
-        <!-- Optional: Floating Pomodoro or minimized -->
-        <div class="timer-floating">
+    {:else if ui.viewMode === 'list'}
+      <div class="content-layout list-layout">
+        <ListView />
+      </div>
+    {:else}
+      <!-- Fallback to Kanban if view mode is unknown or legacy -->
+      <div class="content-layout kanban-layout">
+        <div class="kanban-panel">
+          <KanbanView />
+        </div>
+        <div class="timer-section-kanban">
           <PomodoroTimer onEnterImmersive={handleImmersiveMode} />
         </div>
-      </div>
-    {:else if ui.viewMode === 'week'}
-      <!-- Week View -->
-      <div class="content-layout week-layout">
-        <WeekView />
       </div>
     {/if}
   </main>
@@ -610,9 +561,17 @@
   }
 
   .zones-grid {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+    align-items: start;
+  }
+
+  /* Responsive switch for zones grid */
+  @media (max-width: 1100px) {
+    .zones-grid {
+      grid-template-columns: 1fr;
+    }
   }
 
   .timer-section {
@@ -647,34 +606,37 @@
   /* View toggle */
   .view-toggle {
     display: flex;
-    background: var(--action-btn-bg);
-    border-radius: var(--radius-md);
-    padding: 2px;
-    gap: 2px;
+    /* Removed background for inconspicuous design */
+    padding: 0;
+    gap: 4px;
   }
 
   .view-btn {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 30px;
-    height: 30px;
+    width: 28px;
+    height: 28px;
     border: none;
     border-radius: var(--radius-sm);
     background: transparent;
     color: var(--text-muted);
     cursor: pointer;
     transition: all var(--transition-fast);
+    opacity: 0.6; /* Lower opacity for subtle look */
   }
 
   .view-btn:hover {
     color: var(--text-secondary);
+    background: var(--hover-bg);
+    opacity: 1;
   }
 
   .view-btn.active {
-    background: var(--bg-primary);
+    background: var(--bg-secondary); /* Subtle background for active */
     color: var(--primary);
-    box-shadow: var(--shadow-sm);
+    opacity: 1;
+    /* Removed shadow for flatter design */
   }
 
   .view-btn svg {

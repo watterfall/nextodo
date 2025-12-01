@@ -109,45 +109,7 @@
 
   {#if !ui.sidebarCollapsed}
     <div class="sidebar-content">
-      <!-- Main Views Navigation -->
-      <div class="nav-section main-views">
-        <button 
-          class="nav-item" 
-          class:active={ui.viewMode === 'today'}
-          onclick={() => setViewMode('today')}
-        >
-          <span class="item-icon">☀️</span>
-          <span class="item-text">今日聚焦</span>
-          <span class="item-count">{tasks.dueTodayCount}</span>
-        </button>
-        <button 
-          class="nav-item" 
-          class:active={ui.viewMode === 'week'}
-          onclick={() => setViewMode('week')}
-        >
-          <span class="item-icon">📅</span>
-          <span class="item-text">本周概览</span>
-          <span class="item-count">{tasks.dueThisWeekCount}</span>
-        </button>
-        <button 
-          class="nav-item" 
-          class:active={ui.viewMode === 'zones'}
-          onclick={() => setViewMode('zones')}
-        >
-          <span class="item-icon">🎯</span>
-          <span class="item-text">四象限看板</span>
-        </button>
-        <button 
-          class="nav-item" 
-          class:active={ui.viewMode === 'list'}
-          onclick={() => setViewMode('list')}
-        >
-          <span class="item-icon">📋</span>
-          <span class="item-text">全景列表</span>
-        </button>
-      </div>
-
-      <div class="divider"></div>
+      <!-- Removed View Navigation for Minimalism -->
 
       <!-- Projects Section -->
       {#if allProjects.length > 0}

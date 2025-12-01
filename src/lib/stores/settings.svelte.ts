@@ -91,12 +91,10 @@ export function setTheme(theme: Theme): void {
   updateSettings({ theme });
 }
 
-// Toggle theme (cycles through dark -> light -> system)
+// Toggle theme (switches between light and dark based on effective theme)
 export function toggleTheme(): void {
-  const themes: Theme[] = ['dark', 'light', 'system'];
-  const currentIndex = themes.indexOf(settings.theme);
-  const nextIndex = (currentIndex + 1) % themes.length;
-  setTheme(themes[nextIndex]);
+  const current = getEffectiveTheme();
+  setTheme(current === 'dark' ? 'light' : 'dark');
 }
 
 // Set language

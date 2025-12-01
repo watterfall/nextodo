@@ -22,22 +22,22 @@ export default {
   priority: {
     A: '核心挑战',
     B: '重要推进',
-    C: '标准任务',
+    C: '日常事务',
     D: '快速处理',
-    E: '待处理',
+    E: '收集箱',
     description: {
       A: '深度工作，需 2+ 小时专注',
       B: '项目关键节点，45-90分钟',
-      C: '日常工作任务，15-45分钟',
+      C: '日常事务，15-45分钟',
       D: '15分钟内可完成',
       E: '备忘、想法、待分类',
     },
     tooltip: {
       A: '核心挑战 · 配额 1/周期 · 2+ 小时深度专注 · 高难度高价值',
       B: '重要推进 · 配额 2/周期 · 45-90 分钟 · 中等难度',
-      C: '标准任务 · 配额 3/周期 · 15-45 分钟 · 日常工作',
+      C: '日常事务 · 配额 3/周期 · 15-45 分钟 · 日常工作',
       D: '快速处理 · 配额 5/周期 · <15 分钟 · 低难度',
-      E: '待处理区 · 无配额限制 · 待分类整理',
+      E: '收集箱 · 无配额限制 · 待分类整理',
     },
     quota: {
       A: '1/周期',
@@ -68,7 +68,7 @@ export default {
     addToInbox: '添加到待处理',
     project: '项目',
     projectPlaceholder: '例如: 工作、学习',
-    context: '场景',
+    context: '情境',
     contextPlaceholder: '例如: 办公室、家里',
     tags: '标签',
     tagsPlaceholder: '多个标签用逗号分隔',
@@ -90,13 +90,13 @@ export default {
 
   // Inbox Panel
   inbox: {
-    title: '待处理',
+    title: '收集箱',
     subtitle: '收集想法，整理分类',
     hint: '拖拽任务到左侧区域或点击快速分类按钮',
     dragHint: '拖拽到 A/B/C/D 区域进行分类',
     moveTo: '移动到',
-    empty: '待处理区已清空',
-    emptyHint: '输入框添加新任务，自动进入待处理区',
+    empty: '收集箱已清空',
+    emptyHint: '输入框添加新任务，自动进入收集箱',
     completed: '已完成',
     aging: '已停留 {days} 天',
     agingWarning: '建议尽快分类处理',
@@ -105,7 +105,7 @@ export default {
   // Task
   task: {
     add: '添加任务',
-    addPlaceholder: '快速添加任务 (+项目 @场景 #标签 !A-E ~日期 🍅数量)',
+    addPlaceholder: '快速添加任务 (+项目 @情境 #标签 !A-E ~日期 🍅数量)',
     edit: '编辑任务',
     delete: '删除任务',
     complete: '完成任务',
@@ -142,6 +142,7 @@ export default {
     selectTask: '选择任务开始专注',
     immersiveMode: '沉浸模式',
     exitImmersive: '退出沉浸',
+    idle: '就绪',
   },
 
   // Unit/Review
@@ -238,9 +239,9 @@ export default {
         title: '优先级说明',
         A: 'A 级 (核心挑战): 每周期 1 个，需要 2+ 小时深度专注的高价值任务',
         B: 'B 级 (重要推进): 每周期 2 个，项目关键节点，45-90 分钟',
-        C: 'C 级 (标准任务): 每周期 3 个，日常工作任务，15-45 分钟',
+        C: 'C 级 (日常事务): 每周期 3 个，日常工作任务，15-45 分钟',
         D: 'D 级 (快速处理): 每周期 5 个，15 分钟内可完成的小任务',
-        E: 'E 级 (待处理): 无限制，收集想法、待分类任务',
+        E: 'E 级 (收集箱): 无限制，收集想法、待分类任务',
       },
       highlander: {
         title: '高地人法则',
@@ -267,7 +268,7 @@ export default {
     todayCompleted: '今日完成',
     allTasks: '全部任务',
     projects: '项目',
-    contexts: '场景',
+    contexts: '情境',
     tags: '标签',
     dueDates: '截止日期',
     recurring: '重复任务',
@@ -277,7 +278,7 @@ export default {
     dailyRecurring: '每日',
     weeklyRecurring: '每周',
     noProjects: '暂无项目',
-    noContexts: '暂无场景',
+    noContexts: '暂无情境',
     collapse: '收起侧边栏',
     showAll: '显示全部',
   },
@@ -292,10 +293,8 @@ export default {
 
   // View modes
   view: {
-    zones: '区块视图',
-    kanban: '看板视图',
-    list: '列表视图',
-    hybrid: '混合视图',
+    kanban: '看板',
+    list: '列表',
   },
 
   // Actions
@@ -348,7 +347,7 @@ export default {
   syntax: {
     title: '输入语法',
     project: '+项目',
-    context: '@场景',
+    context: '@情境',
     tag: '#标签',
     priority: '!A-E 优先级',
     dueDate: 'due:日期 截止日',
