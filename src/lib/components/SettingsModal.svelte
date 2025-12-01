@@ -1,6 +1,6 @@
 <script lang="ts">
   import { getSettingsStore, updateSettings, toggleTheme, setAppLanguage } from '$lib/stores/settings.svelte';
-  import { t, availableLanguages, setLanguage, currentLanguage } from '$lib/i18n';
+  import { getI18nStore, availableLanguages, setLanguage, currentLanguage } from '$lib/i18n';
   import type { Language } from '$lib/types';
   import { PRIORITY_CONFIG } from '$lib/types';
 
@@ -12,6 +12,8 @@
   let { isOpen, onClose }: Props = $props();
 
   const settings = getSettingsStore();
+  const i18n = getI18nStore();
+  const t = i18n.t;
 
   let pomodoroWork = $state(settings.pomodoroWork);
   let pomodoroShortBreak = $state(settings.pomodoroShortBreak);

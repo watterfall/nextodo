@@ -6,7 +6,7 @@
   import { changePriority, getTasksStore, reorderTask } from '$lib/stores/tasks.svelte';
   import { getPomodoroStore } from '$lib/stores/pomodoro.svelte';
   import { countActiveByPriority } from '$lib/utils/quota';
-  import { t } from '$lib/i18n';
+  import { getI18nStore } from '$lib/i18n';
   import { dndzone, TRIGGERS, SHADOW_ITEM_MARKER_PROPERTY_NAME } from 'svelte-dnd-action';
   import { flip } from 'svelte/animate';
   import { dndConfig, areTaskArraysEqual, type DndConsiderEvent, type DndFinalizeEvent } from '$lib/utils/motion';
@@ -19,6 +19,8 @@
   let { priority, tasks }: Props = $props();
 
   const pomodoro = getPomodoroStore();
+  const i18n = getI18nStore();
+  const t = i18n.t;
 
   const config = PRIORITY_CONFIG[priority];
   const ui = getUIStore();
@@ -34,11 +36,11 @@
 
   // Check if pomodoro is actively running on a task
   const isFocusMode = $derived(pomodoro.state === 'work' && pomodoro.activeTaskId !== null);
-  const hasActiveTask = $derived(tasks.some(t => t.id === pomodoro.activeTaskId));
+  const hasActiveTask = $derived(tasks.some(task => task.id === pomodoro.activeTaskId));
 
   // Filter out completed tasks for display
-  let activeTasks = $derived(tasks.filter(t => !t.completed));
-  let completedTasks = $derived(tasks.filter(t => t.completed));
+  let activeTasks = $derived(tasks.filter(task => !task.completed));
+  let completedTasks = $derived(tasks.filter(task => task.completed));
 
   // DnD items - need to be reactive and include shadow marker handling
   let dndItems = $state<Task[]>([]);
@@ -74,13 +76,13 @@
 
     if (info.trigger === TRIGGERS.DROPPED_INTO_ZONE) {
       // Item was dropped into this zone
-      const droppedTask = cleanItems.find(t => t.id === info.id);
+      const droppedTask = cleanItems.find(task => task.id === info.id);
       if (droppedTask && droppedTask.priority !== priority) {
         // Change priority for items from other zones
         changePriority(info.id, priority);
       } else {
         // Reorder within same zone
-        const newOrder = cleanItems.map(t => t.id);
+        const newOrder = cleanItems.map(task => task.id);
         reorderTask(priority, newOrder);
       }
     } else if (info.trigger === TRIGGERS.DROPPED_OUTSIDE_OF_ANY) {

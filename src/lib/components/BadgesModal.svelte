@@ -1,7 +1,7 @@
 <script lang="ts">
   import { getTasksStore } from '$lib/stores/tasks.svelte';
   import { fade, scale } from 'svelte/transition';
-  import { t } from '$lib/i18n';
+  import { getI18nStore } from '$lib/i18n';
 
   interface Props {
     onClose: () => void;
@@ -10,6 +10,8 @@
   let { onClose }: Props = $props();
 
   const tasks = getTasksStore();
+  const i18n = getI18nStore();
+  const t = i18n.t;
   const badges = $derived(tasks.appData.badges || []);
 
   // Defined Badges (to show locked ones too)

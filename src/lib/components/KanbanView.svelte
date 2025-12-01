@@ -6,7 +6,7 @@
   import { getPomodoroStore } from '$lib/stores/pomodoro.svelte';
   import { setDropTarget, clearDragState, getUIStore } from '$lib/stores/ui.svelte';
   import { countActiveByPriority } from '$lib/utils/quota';
-  import { t } from '$lib/i18n';
+  import { getI18nStore } from '$lib/i18n';
   import { dndzone, TRIGGERS, SHADOW_ITEM_MARKER_PROPERTY_NAME } from 'svelte-dnd-action';
   import { flip } from 'svelte/animate';
   import { dndConfig, areTaskArraysEqual, type DndConsiderEvent, type DndFinalizeEvent } from '$lib/utils/motion';
@@ -15,6 +15,8 @@
   const tasks = getTasksStore();
   const pomodoro = getPomodoroStore();
   const ui = getUIStore();
+  const i18n = getI18nStore();
+  const t = i18n.t;
 
   const priorities: Priority[] = ['A', 'B', 'C', 'D', 'E'];
   const counts = $derived(countActiveByPriority(tasks.tasks));
@@ -34,15 +36,15 @@
   let focusedTaskId = $state<string | null>(null);
 
   function getTasksForPriority(priority: Priority) {
-    return tasks.tasksByPriority[priority].filter(t => !t.completed);
+    return tasks.tasksByPriority[priority].filter(task => !task.completed);
   }
 
   function getCompletedForPriority(priority: Priority) {
-    return tasks.tasksByPriority[priority].filter(t => t.completed);
+    return tasks.tasksByPriority[priority].filter(task => task.completed);
   }
 
   function hasActiveTaskInColumn(priority: Priority) {
-    return tasks.tasksByPriority[priority].some(t => t.id === pomodoro.activeTaskId);
+    return tasks.tasksByPriority[priority].some(task => task.id === pomodoro.activeTaskId);
   }
 
   // Sync dndItems with actual tasks for each priority (with shallow comparison)
@@ -91,13 +93,13 @@
       dndItemsByPriority[priority] = cleanItems;
 
       if (info.trigger === TRIGGERS.DROPPED_INTO_ZONE) {
-        const droppedTask = cleanItems.find(t => t.id === info.id);
+        const droppedTask = cleanItems.find(task => task.id === info.id);
         if (droppedTask && droppedTask.priority !== priority) {
           // Item came from another column - change its priority
           changePriority(info.id, priority);
         } else {
           // Reorder within column
-          const newOrder = cleanItems.map(t => t.id);
+          const newOrder = cleanItems.map(task => task.id);
           reorderTask(priority, newOrder);
         }
       } else if (info.trigger === TRIGGERS.DROPPED_OUTSIDE_OF_ANY) {
