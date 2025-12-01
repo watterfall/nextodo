@@ -1,7 +1,7 @@
 <script lang="ts">
   import { getTasksStore, setFilter, clearFilters } from '$lib/stores/tasks.svelte';
   import { getUIStore, toggleSidebar, setViewMode } from '$lib/stores/ui.svelte';
-  import { getSettingsStore, toggleTheme } from '$lib/stores/settings.svelte';
+  import { getSettingsStore, toggleTheme, setAppLanguage } from '$lib/stores/settings.svelte';
   import { t, setLanguage, currentLanguage } from '$lib/i18n';
   import type { Language } from '$lib/types';
 
@@ -74,6 +74,7 @@
     const currentLang = currentLanguage();
     const newLang: Language = currentLang === 'zh-CN' ? 'en-US' : 'zh-CN';
     setLanguage(newLang);
+    setAppLanguage(newLang); // Also persist to settings
   }
 
   function getThemeIcon(): 'dark' | 'light' | 'system' {

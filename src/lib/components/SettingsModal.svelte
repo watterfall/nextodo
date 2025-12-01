@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { getSettingsStore, updateSettings, toggleTheme } from '$lib/stores/settings.svelte';
+  import { getSettingsStore, updateSettings, toggleTheme, setAppLanguage } from '$lib/stores/settings.svelte';
   import { t, availableLanguages, setLanguage, currentLanguage } from '$lib/i18n';
   import type { Language } from '$lib/types';
   import { PRIORITY_CONFIG } from '$lib/types';
@@ -33,7 +33,7 @@
 
   function handleLanguageChange(lang: Language) {
     setLanguage(lang);
-    updateSettings({ language: lang });
+    setAppLanguage(lang);
   }
 
   function handleSave() {
