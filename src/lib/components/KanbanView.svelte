@@ -30,6 +30,11 @@
   // Focus mode check
   const isFocusMode = $derived(pomodoro.state === 'work' && pomodoro.activeTaskId !== null);
 
+  // Idea Pool (E zone) derived values
+  const ideaPoolTasks = $derived(dndItemsByPriority['E']);
+  const ideaPoolDropTarget = $derived(ui.dropTargetPriority === 'E' || activeDndColumn === 'E');
+  const ideaPoolDimmed = $derived(isFocusMode && !hasActiveTaskInColumn('E'));
+
   // DnD state for each column
   let dndItemsByPriority = $state<Record<Priority, Task[]>>({
     A: [], B: [], C: [], D: [], E: []
@@ -266,10 +271,6 @@
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div class="kanban-container" onclick={handleContainerClick}>
   <!-- Idea Pool (E zone) at top as horizontal strip -->
-  {@const ideaPoolTasks = dndItemsByPriority['E']}
-  {@const ideaPoolDropTarget = ui.dropTargetPriority === 'E' || activeDndColumn === 'E'}
-  {@const ideaPoolDimmed = isFocusMode && !hasActiveTaskInColumn('E')}
-
   <div
     class="idea-pool-strip"
     class:expanded={isIdeaPoolExpanded}
