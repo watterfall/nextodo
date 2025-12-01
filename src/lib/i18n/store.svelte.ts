@@ -8,9 +8,9 @@ const locales: Record<Language, typeof zhCN> = {
   'en-US': enUS,
 };
 
-// Current language state
-let _currentLanguage: Language = $state('zh-CN');
-let _currentLocale = $state(zhCN);
+// Current language state (use regular variables at module level, not $state)
+let _currentLanguage: Language = 'zh-CN';
+let _currentLocale: typeof zhCN = zhCN;
 
 // Initialize from settings or system
 export function initI18n(language?: Language): void {
