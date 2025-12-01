@@ -389,7 +389,7 @@
     outline: none;
   }
 
-  /* Main area with A/B/C/D grid */
+  /* Main area with A/B/C/D grid - fills all remaining space */
   .kanban-main {
     flex: 1;
     min-width: 0;
@@ -397,13 +397,12 @@
     padding-right: 4px;
   }
 
-  /* Responsive 2x2 grid for A/B/C/D cards */
+  /* Vertical list for A/B/C/D cards - fills available width */
   .priority-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
     height: 100%;
-    align-content: start;
   }
 
   /* Priority Card (A/B/C/D) */
@@ -414,8 +413,9 @@
     border: 1px solid var(--border-subtle);
     border-radius: var(--radius-lg);
     transition: all var(--transition-normal);
-    min-height: 180px;
-    max-height: calc(50vh - 80px);
+    flex: 1;
+    min-height: 80px;
+    overflow: hidden;
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
   }
@@ -639,6 +639,12 @@
   }
 
   /* Responsive adjustments */
+  @media (max-width: 1400px) {
+    .idea-pool-panel {
+      width: 260px;
+    }
+  }
+
   @media (max-width: 1200px) {
     .idea-pool-panel {
       width: 240px;
@@ -651,28 +657,25 @@
     }
 
     .kanban-main {
-      flex: none;
-      overflow: visible;
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
     }
 
     .priority-grid {
-      grid-template-columns: repeat(2, 1fr);
       height: auto;
     }
 
     .priority-card {
-      max-height: none;
+      flex: none;
+      min-height: 120px;
+      max-height: 200px;
     }
 
     .idea-pool-panel {
       width: 100%;
-      max-height: 250px;
-    }
-  }
-
-  @media (max-width: 600px) {
-    .priority-grid {
-      grid-template-columns: 1fr;
+      flex-shrink: 0;
+      max-height: 200px;
     }
   }
 </style>
