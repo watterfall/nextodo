@@ -9,5 +9,5 @@ export {
   getRelativeDate,
   getI18nStore,
   availableLanguages
-} from './store.svelte';
+} from './store';
 
