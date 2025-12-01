@@ -203,6 +203,7 @@
 <style>
   .list-view-container {
     display: flex;
+    width: 100%;
     height: 100%;
     overflow: hidden;
     gap: 12px;
@@ -217,10 +218,6 @@
     flex-direction: column;
     gap: 12px;
     transition: all 0.3s ease;
-  }
-
-  .list-main.expanded {
-    /* When idea pool is hidden, main area expands */
   }
 
   /* Task Row (A/B/C/D) - horizontal rows */

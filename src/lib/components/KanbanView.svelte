@@ -394,6 +394,7 @@
 <style>
   .kanban-container {
     display: flex;
+    width: 100%;
     height: 100%;
     gap: 12px;
     overflow: hidden;
@@ -408,10 +409,6 @@
     gap: 12px;
     overflow-x: auto;
     transition: all 0.3s ease;
-  }
-
-  .kanban-main.expanded {
-    /* When idea pool is hidden, main area expands */
   }
 
   /* Priority Column (A/B/C/D) - vertical kanban columns */
