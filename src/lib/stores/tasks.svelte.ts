@@ -384,7 +384,8 @@ const filteredTasks = $derived.by(() => {
 
   // Apply due filter
   if (filter.dueFilter === 'today') {
-    tasks = tasks.filter(t => t.dueDate && isToday(t.dueDate));
+    // Include both today's tasks AND overdue tasks (consistent with TodayView)
+    tasks = tasks.filter(t => t.dueDate && (isToday(t.dueDate) || isOverdue(t.dueDate)));
   } else if (filter.dueFilter === 'thisWeek') {
     tasks = tasks.filter(t => t.dueDate && isThisWeek(t.dueDate));
   } else if (filter.dueFilter === 'overdue') {
@@ -451,7 +452,7 @@ const contextCounts = $derived.by(() => {
 });
 
 const dueTodayCount = $derived(
-  appData.tasks.filter(t => !t.completed && t.dueDate && isToday(t.dueDate)).length
+  appData.tasks.filter(t => !t.completed && t.dueDate && (isToday(t.dueDate) || isOverdue(t.dueDate))).length
 );
 
 const dueThisWeekCount = $derived(

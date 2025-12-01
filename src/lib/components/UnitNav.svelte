@@ -8,11 +8,11 @@
   const i18n = getI18nStore();
   const t = i18n.t;
 
-  // Day names for unit display (shorter, more intuitive)
+  // Day names for unit display (clearer format with weekday prefix)
   const unitDayNames: Record<number, { zh: string; en: string }> = {
-    1: { zh: '日-一', en: 'Sun-Mon' },
-    2: { zh: '二-三', en: 'Tue-Wed' },
-    3: { zh: '四-五', en: 'Thu-Fri' },
+    1: { zh: '周日&周一', en: 'Sun&Mon' },
+    2: { zh: '周二&周三', en: 'Tue&Wed' },
+    3: { zh: '周四&周五', en: 'Thu&Fri' },
   };
 
   function handlePrev() {

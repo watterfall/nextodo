@@ -122,10 +122,10 @@
     gap: 20px;
   }
 
-  /* Grid layout for A/B/C/D sections */
+  /* Single column layout for A/B/C/D sections - each row full width */
   .tasks-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    display: flex;
+    flex-direction: column;
     gap: 16px;
     padding-bottom: 20px;
   }
@@ -138,7 +138,7 @@
     border: 1px solid var(--border-subtle);
     border-radius: var(--radius-lg);
     padding: 14px;
-    min-height: 120px;
+    min-height: 80px;
   }
 
   .section-header {
@@ -231,7 +231,7 @@
     transform: rotate(90deg);
   }
 
-  /* Idea Pool (E-zone) panel on right side */
+  /* Idea Pool (E-zone) panel on right side - vertical strip filling height */
   .idea-pool-panel {
     width: 260px;
     flex-shrink: 0;
@@ -242,8 +242,8 @@
     display: flex;
     flex-direction: column;
     transition: all 0.3s ease;
-    height: fit-content;
-    max-height: 100%;
+    height: 100%;
+    align-self: stretch;
   }
 
   .idea-pool-panel.collapsed {
@@ -336,12 +336,6 @@
   }
 
   /* Responsive */
-  @media (max-width: 1100px) {
-    .tasks-grid {
-      grid-template-columns: 1fr;
-    }
-  }
-
   @media (max-width: 900px) {
     .list-view-container {
       flex-direction: column;

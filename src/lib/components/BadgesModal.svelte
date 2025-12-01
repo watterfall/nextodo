@@ -12,7 +12,15 @@
   const tasks = getTasksStore();
   const i18n = getI18nStore();
   const t = i18n.t;
-  const badges = $derived(tasks.appData.badges || []);
+
+  // Safely access badges with defensive fallback
+  const badges = $derived.by(() => {
+    try {
+      return tasks.appData?.badges ?? [];
+    } catch {
+      return [];
+    }
+  });
 
   // Defined Badges (to show locked ones too)
   const BADGES = [
