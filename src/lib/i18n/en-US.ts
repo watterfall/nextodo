@@ -160,6 +160,12 @@ export default {
     thresholdNotReached: 'Deferred',
     startFocus: 'Start Focus',
     pomodoroProgress: '{completed}/{estimated} pomodoros',
+    markComplete: 'Mark complete',
+    markIncomplete: 'Mark incomplete',
+    focusInProgress: 'Focus in progress',
+    clickToStartFocus: 'Click to start focus',
+    dormantUntil: 'Dormant until',
+    energyLevel: 'Energy level',
   },
 
   // Pomodoro
@@ -382,6 +388,7 @@ export default {
     backupCreated: 'Backup created',
     taskAdded: 'Task added to inbox',
     taskMoved: 'Task moved to {priority} zone',
+    taskMovedToTrash: 'Task moved to trash',
   },
 
   // Date/Time

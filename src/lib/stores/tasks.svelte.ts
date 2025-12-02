@@ -6,6 +6,7 @@ import { createTaskFromInput } from '$lib/utils/parser';
 import { processRecurringTasks, createNextOccurrence } from '$lib/utils/recurrence';
 import { getCurrentUnit, isDateInUnit, isToday, isOverdue, isThisWeek } from '$lib/utils/unitCalc';
 import { checkBadges } from '$lib/stores/gamification.svelte'; // Import checkBadges
+import { t } from '$lib/i18n';
 
 // Main app state
 let appData = $state<AppData>(createDefaultAppData());
@@ -286,7 +287,7 @@ export async function changePriority(taskId: string, newPriority: Priority): Pro
   // Check quota for new priority
   const otherTasks = appData.tasks.filter(t => t.id !== taskId);
   if (!canAddTask(otherTasks, newPriority)) {
-    return { success: false, error: `${newPriority} 类已达配额上限` };
+    return { success: false, error: t('message.quotaExceeded', { priority: newPriority }) };
   }
 
   await updateTask(taskId, { priority: newPriority });

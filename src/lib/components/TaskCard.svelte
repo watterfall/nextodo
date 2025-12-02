@@ -6,6 +6,7 @@
   import { startPomodoro, getPomodoroStore } from '$lib/stores/pomodoro.svelte';
   import { formatRecurrence } from '$lib/utils/recurrence';
   import { isOverdue, getRelativeDayLabel, parseISODate } from '$lib/utils/unitCalc';
+  import { getI18nStore } from '$lib/i18n';
 
   interface Props {
     task: Task;
@@ -18,6 +19,7 @@
 
   const ui = getUIStore();
   const pomodoro = getPomodoroStore();
+  const i18n = getI18nStore();
 
   let isActive = $derived(pomodoro.activeTaskId === task.id);
   let isFocusMode = $derived(pomodoro.state === 'work' && pomodoro.activeTaskId !== null);
@@ -66,7 +68,7 @@
 
   function handleDelete() {
     deleteTask(task.id);
-    showToast('任务已移至回收站', 'info');
+    showToast(i18n.t('message.taskMovedToTrash'), 'info');
   }
 
   function handlePriorityChange(newPriority: Priority) {
@@ -127,7 +129,7 @@
       class="checkbox"
       class:checked={task.completed}
       onclick={handleCheck}
-      aria-label={task.completed ? '标记未完成' : '标记完成'}
+      aria-label={task.completed ? i18n.t('task.markIncomplete') : i18n.t('task.markComplete')}
     >
       {#if task.completed}
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
@@ -140,7 +142,7 @@
       <button
         class="pomodoro-btn-left"
         class:active={isActive}
-        title={isActive ? '专注进行中' : `${task.pomodoros.completed}/${task.pomodoros.estimated} 番茄`}
+        title={isActive ? i18n.t('task.focusInProgress') : i18n.t('task.pomodoroProgress', { completed: task.pomodoros.completed, estimated: task.pomodoros.estimated })}
         onclick={(e) => { e.stopPropagation(); handleStartPomodoro(); }}
         disabled={isActive}
       >
@@ -181,7 +183,7 @@
 
           <!-- Energy Level Visualization -->
           {#if energyLevel}
-            <span class="meta-tag energy {energyLevel}" title="能量消耗: {energyTag}">
+            <span class="meta-tag energy {energyLevel}" title={`${i18n.t('task.energyLevel')}: ${energyTag}`}>
               {#if energyLevel === 'high'}⚡{:else if energyLevel === 'medium'}☕{:else}😴{/if}
             </span>
           {/if}
@@ -193,7 +195,7 @@
       <button
         class="pomodoro-btn"
         class:active={isActive}
-        title={isActive ? '专注进行中' : '点击开始专注'}
+        title={isActive ? i18n.t('task.focusInProgress') : i18n.t('task.clickToStartFocus')}
         onclick={(e) => { e.stopPropagation(); handleStartPomodoro(); }}
         disabled={isActive}
       >
@@ -205,7 +207,7 @@
   {#if !compact && (task.dueDate || task.recurrence || task.thresholdDate)}
     <div class="task-footer">
       {#if task.thresholdDate && isDormant}
-        <span class="threshold-date" title="休眠至">
+        <span class="threshold-date" title={i18n.t('task.dormantUntil')}>
           💤 {thresholdLabel}
         </span>
       {/if}
@@ -228,7 +230,7 @@
       <button
         class="action-btn play"
         onclick={handleStartPomodoro}
-        title="开始专注"
+        title={i18n.t('task.startFocus')}
         disabled={isActive}
       >
         <svg viewBox="0 0 24 24" fill="currentColor">
@@ -236,13 +238,13 @@
         </svg>
       </button>
     {/if}
-    <button class="action-btn edit" onclick={handleEdit} title="编辑">
+    <button class="action-btn edit" onclick={handleEdit} title={i18n.t('action.edit')}>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
         <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
       </svg>
     </button>
-    <button class="action-btn delete" onclick={handleDelete} title="删除">
+    <button class="action-btn delete" onclick={handleDelete} title={i18n.t('action.delete')}>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <polyline points="3 6 5 6 21 6"></polyline>
         <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
