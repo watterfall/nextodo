@@ -181,6 +181,18 @@ export default {
     immersiveMode: '沉浸模式',
     exitImmersive: '退出沉浸',
     idle: '就绪',
+    immersive: {
+      exitTitle: '退出沉浸模式 (Esc)',
+      timerControls: '计时器控制',
+      recordInterruption: '记录中断 (I)',
+      interruptionCount: '本次中断次数',
+      keyboardPauseResume: '暂停/继续',
+      keyboardInterrupt: '记录中断',
+      keyboardExit: '退出',
+      interruptionTitle: '记录中断原因',
+      interruptionPlaceholder: '例如：老板电话、同事询问...',
+      record: '记录',
+    },
   },
 
   // Unit/Review
