@@ -4,7 +4,7 @@
   import TaskCard from './TaskCard.svelte';
   import { getTasksStore, changePriority, reorderTask } from '$lib/stores/tasks.svelte';
   import { getPomodoroStore } from '$lib/stores/pomodoro.svelte';
-  import { getUIStore } from '$lib/stores/ui.svelte';
+  import { getUIStore, showToast } from '$lib/stores/ui.svelte';
   import { getI18nStore } from '$lib/i18n';
   import { dndzone, TRIGGERS, SHADOW_ITEM_MARKER_PROPERTY_NAME } from 'svelte-dnd-action';
   import { flip } from 'svelte/animate';
@@ -91,6 +91,8 @@
         // Item came from another priority - change its priority to F
         const result = await changePriority(info.id, 'F');
         if (!result.success) {
+          // Show error feedback to user
+          showToast(result.error || t('error.quotaExceeded'), 'error');
           // Revert on failure
           dndItems = [...inboxTasks];
         } else {

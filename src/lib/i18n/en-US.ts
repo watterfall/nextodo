@@ -393,4 +393,11 @@ export default {
     recurrence: 'repeat',
     pomodoro: 'pomodoros',
   },
+
+  // Errors
+  error: {
+    quotaExceeded: 'Priority quota limit reached',
+    taskNotFound: 'Task not found',
+    saveFailed: 'Save failed',
+  },
 };

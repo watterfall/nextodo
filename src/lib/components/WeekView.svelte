@@ -5,9 +5,10 @@
   import { getI18nStore } from '$lib/i18n';
   import { fade } from 'svelte/transition';
   import type { Task } from '$lib/types';
-  import { dndzone, TRIGGERS } from 'svelte-dnd-action';
+  import { dndzone, TRIGGERS, SHADOW_ITEM_MARKER_PROPERTY_NAME } from 'svelte-dnd-action';
   import { flip } from 'svelte/animate';
   import { isToday } from '$lib/utils/unitCalc';
+  import { dndConfig, areTaskArraysEqual, type DndConsiderEvent, type DndFinalizeEvent } from '$lib/utils/motion';
 
   const tasks = getTasksStore();
   const i18n = getI18nStore();
@@ -30,51 +31,91 @@
     };
   }));
 
+  // DnD type for cross-component dragging compatibility
+  const DND_TYPE = 'task-priority-zone';
+
   // Group tasks by date
   // We need local state for DnD to work smoothly
   let columns = $state<Record<string, Task[]>>({});
+  let activeDndColumn = $state<string | null>(null);
 
-  // Sync with store
-  $effect(() => {
-    const newColumns: Record<string, Task[]> = {};
-    
-    // Initialize columns
-    weekDays.forEach(day => {
-      newColumns[day.dateStr] = [];
-    });
-
-    // Distribute tasks
-    tasks.tasks.forEach(task => {
-      if (!task.completed && task.dueDate) {
-        // Only if due date matches one of our columns
-        if (newColumns[task.dueDate]) {
-          newColumns[task.dueDate].push(task);
-        }
-      }
-    });
-
-    // Update local state only if structurally different to avoid DnD glitches
-    // For simplicity in this version, we just update
-    // In a production app with heavy DnD, you'd want deeper diffing
-    columns = newColumns;
-  });
-
-  function handleDndConsider(dateStr: string, e: CustomEvent<DndEvent<Task>>) {
-    columns[dateStr] = e.detail.items;
+  function getTasksForDate(dateStr: string): Task[] {
+    return tasks.tasks.filter(task => !task.completed && task.dueDate === dateStr);
   }
 
-  function handleDndFinalize(dateStr: string, e: CustomEvent<DndEvent<Task>>) {
+  // Sync with store (only when not actively dragging)
+  $effect(() => {
+    if (!activeDndColumn) {
+      const newColumns: Record<string, Task[]> = {};
+
+      // Initialize columns
+      weekDays.forEach(day => {
+        newColumns[day.dateStr] = [];
+      });
+
+      // Distribute tasks
+      tasks.tasks.forEach(task => {
+        if (!task.completed && task.dueDate) {
+          // Only if due date matches one of our columns
+          if (newColumns[task.dueDate]) {
+            newColumns[task.dueDate].push(task);
+          }
+        }
+      });
+
+      // Check if update is needed to avoid unnecessary re-renders
+      let needsUpdate = false;
+      for (const day of weekDays) {
+        if (!columns[day.dateStr] || !areTaskArraysEqual(columns[day.dateStr], newColumns[day.dateStr])) {
+          needsUpdate = true;
+          break;
+        }
+      }
+
+      if (needsUpdate) {
+        columns = newColumns;
+      }
+    }
+  });
+
+  function handleDndConsider(dateStr: string, e: DndConsiderEvent) {
     const { items, info } = e.detail;
-    columns[dateStr] = items;
+    columns[dateStr] = [...items];
+
+    if (info.trigger === TRIGGERS.DRAG_STARTED) {
+      activeDndColumn = dateStr;
+    }
+  }
+
+  async function handleDndFinalize(dateStr: string, e: DndFinalizeEvent) {
+    const { items, info } = e.detail;
+
+    // Filter out shadow placeholders
+    const cleanItems = items.filter(item => !(item as any)[SHADOW_ITEM_MARKER_PROPERTY_NAME]);
+    columns[dateStr] = [...cleanItems];
 
     if (info.trigger === TRIGGERS.DROPPED_INTO_ZONE) {
-      // Task dropped into this date -> update its due date
-      const taskId = info.id;
-      // We don't have the task object directly in info, but we know it's in items
-      // However, svelte-dnd-action items are the new state of the column
-      // We need to update the store
-      updateTask(taskId, { dueDate: dateStr });
+      const droppedTask = cleanItems.find(task => task.id === info.id);
+      if (droppedTask) {
+        const oldDateStr = droppedTask.dueDate;
+        // Only update if the due date actually changed
+        if (oldDateStr !== dateStr) {
+          await updateTask(info.id, { dueDate: dateStr });
+          // Refresh both source and target columns
+          if (oldDateStr && columns[oldDateStr]) {
+            columns[oldDateStr] = getTasksForDate(oldDateStr);
+          }
+          columns[dateStr] = getTasksForDate(dateStr);
+        }
+      }
+    } else if (info.trigger === TRIGGERS.DROPPED_OUTSIDE_OF_ANY) {
+      // Revert all columns
+      weekDays.forEach(day => {
+        columns[day.dateStr] = getTasksForDate(day.dateStr);
+      });
     }
+
+    activeDndColumn = null;
   }
 </script>
 
@@ -112,14 +153,20 @@
             <span class="day-num">{day.dayNum}</span>
           </div>
           
-          <div 
+          <div
             class="day-tasks"
-            use:dndzone={{ items: columns[day.dateStr] || [], flipDurationMs: 200, dropTargetClasses: ['day-drop-target'] }}
+            use:dndzone={{
+              items: columns[day.dateStr] || [],
+              flipDurationMs: dndConfig.flipDurationMs,
+              dropTargetStyle: {},
+              dropTargetClasses: ['day-drop-target'],
+              type: DND_TYPE
+            }}
             onconsider={(e) => handleDndConsider(day.dateStr, e)}
             onfinalize={(e) => handleDndFinalize(day.dateStr, e)}
           >
             {#each columns[day.dateStr] || [] as task (task.id)}
-              <div animate:flip={{ duration: 200 }} class="task-wrapper">
+              <div animate:flip={{ duration: dndConfig.flipDurationMs }} class="task-wrapper">
                 <TaskCard {task} compact showPriority />
               </div>
             {/each}

@@ -6,7 +6,7 @@
   import { PRIORITY_CONFIG, type Priority, type Task, isThresholdPassed } from '$lib/types';
   import { dndzone, TRIGGERS, SHADOW_ITEM_MARKER_PROPERTY_NAME } from 'svelte-dnd-action';
   import { dndConfig, areTaskArraysEqual, type DndConsiderEvent, type DndFinalizeEvent } from '$lib/utils/motion';
-  import { setDropTarget, clearDragState, getUIStore, setEditingTask } from '$lib/stores/ui.svelte';
+  import { setDropTarget, clearDragState, getUIStore, setEditingTask, showToast } from '$lib/stores/ui.svelte';
   import { startPomodoro, getPomodoroStore } from '$lib/stores/pomodoro.svelte';
   import { isOverdue, getRelativeDayLabel, parseISODate } from '$lib/utils/unitCalc';
   import { validatePomodoroEstimate } from '$lib/utils/quota';
@@ -86,6 +86,8 @@
           const sourcePriority = droppedTask.priority;
           const result = await changePriority(info.id, priority);
           if (!result.success) {
+            // Show error feedback to user
+            showToast(result.error || t('error.quotaExceeded'), 'error');
             // Revert all zones if failed
             for (const p of allPriorities) {
               dndItemsByPriority[p] = getTasksForPriority(p);

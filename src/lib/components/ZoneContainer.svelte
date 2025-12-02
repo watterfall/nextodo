@@ -2,7 +2,7 @@
   import type { Task, Priority } from '$lib/types';
   import { PRIORITY_CONFIG } from '$lib/types';
   import TaskCard from './TaskCard.svelte';
-  import { getUIStore, setDropTarget, clearDragState } from '$lib/stores/ui.svelte';
+  import { getUIStore, setDropTarget, clearDragState, showToast } from '$lib/stores/ui.svelte';
   import { changePriority, getTasksStore, reorderTask } from '$lib/stores/tasks.svelte';
   import { getPomodoroStore } from '$lib/stores/pomodoro.svelte';
   import { countActiveByPriority } from '$lib/utils/quota';
@@ -10,6 +10,9 @@
   import { dndzone, TRIGGERS, SHADOW_ITEM_MARKER_PROPERTY_NAME } from 'svelte-dnd-action';
   import { flip } from 'svelte/animate';
   import { dndConfig, areTaskArraysEqual, type DndConsiderEvent, type DndFinalizeEvent } from '$lib/utils/motion';
+
+  // Shared DnD type for cross-zone dragging
+  const DND_TYPE = 'task-priority-zone';
 
   interface Props {
     priority: Priority;
@@ -81,6 +84,8 @@
         // Change priority for items from other zones
         const result = await changePriority(info.id, priority);
         if (!result.success) {
+          // Show error feedback to user
+          showToast(result.error || t('error.quotaExceeded'), 'error');
           // Revert on failure
           dndItems = [...activeTasks];
         } else {
@@ -166,7 +171,8 @@
           flipDurationMs: dndConfig.flipDurationMs,
           dropTargetStyle: {},
           dropTargetClasses: ['dnd-drop-target-active'],
-          dragDisabled: isFocusMode && !hasActiveTask
+          dragDisabled: isFocusMode && !hasActiveTask,
+          type: DND_TYPE
         }}
         onconsider={handleDndConsider}
         onfinalize={handleDndFinalize}
