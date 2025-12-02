@@ -23,7 +23,8 @@ let filter = $state<FilterState>({
   showCompleted: false,
   dueFilter: null,
   showFutureTasks: false,
-  priority: null
+  priority: null,
+  pomodoroFilter: null
 });
 
 // Search query
@@ -344,7 +345,9 @@ export function clearFilters(): void {
     tag: null,
     showCompleted: false,
     dueFilter: null,
-    showFutureTasks: false
+    showFutureTasks: false,
+    priority: null,
+    pomodoroFilter: null
   };
 }
 
@@ -408,6 +411,11 @@ const filteredTasks = $derived.by(() => {
     tasks = tasks.filter(t => t.dueDate && isThisWeek(t.dueDate));
   } else if (filter.dueFilter === 'overdue') {
     tasks = tasks.filter(t => isOverdue(t.dueDate));
+  }
+
+  // Apply pomodoro filter
+  if (filter.pomodoroFilter !== null) {
+    tasks = tasks.filter(t => t.pomodoros.estimated === filter.pomodoroFilter);
   }
 
   return tasks;
