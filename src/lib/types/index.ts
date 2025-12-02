@@ -253,6 +253,8 @@ export interface FilterState {
   showFutureTasks: boolean;
   // NEW: Filter by priority
   priority: Priority | null;
+  // NEW: Filter by estimated pomodoro count
+  pomodoroFilter: number | null;
 }
 
 // View mode

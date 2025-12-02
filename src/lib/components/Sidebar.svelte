@@ -123,8 +123,11 @@
 
   // Pomodoro filter
   function handlePomodoroFilter(pomodoros: number) {
-    // Custom filter by pomodoro count - just a UI indication for now
-    // Could implement actual filtering if needed
+    if (tasks.filter.pomodoroFilter === pomodoros) {
+      setFilter({ pomodoroFilter: null });
+    } else {
+      setFilter({ pomodoroFilter: pomodoros });
+    }
   }
 
   function handleProjectFilter(project: string) {
@@ -181,7 +184,8 @@
     tasks.filter.context !== null ||
     tasks.filter.tag !== null ||
     tasks.filter.dueFilter !== null ||
-    tasks.filter.priority !== null
+    tasks.filter.priority !== null ||
+    tasks.filter.pomodoroFilter !== null
   );
 
   // Sync selectedPriority with filter state
@@ -248,7 +252,11 @@
           {#if pomodorosExpanded}
             <div class="badge-group pomodoro-badges">
               {#each pomodoroGroups() as { pomodoros, count }}
-                <button class="pomodoro-badge-btn">
+                <button
+                  class="pomodoro-badge-btn"
+                  class:active={tasks.filter.pomodoroFilter === pomodoros}
+                  onclick={() => handlePomodoroFilter(pomodoros)}
+                >
                   <span class="pomodoro-icon">🍅</span>
                   <span class="pomodoro-num">{pomodoros}</span>
                   <span class="badge-count">{count}</span>
@@ -861,6 +869,12 @@
   .pomodoro-badge-btn:hover {
     background: var(--error, #ff6b6b);
     color: white;
+  }
+
+  .pomodoro-badge-btn.active {
+    background: var(--error, #ff6b6b);
+    color: white;
+    box-shadow: 0 0 0 2px var(--bg-secondary), 0 0 0 4px var(--error, #ff6b6b);
   }
 
   .pomodoro-badge-btn .pomodoro-icon {
