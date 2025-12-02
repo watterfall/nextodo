@@ -206,19 +206,22 @@
               <!-- Task metadata -->
               <div class="task-meta">
                 {#if task.pomodoros.estimated > 0}
-                  <button
-                    class="pomodoro-badge"
-                    class:active={isActive}
-                    class:warning={pomodoroCheck.outOfRange}
-                    onclick={(e) => { e.stopPropagation(); handleStartPomodoro(task); }}
-                    title={pomodoroCheck.warning || "开始番茄钟"}
-                    aria-label={`${task.pomodoros.estimated} 番茄${pomodoroCheck.outOfRange ? '，' + pomodoroCheck.warning : ''}`}
-                  >
-                    🍅 {task.pomodoros.completed > 0 ? `${task.pomodoros.completed}/` : ''}{task.pomodoros.estimated}
-                    {#if pomodoroCheck.outOfRange}
-                      <span class="warning-icon">⚠</span>
-                    {/if}
-                  </button>
+                  {@const remaining = task.pomodoros.estimated - task.pomodoros.completed}
+                  {#if remaining > 0}
+                    <button
+                      class="pomodoro-badge"
+                      class:active={isActive}
+                      class:warning={pomodoroCheck.outOfRange}
+                      onclick={(e) => { e.stopPropagation(); handleStartPomodoro(task); }}
+                      title={pomodoroCheck.warning || `剩余 ${remaining} 个番茄钟`}
+                      aria-label={`剩余 ${remaining} 个番茄钟${pomodoroCheck.outOfRange ? '，' + pomodoroCheck.warning : ''}`}
+                    >
+                      🍅 {remaining}
+                      {#if pomodoroCheck.outOfRange}
+                        <span class="warning-icon">⚠</span>
+                      {/if}
+                    </button>
+                  {/if}
                 {/if}
 
                 {#each task.projects as project}
@@ -346,7 +349,10 @@
             <span class="task-content">{task.content}</span>
             <div class="task-meta">
               {#if task.pomodoros.estimated > 0}
-                <span class="pomodoro-badge">🍅 {task.pomodoros.estimated}</span>
+                {@const remaining = task.pomodoros.estimated - task.pomodoros.completed}
+                {#if remaining > 0}
+                  <span class="pomodoro-badge">🍅 {remaining}</span>
+                {/if}
               {/if}
               {#each task.projects as project}
                 {@const displayInfo = getDisplayText(project)}

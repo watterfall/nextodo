@@ -141,17 +141,20 @@
     </button>
 
     {#if !task.completed && task.pomodoros.estimated > 0}
-      <button
-        class="pomodoro-btn-left"
-        class:active={isActive}
-        class:kanban-hidden={kanbanMode}
-        title={isActive ? i18n.t('task.focusInProgress') : i18n.t('task.pomodoroProgress', { completed: task.pomodoros.completed, estimated: task.pomodoros.estimated })}
-        onclick={(e) => { e.stopPropagation(); handleStartPomodoro(); }}
-        disabled={isActive}
-      >
-        <span class="tomato-icon">🍅</span>
-        <span class="pomodoro-count">{task.pomodoros.completed}/{task.pomodoros.estimated}</span>
-      </button>
+      {@const remaining = task.pomodoros.estimated - task.pomodoros.completed}
+      {#if remaining > 0}
+        <button
+          class="pomodoro-btn-left"
+          class:active={isActive}
+          class:kanban-hidden={kanbanMode}
+          title={isActive ? i18n.t('task.focusInProgress') : i18n.t('task.pomodoroRemaining', { remaining })}
+          onclick={(e) => { e.stopPropagation(); handleStartPomodoro(); }}
+          disabled={isActive}
+        >
+          <span class="tomato-icon">🍅</span>
+          <span class="pomodoro-count">{remaining}</span>
+        </button>
+      {/if}
     {/if}
 
     <div class="task-content">
