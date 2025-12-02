@@ -80,28 +80,28 @@
   <div class="timer-controls">
     {#if pomodoro.state !== 'idle'}
       {#if pomodoro.isRunning}
-        <button class="control-btn pause" onclick={pausePomodoro} title="暂停">
+        <button class="control-btn pause" onclick={pausePomodoro} title={i18n.t('pomodoro.pause')}>
           <svg viewBox="0 0 24 24" fill="currentColor">
             <rect x="6" y="4" width="4" height="16"></rect>
             <rect x="14" y="4" width="4" height="16"></rect>
           </svg>
         </button>
       {:else}
-        <button class="control-btn play" onclick={resumePomodoro} title="继续">
+        <button class="control-btn play" onclick={resumePomodoro} title={i18n.t('pomodoro.resume')}>
           <svg viewBox="0 0 24 24" fill="currentColor">
             <polygon points="5 3 19 12 5 21 5 3"></polygon>
           </svg>
         </button>
       {/if}
 
-      <button class="control-btn skip" onclick={skipSession} title="跳过">
+      <button class="control-btn skip" onclick={skipSession} title={i18n.t('pomodoro.skip')}>
         <svg viewBox="0 0 24 24" fill="currentColor">
           <polygon points="5 4 15 12 5 20 5 4"></polygon>
           <line x1="19" y1="5" x2="19" y2="19" stroke="currentColor" stroke-width="2"></line>
         </svg>
       </button>
 
-      <button class="control-btn stop" onclick={stopPomodoro} title="放弃">
+      <button class="control-btn stop" onclick={stopPomodoro} title={i18n.t('pomodoro.stop')}>
         <svg viewBox="0 0 24 24" fill="currentColor">
           <rect x="4" y="4" width="16" height="16" rx="2"></rect>
         </svg>

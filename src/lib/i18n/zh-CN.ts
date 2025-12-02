@@ -160,6 +160,12 @@ export default {
     thresholdNotReached: '延后可见',
     startFocus: '开始专注',
     pomodoroProgress: '{completed}/{estimated} 番茄',
+    markComplete: '标记完成',
+    markIncomplete: '标记未完成',
+    focusInProgress: '专注进行中',
+    clickToStartFocus: '点击开始专注',
+    dormantUntil: '休眠至',
+    energyLevel: '能量消耗',
   },
 
   // Pomodoro
@@ -381,6 +387,7 @@ export default {
     backupCreated: '备份已创建',
     taskAdded: '任务已添加到待处理区',
     taskMoved: '任务已移动到 {priority} 区',
+    taskMovedToTrash: '任务已移至回收站',
   },
 
   // Date/Time
