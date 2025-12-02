@@ -28,7 +28,7 @@
 /
 ├── src/                          # Frontend (Svelte/TypeScript)
 │   ├── lib/
-│   │   ├── components/           # Svelte components (21 files)
+│   │   ├── components/           # Svelte components (23 files)
 │   │   ├── stores/               # Svelte 5 runes state management (6 stores)
 │   │   ├── utils/                # Business logic utilities (6 files)
 │   │   ├── types/                # TypeScript type definitions
@@ -61,7 +61,7 @@
 | `TaskCard.svelte` | Individual task display and actions |
 | `TaskForm.svelte` | Quick task input form |
 | `TaskInput.svelte` | Syntax-highlighted task input |
-| `InboxPanel.svelte` | E-zone (inbox) task panel |
+| `InboxPanel.svelte` | F-zone (Idea Pool) task panel |
 | `KanbanView.svelte` | Kanban board view with priority columns |
 | `ListView.svelte` | List view with tasks grouped by priority |
 | `TodayView.svelte` | Today-focused task view with due/overdue tasks |
@@ -77,6 +77,8 @@
 | `FreshStart.svelte` | Stale task cleanup suggestion modal |
 | `TagPicker.svelte` | Tag selection widget |
 | `Confetti.svelte` | Celebration animation |
+| `TaskEditModal.svelte` | Modal for editing existing tasks with form fields |
+| `TrashArchiveModal.svelte` | View trash, completed tasks, and archived tasks |
 
 ### Store Architecture
 
@@ -85,7 +87,7 @@
 | Tasks | `tasks.svelte.ts` | Central task state, CRUD operations, filtering |
 | Settings | `settings.svelte.ts` | App configuration, theme, pomodoro settings |
 | Pomodoro | `pomodoro.svelte.ts` | Timer state, work/break sessions |
-| UI | `ui.svelte.ts` | UI state (modals, search, editing) |
+| UI | `ui.svelte.ts` | UI state (modals, search, task editing, keyboard shortcuts) |
 | Reviews | `reviews.svelte.ts` | Unit review management |
 | Gamification | `gamification.svelte.ts` | Badge/achievement tracking |
 
@@ -155,13 +157,14 @@ import TaskCard from '$lib/components/TaskCard.svelte';
 All types are centralized in `src/lib/types/index.ts`. Key types:
 
 - **Task** - Core task entity with priority, dates, pomodoros, recurrence, threshold dates
-- **Priority** - `'A' | 'B' | 'C' | 'D' | 'E'` (with quotas: 1, 2, 3, 5, Infinity)
+- **Priority** - `'A' | 'B' | 'C' | 'D' | 'E' | 'F'` (with quotas: 1, 2, 3, 4, 5, Infinity)
 - **AppData** - Combined in-memory data structure
 - **ActiveData** / **ArchiveData** / **PomodoroHistoryData** - Separated file structures
 - **Settings** - Application configuration
-- **FilterState** - Current filter criteria
+- **FilterState** - Current filter criteria (includes priority and pomodoro filters)
 - **UnitReview** - Bi-daily unit review data
 - **Badge** / **BadgeId** - Gamification achievement types
+- **PomodoroSession** - Timer session with interruption tracking
 - **ViewMode** - `'kanban' | 'list'` (currently active views)
 
 ### Factory Functions
@@ -182,7 +185,8 @@ createDefaultAppData(): AppData
 ```typescript
 // From types/index.ts
 isThresholdPassed(task: Task): boolean     // Check if threshold date allows visibility
-calculateEZoneAge(task: Task): number      // Days task has been in inbox
+calculateFZoneAge(task: Task): number      // Units task has been in F-zone (Idea Pool)
+calculateEZoneAge(task: Task): number      // Backward compat alias for calculateFZoneAge
 
 // From utils/quota.ts
 countActiveByPriority(tasks: Task[]): Record<Priority, number>
@@ -233,7 +237,7 @@ Task content !A +project @context #tag 🍅3 ~2025-01-15 thr:2025-01-10 rec:1w
 
 | Syntax | Purpose | Example |
 |--------|---------|---------|
-| `!A-E` | Priority | `!A`, `!B`, `!C`, `!D`, `!E` |
+| `!A-F` | Priority | `!A`, `!B`, `!C`, `!D`, `!E`, `!F` |
 | `+name` | Project tag | `+work`, `+personal` |
 | `@name` | Context tag | `@home`, `@office` |
 | `#name` | Custom tag | `#urgent`, `#review` |
@@ -257,11 +261,12 @@ The Highlander Rule applies - only one A-priority task per unit:
 
 | Priority | Quota | Description |
 |----------|-------|-------------|
-| A | 1 | Core challenge (2+ hours deep work) |
-| B | 2 | Important progress |
-| C | 3 | Standard tasks |
-| D | 5 | Quick tasks (<15 min) |
-| E | ∞ | Inbox/ideas |
+| A | 1 | Core challenge (2.5+ hours deep work, 5-12 pomodoros) |
+| B | 2 | Important progress (1.5-3 hours, 3-6 pomodoros) |
+| C | 3 | Standard tasks (1-2.5 hours, 2-5 pomodoros) |
+| D | 4 | Temporary/unplanned tasks (25-75 min, 1-3 pomodoros) |
+| E | 5 | Quick tasks (<15 min, 0-1 pomodoros) |
+| F | ∞ | Idea Pool - collect ideas, unsorted tasks |
 
 Use quota utilities from `src/lib/utils/quota.ts` for validation.
 
@@ -391,6 +396,31 @@ areTaskArraysEqual(a, b); // DnD optimization helper
 - The `persist()` function saves changes to storage after state updates
 - Access store data via `getTasksStore()` which returns reactive getters
 
+### UI Store Functions
+
+The UI store (`src/lib/stores/ui.svelte.ts`) provides:
+
+```typescript
+// Modals
+openModal(name: string, data?: unknown): void
+closeModal(): void
+openEditModal(task: Task): void    // Open task edit modal
+closeEditModal(): void             // Close task edit modal
+
+// Toast notifications
+showToast(message: string, type: 'success' | 'error' | 'info', duration?: number): void
+hideToast(): void
+
+// Sidebar & Search
+toggleSidebar(): void
+toggleSearch(): void
+
+// Immersive mode
+enterImmersiveMode(): void
+exitImmersiveMode(): void
+toggleImmersiveMode(): void
+```
+
 ### File Watcher
 
 - Rust backend watches data files for external changes
@@ -406,6 +436,19 @@ Tauri capabilities (in `src-tauri/capabilities/default.json`):
 - `fs:allow-appdata-read-recursive` - Read from app data
 - `fs:allow-appdata-write-recursive` - Write to app data
 - `notification:default` - System notifications
+
+### Keyboard Shortcuts
+
+Global keyboard shortcuts are handled in `src/lib/stores/ui.svelte.ts`:
+
+| Shortcut | Action |
+|----------|--------|
+| `Cmd/Ctrl + K` | Toggle search |
+| `Cmd/Ctrl + N` | Focus new task input |
+| `Cmd/Ctrl + B` | Toggle sidebar |
+| `Cmd/Ctrl + Shift + F` | Toggle immersive mode |
+| `Space` | Toggle pomodoro (when not in input) |
+| `Escape` | Close modal/search/editing |
 
 ### Theme Support
 
@@ -465,16 +508,19 @@ Theme is stored in settings and applied via CSS custom properties in `app.css`. 
 
 | File | Purpose | Approx Lines |
 |------|---------|--------------|
-| `src/App.svelte` | Root component, layout, routing | ~800 |
-| `src/lib/stores/tasks.svelte.ts` | Central state management | ~520 |
-| `src/lib/utils/storage.ts` | Data persistence layer | ~615 |
+| `src/App.svelte` | Root component, layout, routing | ~720 |
+| `src/lib/stores/tasks.svelte.ts` | Central state management | ~570 |
+| `src/lib/stores/ui.svelte.ts` | UI state, modals, keyboard shortcuts | ~215 |
+| `src/lib/utils/storage.ts` | Data persistence layer | ~610 |
 | `src/lib/utils/parser.ts` | Task input parsing | ~410 |
 | `src/lib/utils/motion.ts` | Animation configs, DnD types | ~190 |
 | `src/lib/utils/quota.ts` | Priority quota utilities | ~160 |
-| `src/lib/types/index.ts` | Type definitions | ~360 |
-| `src/lib/components/Sidebar.svelte` | Navigation and filters | ~690 |
+| `src/lib/types/index.ts` | Type definitions | ~390 |
+| `src/lib/components/Sidebar.svelte` | Navigation and filters | ~1160 |
 | `src/lib/components/ListView.svelte` | List view by priority | ~190 |
 | `src/lib/components/KanbanView.svelte` | Kanban board view | ~200 |
+| `src/lib/components/TaskEditModal.svelte` | Task edit modal with form | ~200 |
+| `src/lib/components/TrashArchiveModal.svelte` | Trash/archive viewer | ~180 |
 | `src/lib/stores/gamification.svelte.ts` | Badge system | ~115 |
 | `src-tauri/src/commands.rs` | Backend IPC handlers | ~395 |
 | `src-tauri/src/watcher.rs` | File system watcher | ~80 |
