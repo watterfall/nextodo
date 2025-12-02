@@ -160,6 +160,7 @@ export default {
     thresholdNotReached: 'Deferred',
     startFocus: 'Start Focus',
     pomodoroProgress: '{completed}/{estimated} pomodoros',
+    pomodoroRemaining: '{remaining} pomodoros remaining',
     markComplete: 'Mark complete',
     markIncomplete: 'Mark incomplete',
     focusInProgress: 'Focus in progress',

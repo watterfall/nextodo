@@ -160,6 +160,7 @@ export default {
     thresholdNotReached: '延后可见',
     startFocus: '开始专注',
     pomodoroProgress: '{completed}/{estimated} 番茄',
+    pomodoroRemaining: '剩余 {remaining} 个番茄钟',
     markComplete: '标记完成',
     markIncomplete: '标记未完成',
     focusInProgress: '专注进行中',
