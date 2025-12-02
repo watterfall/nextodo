@@ -1,15 +1,10 @@
 <script lang="ts">
-  import { getTasksStore, updateTask } from '$lib/stores/tasks.svelte';
+  import { getTasksStore } from '$lib/stores/tasks.svelte';
   import TaskCard from './TaskCard.svelte';
   import InboxPanel from './InboxPanel.svelte';
   import { getI18nStore } from '$lib/i18n';
   import { fade } from 'svelte/transition';
   import type { Task } from '$lib/types';
-  import { dndzone, TRIGGERS, SHADOW_ITEM_MARKER_PROPERTY_NAME } from 'svelte-dnd-action';
-  import { flip } from 'svelte/animate';
-  import { isToday } from '$lib/utils/unitCalc';
-  import { dndConfig, areTaskArraysEqual, type DndConsiderEvent, type DndFinalizeEvent } from '$lib/utils/motion';
-  import { isTauri } from '$lib/utils/storage';
 
   const tasks = getTasksStore();
   const i18n = getI18nStore();
@@ -32,104 +27,9 @@
     };
   }));
 
-  // DnD type for cross-component dragging compatibility
-  const DND_TYPE = 'task-priority-zone';
-
-  // Group tasks by date
-  // We need local state for DnD to work smoothly
-  let columns = $state<Record<string, Task[]>>({});
-  let activeDndColumn = $state<string | null>(null);
-
+  // Get tasks for a specific date
   function getTasksForDate(dateStr: string): Task[] {
     return tasks.tasks.filter(task => !task.completed && task.dueDate === dateStr);
-  }
-
-  // Sync with store (only when not actively dragging)
-  $effect(() => {
-    if (!activeDndColumn) {
-      const newColumns: Record<string, Task[]> = {};
-
-      // Initialize columns
-      weekDays.forEach(day => {
-        newColumns[day.dateStr] = [];
-      });
-
-      // Distribute tasks
-      tasks.tasks.forEach(task => {
-        if (!task.completed && task.dueDate) {
-          // Only if due date matches one of our columns
-          if (newColumns[task.dueDate]) {
-            newColumns[task.dueDate].push(task);
-          }
-        }
-      });
-
-      // Check if update is needed to avoid unnecessary re-renders
-      let needsUpdate = false;
-      for (const day of weekDays) {
-        if (!columns[day.dateStr] || !areTaskArraysEqual(columns[day.dateStr], newColumns[day.dateStr])) {
-          needsUpdate = true;
-          break;
-        }
-      }
-
-      if (needsUpdate) {
-        columns = newColumns;
-      }
-    }
-  });
-
-  function handleDndConsider(dateStr: string, e: DndConsiderEvent) {
-    const { items, info } = e.detail;
-    columns[dateStr] = [...items];
-
-    if (info.trigger === TRIGGERS.DRAG_STARTED) {
-      activeDndColumn = dateStr;
-      // Suspend file watcher when drag starts
-      if (isTauri()) {
-        import('@tauri-apps/api/core').then(({ invoke }) => {
-          invoke('suspend_watcher');
-        });
-      }
-    }
-  }
-
-  async function handleDndFinalize(dateStr: string, e: DndFinalizeEvent) {
-    const { items, info } = e.detail;
-
-    // Filter out shadow placeholders
-    const cleanItems = items.filter(item => !(item as any)[SHADOW_ITEM_MARKER_PROPERTY_NAME]);
-    columns[dateStr] = [...cleanItems];
-
-    try {
-      if (info.trigger === TRIGGERS.DROPPED_INTO_ZONE) {
-        const droppedTask = cleanItems.find(task => task.id === info.id);
-        if (droppedTask) {
-          const oldDateStr = droppedTask.dueDate;
-          // Only update if the due date actually changed
-          if (oldDateStr !== dateStr) {
-            await updateTask(info.id, { dueDate: dateStr });
-            // Refresh both source and target columns
-            if (oldDateStr && columns[oldDateStr]) {
-              columns[oldDateStr] = getTasksForDate(oldDateStr);
-            }
-            columns[dateStr] = getTasksForDate(dateStr);
-          }
-        }
-      } else if (info.trigger === TRIGGERS.DROPPED_OUTSIDE_OF_ANY) {
-        // Revert all columns
-        weekDays.forEach(day => {
-          columns[day.dateStr] = getTasksForDate(day.dateStr);
-        });
-      }
-    } finally {
-      activeDndColumn = null;
-      // Resume file watcher
-      if (isTauri()) {
-        const { invoke } = await import('@tauri-apps/api/core');
-        await invoke('resume_watcher');
-      }
-    }
   }
 </script>
 
@@ -167,27 +67,16 @@
             <span class="day-num">{day.dayNum}</span>
           </div>
           
-          <div
-            class="day-tasks"
-            use:dndzone={{
-              items: columns[day.dateStr] || [],
-              flipDurationMs: dndConfig.flipDurationMs,
-              dropTargetStyle: {},
-              dropTargetClasses: ['day-drop-target'],
-              type: DND_TYPE
-            }}
-            onconsider={(e) => handleDndConsider(day.dateStr, e)}
-            onfinalize={(e) => handleDndFinalize(day.dateStr, e)}
-          >
-            {#each columns[day.dateStr] || [] as task (task.id)}
-              <div animate:flip={{ duration: dndConfig.flipDurationMs }} class="task-wrapper">
+          <div class="day-tasks">
+            {#each getTasksForDate(day.dateStr) as task (task.id)}
+              <div class="task-wrapper">
                 <TaskCard {task} compact showPriority />
               </div>
             {/each}
-            
-            {#if (columns[day.dateStr] || []).length === 0}
+
+            {#if getTasksForDate(day.dateStr).length === 0}
               <div class="empty-slot">
-                <span>空闲</span>
+                <span>{t('zone.empty')}</span>
               </div>
             {/if}
           </div>
@@ -333,12 +222,6 @@
     min-height: 40px;
     border: 1px dashed transparent;
     border-radius: var(--radius-md);
-  }
-
-  /* Drop target style */
-  :global(.day-drop-target) {
-    background: var(--primary-bg) !important;
-    border: 1px dashed var(--primary) !important;
   }
 
   .inbox-toggle {

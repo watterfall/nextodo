@@ -1,4 +1,4 @@
-import type { ViewMode, Priority } from '$lib/types';
+import type { ViewMode, Priority, Task } from '$lib/types';
 
 // UI State
 let sidebarCollapsed = $state(false);
@@ -9,8 +9,7 @@ let toastMessage = $state<string | null>(null);
 let toastType = $state<'success' | 'error' | 'info'>('info');
 let isSearchOpen = $state(false);
 let editingTaskId = $state<string | null>(null);
-let draggedTaskId = $state<string | null>(null);
-let dropTargetPriority = $state<Priority | null>(null);
+let editingTask = $state<Task | null>(null);
 
 // Immersive mode
 let isImmersiveMode = $state(false);
@@ -80,23 +79,18 @@ export function closeSearch(): void {
   isSearchOpen = false;
 }
 
-// Task editing
+// Task editing (inline - deprecated, kept for compatibility)
 export function setEditingTask(taskId: string | null): void {
   editingTaskId = taskId;
 }
 
-// Drag and drop
-export function setDraggedTask(taskId: string | null): void {
-  draggedTaskId = taskId;
+// Task edit modal
+export function openEditModal(task: Task): void {
+  editingTask = task;
 }
 
-export function setDropTarget(priority: Priority | null): void {
-  dropTargetPriority = priority;
-}
-
-export function clearDragState(): void {
-  draggedTaskId = null;
-  dropTargetPriority = null;
+export function closeEditModal(): void {
+  editingTask = null;
 }
 
 // Immersive mode
@@ -158,7 +152,9 @@ export function initKeyboardShortcuts(): void {
 
     // Escape to close modals/search/immersive/editing
     if (e.key === 'Escape') {
-      if (isImmersiveMode) {
+      if (editingTask) {
+        closeEditModal();
+      } else if (isImmersiveMode) {
         exitImmersiveMode();
       } else if (activeModal) {
         closeModal();
@@ -211,8 +207,7 @@ export function getUIStore() {
     get isSearchOpen() { return isSearchOpen; },
     set isSearchOpen(v: boolean) { isSearchOpen = v; },
     get editingTaskId() { return editingTaskId; },
-    get draggedTaskId() { return draggedTaskId; },
-    get dropTargetPriority() { return dropTargetPriority; },
+    get editingTask() { return editingTask; },
     get isImmersiveMode() { return isImmersiveMode; }
   };
 }

@@ -100,6 +100,7 @@ export default {
     projectPlaceholder: '例如: FocusFlow、网站重设计',
     mood: '状态',
     moodPlaceholder: '选择心情状态',
+    contextPlaceholder: '例如: 在家, 办公室',
     moodOptions: {
       challenging: '🔥 有挑战',
       focused: '⚡ 专注',
@@ -129,8 +130,8 @@ export default {
   inbox: {
     title: '灵感池',
     subtitle: '收集想法，稍后整理',
-    hint: '拖拽任务到下方区域或点击快速分类按钮',
-    dragHint: '拖拽到 A/B/C/D 区域进行分类',
+    hint: '点击任务进行编辑和分类',
+    dragHint: '点击编辑移动到 A/B/C/D 区域',
     moveTo: '移动到',
     empty: '灵感池已空',
     emptyHint: '输入框添加新任务，自动进入灵感池',

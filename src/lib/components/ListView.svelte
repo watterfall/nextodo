@@ -1,17 +1,12 @@
 <script lang="ts">
-  import { getTasksStore, changePriority, reorderTask, completeTask, uncompleteTask } from '$lib/stores/tasks.svelte';
+  import { getTasksStore, completeTask, uncompleteTask } from '$lib/stores/tasks.svelte';
   import { getI18nStore } from '$lib/i18n';
   import { slide } from 'svelte/transition';
-  import { flip } from 'svelte/animate';
   import { PRIORITY_CONFIG, type Priority, type Task, isThresholdPassed } from '$lib/types';
-  import { dndzone, TRIGGERS, SHADOW_ITEM_MARKER_PROPERTY_NAME } from 'svelte-dnd-action';
-  import { dndConfig, areTaskArraysEqual, type DndConsiderEvent, type DndFinalizeEvent } from '$lib/utils/motion';
-  import { setDropTarget, clearDragState, getUIStore, setEditingTask, showToast } from '$lib/stores/ui.svelte';
+  import { openEditModal, getUIStore, showToast } from '$lib/stores/ui.svelte';
   import { startPomodoro, getPomodoroStore } from '$lib/stores/pomodoro.svelte';
   import { isOverdue, getRelativeDayLabel, parseISODate } from '$lib/utils/unitCalc';
   import { validatePomodoroEstimate } from '$lib/utils/quota';
-  import { isTauri } from '$lib/utils/storage';
-  import { invoke } from '@tauri-apps/api/core';
 
   const tasks = getTasksStore();
   const ui = getUIStore();
@@ -19,120 +14,11 @@
   const i18n = getI18nStore();
   const t = i18n.t;
 
-  // Shared DnD type for cross-zone dragging
-  const DND_TYPE = 'task-priority-zone';
-
   // Main priorities (A-E with quotas), F is handled separately as Idea Pool
   const mainPriorities: Priority[] = ['A', 'B', 'C', 'D', 'E'];
-  const allPriorities: Priority[] = ['A', 'B', 'C', 'D', 'E', 'F'];
-
-  // DnD state for each priority
-  let dndItemsByPriority = $state<Record<Priority, Task[]>>({
-    A: [], B: [], C: [], D: [], E: [], F: []
-  });
-  let activeDndPriority = $state<Priority | null>(null);
 
   function getTasksForPriority(priority: Priority) {
     return tasks.tasksByPriority[priority].filter(task => !task.completed);
-  }
-
-  // Sync dndItems with actual tasks
-  $effect(() => {
-    if (!activeDndPriority) {
-      const newItems = {
-        A: getTasksForPriority('A'),
-        B: getTasksForPriority('B'),
-        C: getTasksForPriority('C'),
-        D: getTasksForPriority('D'),
-        E: getTasksForPriority('E'),
-        F: getTasksForPriority('F')
-      };
-      let needsUpdate = false;
-      for (const p of allPriorities) {
-        if (!areTaskArraysEqual(dndItemsByPriority[p], newItems[p])) {
-          needsUpdate = true;
-          break;
-        }
-      }
-      if (needsUpdate) {
-        dndItemsByPriority = newItems;
-      }
-    }
-  });
-
-  // DnD handlers
-  function handleDndConsider(priority: Priority) {
-    return async (e: DndConsiderEvent) => {
-      const { items, info } = e.detail;
-      // Clone the items array to ensure reactivity
-      dndItemsByPriority[priority] = [...items];
-
-      if (info.trigger === TRIGGERS.DRAG_STARTED) {
-        activeDndPriority = priority;
-        setDropTarget(priority);
-        // Suspend file watcher when drag starts to prevent race condition
-        if (isTauri()) {
-          await invoke('suspend_watcher');
-        }
-      }
-    };
-  }
-
-  function handleDndFinalize(priority: Priority) {
-    return async (e: DndFinalizeEvent) => {
-      const { items, info } = e.detail;
-      // Filter out shadow items using the correct property access
-      const cleanItems = items.filter(item => !(item as any)[SHADOW_ITEM_MARKER_PROPERTY_NAME]);
-      // 1. Optimistic UI Update
-      dndItemsByPriority[priority] = [...cleanItems];
-
-      try {
-        if (info.trigger === TRIGGERS.DROPPED_INTO_ZONE) {
-          const droppedTask = cleanItems.find(task => task.id === info.id);
-          // Only process if droppedTask exists (this is the target zone)
-          // If droppedTask is undefined, this is the source zone and we should skip processing
-          if (droppedTask) {
-            if (droppedTask.priority !== priority) {
-              // Task came from another zone - change its priority
-              const sourcePriority = droppedTask.priority;
-              const result = await changePriority(info.id, priority);
-              if (!result.success) {
-                // Show error feedback to user
-                showToast(result.error || t('error.quotaExceeded'), 'error');
-                // Revert all zones if failed
-                for (const p of allPriorities) {
-                  dndItemsByPriority[p] = getTasksForPriority(p);
-                }
-              } else {
-                // Update both source and target zones with fresh data from store
-                dndItemsByPriority[sourcePriority] = getTasksForPriority(sourcePriority);
-                dndItemsByPriority[priority] = getTasksForPriority(priority);
-              }
-            } else {
-              // Reorder within zone
-              await reorderTask(priority, cleanItems.map(task => task.id));
-            }
-            // Clear drag state only when we've processed the drop (target zone)
-            activeDndPriority = null;
-            clearDragState();
-          }
-          // If droppedTask is undefined, this is the source zone - don't clear state yet
-        } else if (info.trigger === TRIGGERS.DROPPED_OUTSIDE_OF_ANY) {
-          // Revert all zones
-          for (const p of allPriorities) {
-            dndItemsByPriority[p] = getTasksForPriority(p);
-          }
-          // Clear drag state for cancelled drops
-          activeDndPriority = null;
-          clearDragState();
-        }
-      } finally {
-        // 2. Resume Watcher (Always run this, even on error)
-        if (isTauri()) {
-          await invoke('resume_watcher');
-        }
-      }
-    };
   }
 
   // Task actions
@@ -146,6 +32,10 @@
 
   function handleStartPomodoro(task: Task) {
     startPomodoro(task);
+  }
+
+  function handleEdit(task: Task) {
+    openEditModal(task);
   }
 
   // Helper functions for task display
@@ -178,20 +68,17 @@
   let showIdeaPool = $state(true);
 
   // Idea Pool (F zone) state
-  const ideaPoolTasks = $derived(dndItemsByPriority['F']);
-  const ideaPoolDropTarget = $derived(ui.dropTargetPriority === 'F' || activeDndPriority === 'F');
+  const ideaPoolTasks = $derived(getTasksForPriority('F'));
 </script>
 
 <div class="list-view-container">
   <!-- Main tasks area - clean list style grouped by priority -->
   <div class="list-main" class:expanded={!showIdeaPool}>
     {#each mainPriorities as priority}
-      {@const priorityTasks = dndItemsByPriority[priority]}
-      {@const isDropTarget = ui.dropTargetPriority === priority || activeDndPriority === priority}
+      {@const priorityTasks = getTasksForPriority(priority)}
       {@const config = PRIORITY_CONFIG[priority]}
       <section
         class="priority-section"
-        class:drop-target={isDropTarget}
         class:has-tasks={priorityTasks.length > 0}
         style:--section-color={config.color}
       >
@@ -222,26 +109,16 @@
         </div>
 
         <!-- Task List - Clean horizontal list items -->
-        <div
-          class="task-list"
-          use:dndzone={{
-            items: priorityTasks,
-            flipDurationMs: dndConfig.flipDurationMs,
-            dropTargetStyle: {},
-            dropTargetClasses: ['dnd-drop-target-active'],
-            type: DND_TYPE
-          }}
-          onconsider={handleDndConsider(priority)}
-          onfinalize={handleDndFinalize(priority)}
-        >
+        <div class="task-list">
           {#each priorityTasks as task (task.id)}
             {@const dueLabel = getTaskDueLabel(task)}
             {@const taskOverdue = isTaskOverdue(task)}
             {@const taskDormant = isDormant(task)}
             {@const isActive = pomodoro.activeTaskId === task.id}
             {@const pomodoroCheck = isPomodoroOutOfRange(task)}
+            <!-- svelte-ignore a11y_click_events_have_key_events -->
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
             <div
-              animate:flip={{ duration: dndConfig.flipDurationMs }}
               class="task-row-item"
               class:completed={task.completed}
               class:overdue={taskOverdue && !task.completed}
@@ -249,6 +126,7 @@
               class:active={isActive}
               class:pomodoro-warning={pomodoroCheck.outOfRange}
               style:--priority-color={config.color}
+              ondblclick={() => handleEdit(task)}
             >
               <!-- Left priority border indicator -->
               <div class="priority-indicator"></div>
@@ -296,6 +174,19 @@
                     {/if}
                   </button>
                 {/if}
+
+                <!-- Edit button -->
+                <button
+                  class="edit-btn"
+                  onclick={(e) => { e.stopPropagation(); handleEdit(task); }}
+                  title="编辑任务"
+                  aria-label="编辑任务"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                  </svg>
+                </button>
               </div>
             </div>
           {/each}
@@ -341,7 +232,7 @@
   </div>
 
   <!-- Idea Pool (F-zone) - fixed on right side, toggleable -->
-  <aside class="idea-pool-panel" class:collapsed={!showIdeaPool} class:drop-target={ideaPoolDropTarget}>
+  <aside class="idea-pool-panel" class:collapsed={!showIdeaPool}>
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <div class="pool-header" onclick={() => showIdeaPool = !showIdeaPool}>
@@ -356,26 +247,16 @@
     </div>
 
     {#if showIdeaPool}
-      <div
-        class="pool-tasks"
-        transition:slide
-        use:dndzone={{
-          items: ideaPoolTasks,
-          flipDurationMs: dndConfig.flipDurationMs,
-          dropTargetStyle: {},
-          dropTargetClasses: ['dnd-drop-target-active'],
-          type: DND_TYPE
-        }}
-        onconsider={handleDndConsider('F')}
-        onfinalize={handleDndFinalize('F')}
-      >
+      <div class="pool-tasks" transition:slide>
         {#each ideaPoolTasks as task (task.id)}
           {@const dueLabel = getTaskDueLabel(task)}
           {@const taskOverdue = isTaskOverdue(task)}
+          <!-- svelte-ignore a11y_click_events_have_key_events -->
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
           <div
-            animate:flip={{ duration: dndConfig.flipDurationMs }}
             class="pool-task-row"
             style:--priority-color={PRIORITY_CONFIG.F.color}
+            ondblclick={() => handleEdit(task)}
           >
             <button
               class="task-checkbox"
@@ -398,6 +279,18 @@
               {#if task.pomodoros.estimated > 0}
                 <span class="pomodoro-badge">🍅 {task.pomodoros.estimated}</span>
               {/if}
+              <!-- Edit button -->
+              <button
+                class="edit-btn"
+                onclick={(e) => { e.stopPropagation(); handleEdit(task); }}
+                title="编辑任务"
+                aria-label="编辑任务"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                </svg>
+              </button>
             </div>
           </div>
         {/each}
@@ -432,11 +325,6 @@
     display: flex;
     flex-direction: column;
     transition: all var(--transition-normal);
-  }
-
-  .priority-section.drop-target {
-    background: var(--hover-bg);
-    border-radius: var(--radius-md);
   }
 
   /* Section Header - Just the priority badge */
@@ -648,31 +536,16 @@
     background: var(--card-bg);
     border-radius: var(--radius-md);
     transition: all var(--transition-fast);
-    cursor: grab;
+    cursor: pointer;
     position: relative;
-    user-select: none;
-    -webkit-user-select: none;
-    touch-action: manipulation;
   }
 
   .task-row-item:hover {
     background: var(--card-hover-bg);
   }
 
-  .task-row-item:active {
-    cursor: grabbing;
-  }
-
-  /* DnD active states - from svelte-dnd-action */
-  :global(.task-row-item[data-is-dnd-shadow-item]) {
-    opacity: 0.5;
-    background: var(--primary-bg);
-    border: 2px dashed var(--primary);
-  }
-
-  :global(.dnd-drop-target-active) {
-    background: var(--hover-bg);
-    border-radius: var(--radius-md);
+  .task-row-item:hover .edit-btn {
+    opacity: 1;
   }
 
   .task-row-item.active {
@@ -709,7 +582,6 @@
     width: 3px;
     background: var(--priority-color);
     border-radius: 2px;
-    pointer-events: none; /* Prevent interference with drag */
   }
 
   /* Checkbox - Circular style like sleek */
@@ -841,6 +713,33 @@
     margin-left: 2px;
   }
 
+  /* Edit button */
+  .edit-btn {
+    width: 24px;
+    height: 24px;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all var(--transition-fast);
+    padding: 0;
+    opacity: 0;
+  }
+
+  .edit-btn:hover {
+    background: var(--primary-bg);
+    color: var(--primary);
+  }
+
+  .edit-btn svg {
+    width: 14px;
+    height: 14px;
+  }
+
   @keyframes pulse {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.7; }
@@ -853,16 +752,6 @@
     font-weight: 600;
     color: white;
     border-radius: var(--radius-sm);
-  }
-
-  /* Empty state hint */
-  .empty-hint {
-    padding: 16px 24px;
-    font-size: 12px;
-    color: var(--text-muted);
-    font-style: italic;
-    text-align: center;
-    opacity: 0.6;
   }
 
   /* Completed Section */
@@ -886,11 +775,6 @@
 
   .idea-pool-panel.collapsed {
     width: 52px;
-  }
-
-  .idea-pool-panel.drop-target {
-    border-color: var(--primary);
-    box-shadow: 0 0 0 2px var(--primary);
   }
 
   .pool-header {
@@ -967,25 +851,15 @@
     background: var(--bg-secondary);
     border-radius: var(--radius-md);
     transition: all var(--transition-fast);
-    cursor: grab;
-    user-select: none;
-    -webkit-user-select: none;
-    touch-action: manipulation;
+    cursor: pointer;
   }
 
   .pool-task-row:hover {
     background: var(--hover-bg);
   }
 
-  .pool-task-row:active {
-    cursor: grabbing;
-  }
-
-  /* DnD shadow item for pool */
-  :global(.pool-task-row[data-is-dnd-shadow-item]) {
-    opacity: 0.5;
-    background: var(--primary-bg);
-    border: 2px dashed var(--primary);
+  .pool-task-row:hover .edit-btn {
+    opacity: 1;
   }
 
   .pool-task-row .task-checkbox {
@@ -1006,14 +880,6 @@
   .pool-task-row .pomodoro-badge {
     padding: 2px 6px;
     font-size: 10px;
-  }
-
-  .pool-empty {
-    text-align: center;
-    padding: 24px;
-    color: var(--text-muted);
-    font-size: 13px;
-    font-style: italic;
   }
 
   /* Responsive */
@@ -1084,4 +950,3 @@
     }
   }
 </style>
-
