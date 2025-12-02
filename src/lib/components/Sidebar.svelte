@@ -192,6 +192,22 @@
   $effect(() => {
     selectedPriority = tasks.filter.priority ?? null;
   });
+
+  // Helper to extract emoji from string (for minimal display)
+  const emojiRegex = /[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu;
+
+  function extractEmoji(text: string): string | null {
+    const match = text.match(emojiRegex);
+    return match ? match.join('') : null;
+  }
+
+  function getDisplayText(text: string): { display: string; isEmoji: boolean } {
+    const emoji = extractEmoji(text);
+    if (emoji && emoji.length > 0) {
+      return { display: emoji, isEmoji: true };
+    }
+    return { display: text, isEmoji: false };
+  }
 </script>
 
 <aside class="sidebar" class:collapsed={ui.sidebarCollapsed}>
@@ -280,12 +296,15 @@
             <div class="badge-group tag-badges">
               {#each allProjects as project}
                 {@const count = getProjectCount(project)}
+                {@const displayInfo = getDisplayText(project)}
                 <button
                   class="tag-badge-btn project"
                   class:active={tasks.filter.project === project}
+                  class:emoji-only={displayInfo.isEmoji}
                   onclick={() => handleProjectFilter(project)}
+                  title={project}
                 >
-                  <span class="badge-text">{project}</span>
+                  <span class="badge-text">{displayInfo.display}</span>
                   {#if count > 0}
                     <span class="badge-sup">{count}</span>
                   {/if}
@@ -309,12 +328,15 @@
             <div class="badge-group tag-badges">
               {#each allContexts as context}
                 {@const count = getContextCount(context)}
+                {@const displayInfo = getDisplayText(context)}
                 <button
                   class="tag-badge-btn context"
                   class:active={tasks.filter.context === context}
+                  class:emoji-only={displayInfo.isEmoji}
                   onclick={() => handleContextFilter(context)}
+                  title={context}
                 >
-                  <span class="badge-text">{context}</span>
+                  <span class="badge-text">{displayInfo.display}</span>
                   {#if count > 0}
                     <span class="badge-sup">{count}</span>
                   {/if}
@@ -338,12 +360,15 @@
             <div class="badge-group tag-badges">
               {#each allTags as tag}
                 {@const count = getTagCount(tag)}
+                {@const displayInfo = getDisplayText(tag)}
                 <button
                   class="tag-badge-btn tag"
                   class:active={tasks.filter.tag === tag}
+                  class:emoji-only={displayInfo.isEmoji}
                   onclick={() => handleTagFilter(tag)}
+                  title={tag}
                 >
-                  <span class="badge-text">{tag}</span>
+                  <span class="badge-text">{displayInfo.display}</span>
                   {#if count > 0}
                     <span class="badge-sup">{count}</span>
                   {/if}
@@ -1154,5 +1179,24 @@
 
   .tag-badge-btn.tag .badge-sup {
     background: #6ca88c;
+  }
+
+  /* Emoji-only display mode - compact square badges */
+  .tag-badge-btn.emoji-only {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    justify-content: center;
+    font-size: 16px;
+  }
+
+  .tag-badge-btn.emoji-only .badge-text {
+    font-size: 16px;
+    line-height: 1;
+  }
+
+  .tag-badge-btn.emoji-only .badge-sup {
+    top: -6px;
+    right: -6px;
   }
 </style>
