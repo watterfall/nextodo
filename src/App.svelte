@@ -13,6 +13,7 @@
   import ImmersivePomodoro from '$lib/components/ImmersivePomodoro.svelte';
   import BadgesModal from '$lib/components/BadgesModal.svelte';
   import TrashArchiveModal from '$lib/components/TrashArchiveModal.svelte';
+  import TaskEditModal from '$lib/components/TaskEditModal.svelte';
 
   import {
     initializeData,
@@ -349,6 +350,11 @@
   <!-- Trash/Archive Modal -->
   {#if isTrashOpen}
     <TrashArchiveModal onClose={() => isTrashOpen = false} />
+  {/if}
+
+  <!-- Task Edit Modal -->
+  {#if ui.editingTask}
+    <TaskEditModal task={ui.editingTask} />
   {/if}
 
   <!-- Review Modal -->

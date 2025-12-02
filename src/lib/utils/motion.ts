@@ -3,30 +3,6 @@
  * Provides shared spring configs, durations, and easing curves for consistent animations
  */
 
-import type { Task } from '$lib/types';
-
-// Type definitions for svelte-dnd-action events
-export interface DndConsiderDetail<T = Task> {
-  items: T[];
-  info: {
-    trigger: string;
-    id?: string;
-    source?: string;
-  };
-}
-
-export interface DndFinalizeDetail<T = Task> {
-  items: T[];
-  info: {
-    trigger: string;
-    id: string;
-    source: string;
-  };
-}
-
-export type DndConsiderEvent<T = Task> = CustomEvent<DndConsiderDetail<T>>;
-export type DndFinalizeEvent<T = Task> = CustomEvent<DndFinalizeDetail<T>>;
-
 // Spring configurations for different animation types
 export const springs = {
   // Snappy - for quick interactions like buttons
@@ -36,9 +12,7 @@ export const springs = {
   // Bouncy - for playful animations like checkmarks
   bouncy: { stiffness: 500, damping: 20 },
   // Gentle - for subtle movements
-  gentle: { stiffness: 200, damping: 20 },
-  // Drag - optimized for drag operations
-  drag: { stiffness: 350, damping: 35 }
+  gentle: { stiffness: 200, damping: 20 }
 } as const;
 
 // Duration presets in milliseconds
@@ -69,31 +43,6 @@ export const flipDefaults = {
   duration: 250,
   easing: easings.smoothOut
 };
-
-// DnD-specific configurations for svelte-dnd-action
-export const dndConfig = {
-  // Duration for the flip animation when items reorder
-  flipDurationMs: 200,
-  // Drop target animation duration
-  dropTargetAnimationMs: 150,
-  // Drag preview opacity
-  dragPreviewOpacity: 0.9,
-  // Drop zone highlight scale
-  dropZoneHighlightScale: 1.02,
-  // Center dragged item on cursor for better UX
-  centreDraggedOnCursor: true,
-  // Morphing duration for smoother transitions
-  morphDisabled: false,
-  // Enable transform drag to reduce layout thrashing
-  transformDraggedElement: (el: HTMLElement | undefined) => {
-    if (el) {
-      el.style.boxShadow = '0 8px 24px rgba(0, 0, 0, 0.25)';
-      el.style.transform = 'scale(1.02) rotate(1deg)';
-      el.style.cursor = 'grabbing';
-      el.style.zIndex = '9999';
-    }
-  }
-} as const;
 
 // CSS transition strings for common animations
 export const transitions = {
@@ -140,23 +89,6 @@ export const focusDimming = {
   transition: `all ${durations.slow}ms ${easings.standard}`
 } as const;
 
-// Drop zone highlight animation
-export const dropZoneHighlight = {
-  idle: {
-    borderStyle: 'dashed',
-    borderColor: 'var(--border-color)',
-    background: 'transparent',
-    transform: 'scale(1)'
-  },
-  active: {
-    borderStyle: 'solid',
-    borderColor: 'var(--zone-color)',
-    background: 'var(--zone-bg)',
-    transform: 'scale(1.01)',
-    boxShadow: '0 0 0 2px var(--zone-color)'
-  }
-} as const;
-
 // Glassmorphism CSS values
 export const glassmorphism = {
   // Light glass effect
@@ -193,15 +125,4 @@ export function createTransition(
 // Helper to generate staggered delay for list items
 export function staggerDelay(index: number, baseDelay = 30): number {
   return index * baseDelay;
-}
-
-// Helper for shallow array comparison by ID and priority (for DnD optimization)
-// Compares both ID and priority to ensure proper state sync after priority changes
-export function areTaskArraysEqual(a: Task[], b: Task[]): boolean {
-  if (a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i++) {
-    // Compare both id and priority to detect stale task objects
-    if (a[i].id !== b[i].id || a[i].priority !== b[i].priority) return false;
-  }
-  return true;
 }

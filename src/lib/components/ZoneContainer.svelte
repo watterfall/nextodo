@@ -2,18 +2,11 @@
   import type { Task, Priority } from '$lib/types';
   import { PRIORITY_CONFIG } from '$lib/types';
   import TaskCard from './TaskCard.svelte';
-  import { getUIStore, setDropTarget, clearDragState, showToast } from '$lib/stores/ui.svelte';
-  import { changePriority, getTasksStore, reorderTask } from '$lib/stores/tasks.svelte';
+  import { getUIStore } from '$lib/stores/ui.svelte';
+  import { getTasksStore } from '$lib/stores/tasks.svelte';
   import { getPomodoroStore } from '$lib/stores/pomodoro.svelte';
   import { countActiveByPriority } from '$lib/utils/quota';
   import { getI18nStore } from '$lib/i18n';
-  import { dndzone, TRIGGERS, SHADOW_ITEM_MARKER_PROPERTY_NAME } from 'svelte-dnd-action';
-  import { flip } from 'svelte/animate';
-  import { dndConfig, areTaskArraysEqual, type DndConsiderEvent, type DndFinalizeEvent } from '$lib/utils/motion';
-  import { isTauri } from '$lib/utils/storage';
-
-  // Shared DnD type for cross-zone dragging
-  const DND_TYPE = 'task-priority-zone';
 
   interface Props {
     priority: Priority;
@@ -30,9 +23,7 @@
   const ui = getUIStore();
   const tasksStore = getTasksStore();
 
-  let isDropTarget = $derived(ui.dropTargetPriority === priority);
   let showCompleted = $state(false);
-  let isDndActive = $state(false);
 
   const counts = $derived(countActiveByPriority(tasksStore.tasks));
   const remaining = $derived(config.quota === Infinity ? Infinity : config.quota - counts[priority]);
@@ -46,115 +37,18 @@
   let activeTasks = $derived(tasks.filter(task => !task.completed));
   let completedTasks = $derived(tasks.filter(task => task.completed));
 
-  // DnD items - need to be reactive and include shadow marker handling
-  let dndItems = $state<Task[]>([]);
-
-  // Keep dndItems in sync with activeTasks (with shallow comparison to avoid unnecessary updates)
-  $effect(() => {
-    // Only update if not currently dragging and arrays are different
-    if (!isDndActive && !areTaskArraysEqual(dndItems, activeTasks)) {
-      dndItems = [...activeTasks];
-    }
-  });
-
   // Get tooltip text for priority
   const tooltipText = $derived(t(`priority.tooltip.${priority}`));
-
-  // Handle DnD events from svelte-dnd-action
-  function handleDndConsider(e: DndConsiderEvent) {
-    const { items, info } = e.detail;
-    dndItems = items;
-
-    if (info.trigger === TRIGGERS.DRAG_STARTED) {
-      isDndActive = true;
-      setDropTarget(priority);
-      // Suspend file watcher
-      if (isTauri()) {
-        import('@tauri-apps/api/core').then(({ invoke }) => {
-          invoke('suspend_watcher');
-        });
-      }
-    }
-  }
-
-  async function handleDndFinalize(e: DndFinalizeEvent) {
-    const { items, info } = e.detail;
-
-    // Filter out shadow placeholders
-    const cleanItems = items.filter(item => !item[SHADOW_ITEM_MARKER_PROPERTY_NAME as keyof Task]);
-    dndItems = cleanItems;
-
-    try {
-      if (info.trigger === TRIGGERS.DROPPED_INTO_ZONE) {
-        // Item was dropped into this zone
-        const droppedTask = cleanItems.find(task => task.id === info.id);
-        if (droppedTask && droppedTask.priority !== priority) {
-          // Change priority for items from other zones
-          const result = await changePriority(info.id, priority);
-          if (!result.success) {
-            // Show error feedback to user
-            showToast(result.error || t('error.quotaExceeded'), 'error');
-            // Revert on failure
-            dndItems = [...activeTasks];
-          } else {
-            // Refresh with fresh data from store
-            dndItems = [...activeTasks];
-          }
-        } else {
-          // Reorder within same zone
-          const newOrder = cleanItems.map(task => task.id);
-          await reorderTask(priority, newOrder);
-        }
-      } else if (info.trigger === TRIGGERS.DROPPED_OUTSIDE_OF_ANY) {
-        // Reset if dropped outside
-        dndItems = [...activeTasks];
-      }
-    } finally {
-      isDndActive = false;
-      clearDragState();
-      // Resume file watcher
-      if (isTauri()) {
-        const { invoke } = await import('@tauri-apps/api/core');
-        await invoke('resume_watcher');
-      }
-    }
-  }
-
-  // Legacy drag handlers for fallback
-  function handleDragOver(e: DragEvent) {
-    e.preventDefault();
-    e.dataTransfer!.dropEffect = 'move';
-    setDropTarget(priority);
-  }
-
-  function handleDragLeave() {
-    clearDragState();
-  }
-
-  function handleDrop(e: DragEvent) {
-    e.preventDefault();
-    const taskId = e.dataTransfer!.getData('text/plain');
-
-    if (taskId && taskId !== ui.draggedTaskId) {
-      changePriority(taskId, priority);
-    }
-
-    clearDragState();
-  }
 </script>
 
 <div
   class="zone-container zone-{priority.toLowerCase()}"
-  class:drop-target={isDropTarget || isDndActive}
   class:is-priority-a={priority === 'A'}
   class:is-full={isFull}
   class:focus-dimmed={isFocusMode && !hasActiveTask}
   style:--zone-color={config.color}
   style:--zone-bg={config.bgColor}
   style:--zone-border={config.borderColor}
-  ondragover={handleDragOver}
-  ondragleave={handleDragLeave}
-  ondrop={handleDrop}
   role="region"
   aria-label="{config.name}"
 >
@@ -176,34 +70,21 @@
   </div>
 
   <div class="zone-tasks">
-    {#if dndItems.length > 0 || activeTasks.length > 0}
-      <div
-        class="tasks-grid"
-        class:compact={priority === 'D'}
-        use:dndzone={{
-          items: dndItems,
-          flipDurationMs: dndConfig.flipDurationMs,
-          dropTargetStyle: {},
-          dropTargetClasses: ['dnd-drop-target-active'],
-          dragDisabled: isFocusMode && !hasActiveTask,
-          type: DND_TYPE
-        }}
-        onconsider={handleDndConsider}
-        onfinalize={handleDndFinalize}
-      >
-        {#each dndItems as task (task.id)}
-          <div animate:flip={{ duration: dndConfig.flipDurationMs }} class="task-item-wrapper">
+    {#if activeTasks.length > 0}
+      <div class="tasks-grid" class:compact={priority === 'D'}>
+        {#each activeTasks as task (task.id)}
+          <div class="task-item-wrapper">
             <TaskCard {task} compact={priority === 'D'} />
           </div>
         {/each}
       </div>
     {:else}
-      <div class="empty-zone" class:very-subtle={!isDropTarget}>
+      <div class="empty-zone very-subtle">
         <span class="empty-text">
           {#if isFull}
             {t('zone.full')}
           {:else}
-            {t('zone.dropHere')}
+            {t('zone.empty')}
           {/if}
         </span>
       </div>

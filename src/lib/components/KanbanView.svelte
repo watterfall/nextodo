@@ -2,18 +2,13 @@
   import type { Task, Priority } from '$lib/types';
   import { PRIORITY_CONFIG } from '$lib/types';
   import TaskCard from './TaskCard.svelte';
-  import { getTasksStore, changePriority, reorderTask } from '$lib/stores/tasks.svelte';
+  import { getTasksStore } from '$lib/stores/tasks.svelte';
   import { getPomodoroStore } from '$lib/stores/pomodoro.svelte';
-  import { setDropTarget, clearDragState, getUIStore, showToast } from '$lib/stores/ui.svelte';
+  import { getUIStore, openEditModal } from '$lib/stores/ui.svelte';
   import { countActiveByPriority } from '$lib/utils/quota';
   import { getI18nStore } from '$lib/i18n';
-  import { dndzone, TRIGGERS, SHADOW_ITEM_MARKER_PROPERTY_NAME } from 'svelte-dnd-action';
-  import { flip } from 'svelte/animate';
   import { slide } from 'svelte/transition';
-  import { dndConfig, areTaskArraysEqual, type DndConsiderEvent, type DndFinalizeEvent } from '$lib/utils/motion';
-  import { onMount, tick } from 'svelte';
-  import { isTauri } from '$lib/utils/storage';
-  import { invoke } from '@tauri-apps/api/core';
+  import { tick } from 'svelte';
 
   const tasks = getTasksStore();
   const pomodoro = getPomodoroStore();
@@ -26,22 +21,12 @@
   const priorities: Priority[] = ['A', 'B', 'C', 'D', 'E', 'F'];
   const counts = $derived(countActiveByPriority(tasks.tasks));
 
-  // Shared DnD type for cross-zone dragging
-  const DND_TYPE = 'task-priority-zone';
-
   // Focus mode check
   const isFocusMode = $derived(pomodoro.state === 'work' && pomodoro.activeTaskId !== null);
 
   // Idea Pool (F zone) derived values
-  const ideaPoolTasks = $derived(dndItemsByPriority['F']);
-  const ideaPoolDropTarget = $derived(ui.dropTargetPriority === 'F' || activeDndColumn === 'F');
+  const ideaPoolTasks = $derived(getTasksForPriority('F'));
   const ideaPoolDimmed = $derived(isFocusMode && !hasActiveTaskInColumn('F'));
-
-  // DnD state for each column
-  let dndItemsByPriority = $state<Record<Priority, Task[]>>({
-    A: [], B: [], C: [], D: [], E: [], F: []
-  });
-  let activeDndColumn = $state<Priority | null>(null);
 
   // Keyboard navigation state
   let focusedPriority = $state<Priority | null>(null);
@@ -63,131 +48,10 @@
     return tasks.tasksByPriority[priority].some(task => task.id === pomodoro.activeTaskId);
   }
 
-  // Sync dndItems with actual tasks for each priority (with shallow comparison)
-  $effect(() => {
-    if (!activeDndColumn) {
-      const newItems = {
-        A: getTasksForPriority('A'),
-        B: getTasksForPriority('B'),
-        C: getTasksForPriority('C'),
-        D: getTasksForPriority('D'),
-        E: getTasksForPriority('E'),
-        F: getTasksForPriority('F')
-      };
-      // Only update if any priority's tasks changed
-      let needsUpdate = false;
-      for (const p of priorities) {
-        if (!areTaskArraysEqual(dndItemsByPriority[p], newItems[p])) {
-          needsUpdate = true;
-          break;
-        }
-      }
-      if (needsUpdate) {
-        dndItemsByPriority = newItems;
-      }
-    }
-  });
-
-  // DnD handlers
-  function handleDndConsider(priority: Priority) {
-    return async (e: DndConsiderEvent) => {
-      const { items, info } = e.detail;
-      // Clone the items array to ensure reactivity
-      dndItemsByPriority[priority] = [...items];
-
-      if (info.trigger === TRIGGERS.DRAG_STARTED) {
-        activeDndColumn = priority;
-        setDropTarget(priority);
-        // Suspend file watcher when drag starts to prevent race condition
-        if (isTauri()) {
-          await invoke('suspend_watcher');
-        }
-      }
-    };
-  }
-
-  function handleDndFinalize(priority: Priority) {
-    return async (e: DndFinalizeEvent) => {
-      const { items, info } = e.detail;
-
-      // Filter out shadow placeholders using correct property access
-      const cleanItems = items.filter(item => !(item as any)[SHADOW_ITEM_MARKER_PROPERTY_NAME]);
-      // 1. Optimistic UI Update
-      dndItemsByPriority[priority] = [...cleanItems];
-
-      try {
-        if (info.trigger === TRIGGERS.DROPPED_INTO_ZONE) {
-          const droppedTask = cleanItems.find(task => task.id === info.id);
-          // Only process if droppedTask exists (this is the target zone)
-          // If droppedTask is undefined, this is the source zone and we should skip processing
-          if (droppedTask) {
-            if (droppedTask.priority !== priority) {
-              // Item came from another column - change its priority
-              const sourcePriority = droppedTask.priority;
-              const result = await changePriority(info.id, priority);
-              if (!result.success) {
-                // Show error feedback to user
-                showToast(result.error || t('error.quotaExceeded'), 'error');
-                // Revert all zones if failed
-                for (const p of priorities) {
-                  dndItemsByPriority[p] = getTasksForPriority(p);
-                }
-              } else {
-                // Update both source and target zones with fresh data from store
-                dndItemsByPriority[sourcePriority] = getTasksForPriority(sourcePriority);
-                dndItemsByPriority[priority] = getTasksForPriority(priority);
-              }
-            } else {
-              // Reorder within column
-              await reorderTask(priority, cleanItems.map(task => task.id));
-            }
-            // Clear drag state only when we've processed the drop (target zone)
-            activeDndColumn = null;
-            clearDragState();
-          }
-          // If droppedTask is undefined, this is the source zone - don't clear state yet
-        } else if (info.trigger === TRIGGERS.DROPPED_OUTSIDE_OF_ANY) {
-          // Revert all zones
-          for (const p of priorities) {
-            dndItemsByPriority[p] = getTasksForPriority(p);
-          }
-          // Clear drag state for cancelled drops
-          activeDndColumn = null;
-          clearDragState();
-        }
-      } finally {
-        // 2. Resume Watcher (Always run this, even on error)
-        if (isTauri()) {
-          await invoke('resume_watcher');
-        }
-      }
-    };
-  }
-
-  // Legacy drag handlers for fallback
-  function handleDragOver(e: DragEvent, priority: Priority) {
-    e.preventDefault();
-    e.dataTransfer!.dropEffect = 'move';
-    setDropTarget(priority);
-  }
-
-  function handleDragLeave() {
-    clearDragState();
-  }
-
-  function handleDrop(e: DragEvent, priority: Priority) {
-    e.preventDefault();
-    const taskId = e.dataTransfer!.getData('text/plain');
-    if (taskId) {
-      changePriority(taskId, priority);
-    }
-    clearDragState();
-  }
-
   // Keyboard Navigation
   function handleKeyDown(e: KeyboardEvent) {
     // Only handle if no modal is open and not editing
-    if (ui.editingTaskId || document.querySelector('.modal-overlay')) return;
+    if (ui.editingTaskId || ui.editingTask || document.querySelector('.modal-overlay')) return;
 
     // Start navigation with arrow keys if nothing focused
     if (!focusedPriority && (e.key === 'ArrowDown' || e.key === 'ArrowRight')) {
@@ -200,7 +64,7 @@
 
     if (!focusedPriority) return;
 
-    const currentTasks = dndItemsByPriority[focusedPriority];
+    const currentTasks = getTasksForPriority(focusedPriority);
     const priorityIndex = priorities.indexOf(focusedPriority);
 
     switch (e.key) {
@@ -227,7 +91,7 @@
         e.preventDefault();
         if (priorityIndex < priorities.length - 1) {
           focusedPriority = priorities[priorityIndex + 1];
-          const newTasks = dndItemsByPriority[focusedPriority];
+          const newTasks = getTasksForPriority(focusedPriority);
           focusedTaskIndex = Math.min(focusedTaskIndex, Math.max(0, newTasks.length - 1));
           if (newTasks.length === 0) focusedTaskIndex = -1;
           updateFocus();
@@ -239,7 +103,7 @@
         e.preventDefault();
         if (priorityIndex > 0) {
           focusedPriority = priorities[priorityIndex - 1];
-          const newTasks = dndItemsByPriority[focusedPriority];
+          const newTasks = getTasksForPriority(focusedPriority);
           focusedTaskIndex = Math.min(focusedTaskIndex, Math.max(0, newTasks.length - 1));
           if (newTasks.length === 0) focusedTaskIndex = -1;
           updateFocus();
@@ -249,9 +113,10 @@
       case 'Enter':
         e.preventDefault();
         if (focusedPriority && focusedTaskIndex >= 0) {
-          const task = dndItemsByPriority[focusedPriority][focusedTaskIndex];
+          const task = getTasksForPriority(focusedPriority)[focusedTaskIndex];
           if (task) {
-            // Edit task or start pomodoro
+            // Open edit modal for the task
+            openEditModal(task);
           }
         }
         break;
@@ -269,7 +134,7 @@
 
   function updateFocus() {
     if (focusedPriority && focusedTaskIndex >= 0) {
-      const task = dndItemsByPriority[focusedPriority][focusedTaskIndex];
+      const task = getTasksForPriority(focusedPriority)[focusedTaskIndex];
       if (task) {
         focusedTaskId = task.id;
         tick().then(() => {
@@ -304,21 +169,16 @@
   <div class="kanban-main" class:expanded={!showQuickAction}>
     {#each mainPriorities as priority}
       {@const config = PRIORITY_CONFIG[priority]}
-      {@const activeTasks = dndItemsByPriority[priority]}
+      {@const activeTasks = getTasksForPriority(priority)}
       {@const completedTasks = getCompletedForPriority(priority)}
-      {@const isDropTarget = ui.dropTargetPriority === priority || activeDndColumn === priority}
       {@const isFull = counts[priority] >= config.quota}
       {@const isDimmed = isFocusMode && !hasActiveTaskInColumn(priority)}
 
       <div
         class="priority-column"
-        class:drop-target={isDropTarget}
         class:is-full={isFull}
         class:focus-dimmed={isDimmed}
         style:--card-color={config.color}
-        ondragover={(e) => handleDragOver(e, priority)}
-        ondragleave={handleDragLeave}
-        ondrop={(e) => handleDrop(e, priority)}
         role="region"
         aria-label={t(`priority.${priority}`)}
       >
@@ -328,22 +188,9 @@
           <span class="column-count">{counts[priority]}</span>
         </div>
 
-        <div
-          class="column-tasks"
-          use:dndzone={{
-            items: activeTasks,
-            flipDurationMs: dndConfig.flipDurationMs,
-            dropTargetStyle: {},
-            dropTargetClasses: ['dnd-drop-target-active'],
-            dragDisabled: isDimmed,
-            type: DND_TYPE
-          }}
-          onconsider={handleDndConsider(priority)}
-          onfinalize={handleDndFinalize(priority)}
-        >
+        <div class="column-tasks">
           {#each activeTasks as task (task.id)}
             <div
-              animate:flip={{ duration: dndConfig.flipDurationMs }}
               class="task-item-wrapper"
               id={`task-${task.id}`}
               tabindex={focusedTaskId === task.id ? 0 : -1}
@@ -379,11 +226,7 @@
   <aside
     class="idea-pool-panel"
     class:collapsed={!showQuickAction}
-    class:drop-target={ideaPoolDropTarget}
     class:focus-dimmed={ideaPoolDimmed}
-    ondragover={(e) => handleDragOver(e, 'F')}
-    ondragleave={handleDragLeave}
-    ondrop={(e) => handleDrop(e, 'F')}
   >
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div class="pool-header" onclick={() => showQuickAction = !showQuickAction} title={t('priority.tooltip.F')}>
@@ -398,22 +241,9 @@
     </div>
 
     {#if showQuickAction}
-      <div
-        class="pool-tasks"
-        transition:slide
-        use:dndzone={{
-          items: ideaPoolTasks,
-          flipDurationMs: dndConfig.flipDurationMs,
-          dropTargetStyle: {},
-          dropTargetClasses: ['dnd-drop-target-active'],
-          dragDisabled: ideaPoolDimmed,
-          type: DND_TYPE
-        }}
-        onconsider={handleDndConsider('F')}
-        onfinalize={handleDndFinalize('F')}
-      >
+      <div class="pool-tasks" transition:slide>
         {#each ideaPoolTasks as task (task.id)}
-          <div animate:flip={{ duration: dndConfig.flipDurationMs }} class="pool-task-item">
+          <div class="pool-task-item">
             <TaskCard {task} compact />
           </div>
         {/each}

@@ -1,8 +1,8 @@
 <script lang="ts">
   import type { Task, Priority } from '$lib/types';
   import { PRIORITY_CONFIG, isThresholdPassed } from '$lib/types';
-  import { completeTask, uncompleteTask, deleteTask, updateTask, changePriority } from '$lib/stores/tasks.svelte';
-  import { setEditingTask, getUIStore, showToast, setDraggedTask, clearDragState } from '$lib/stores/ui.svelte';
+  import { completeTask, uncompleteTask, deleteTask, changePriority } from '$lib/stores/tasks.svelte';
+  import { openEditModal, getUIStore, showToast } from '$lib/stores/ui.svelte';
   import { startPomodoro, getPomodoroStore } from '$lib/stores/pomodoro.svelte';
   import { formatRecurrence } from '$lib/utils/recurrence';
   import { isOverdue, getRelativeDayLabel, parseISODate } from '$lib/utils/unitCalc';
@@ -19,12 +19,9 @@
   const ui = getUIStore();
   const pomodoro = getPomodoroStore();
 
-  let isEditing = $derived(ui.editingTaskId === task.id);
   let isActive = $derived(pomodoro.activeTaskId === task.id);
-  let isDragging = $derived(ui.draggedTaskId === task.id);
   let isFocusMode = $derived(pomodoro.state === 'work' && pomodoro.activeTaskId !== null);
   let isFocusDimmed = $derived(isFocusMode && !isActive);
-  let editContent = $state(task.content);
   let isHovered = $state(false);
 
   // Derived energy level
@@ -48,27 +45,7 @@
   }
 
   function handleEdit() {
-    editContent = task.content;
-    setEditingTask(task.id);
-  }
-
-  function handleSaveEdit() {
-    if (editContent.trim()) {
-      updateTask(task.id, { content: editContent.trim() });
-    }
-    setEditingTask(null);
-  }
-
-  function handleCancelEdit() {
-    setEditingTask(null);
-  }
-
-  function handleKeydown(e: KeyboardEvent) {
-    if (e.key === 'Enter') {
-      handleSaveEdit();
-    } else if (e.key === 'Escape') {
-      handleCancelEdit();
-    }
+    openEditModal(task);
   }
 
   function handleDelete() {
@@ -81,16 +58,6 @@
     if (!result.success && result.error) {
       showToast(result.error, 'error');
     }
-  }
-
-  function handleDragStart(e: DragEvent) {
-    e.dataTransfer!.effectAllowed = 'move';
-    e.dataTransfer!.setData('text/plain', task.id);
-    setDraggedTask(task.id);
-  }
-
-  function handleDragEnd() {
-    clearDragState();
   }
 
   const config = $derived(PRIORITY_CONFIG[task.priority]);
@@ -124,7 +91,6 @@
   class:compact
   class:completed={task.completed}
   class:active={isActive}
-  class:dragging={isDragging}
   class:overdue={isTaskOverdue && !task.completed}
   class:dormant={isDormant}
   class:scheduled-too-far={isScheduledTooFar}
@@ -135,24 +101,10 @@
   style:--priority-color={config.color}
   style:--priority-bg={config.bgColor}
   style:--priority-border={config.borderColor}
-  draggable={!isFocusDimmed}
-  ondragstart={handleDragStart}
-  ondragend={handleDragEnd}
   onmouseenter={() => isHovered = true}
   onmouseleave={() => isHovered = false}
   role="listitem"
 >
-  <!-- Drag Handle - visible on hover -->
-  <div class="drag-handle" aria-label="Drag to reorder">
-    <svg viewBox="0 0 24 24" fill="currentColor" width="12" height="12">
-      <circle cx="8" cy="6" r="1.5"></circle>
-      <circle cx="16" cy="6" r="1.5"></circle>
-      <circle cx="8" cy="12" r="1.5"></circle>
-      <circle cx="16" cy="12" r="1.5"></circle>
-      <circle cx="8" cy="18" r="1.5"></circle>
-      <circle cx="16" cy="18" r="1.5"></circle>
-    </svg>
-  </div>
 
   <div class="task-main">
     <button
@@ -169,50 +121,39 @@
     </button>
 
     <div class="task-content">
-      {#if isEditing}
-        <input
-          type="text"
-          class="edit-input"
-          bind:value={editContent}
-          onkeydown={handleKeydown}
-          onblur={handleSaveEdit}
-          autoFocus
-        />
-      {:else}
-        <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <span
-          class="task-text"
-          ondblclick={handleEdit}
-          onkeydown={(e) => e.key === 'Enter' && handleEdit()}
-          role="textbox"
-          aria-readonly="true"
-          tabindex="0"
-        >
-          {task.content}
-        </span>
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <span
+        class="task-text"
+        ondblclick={handleEdit}
+        onkeydown={(e) => e.key === 'Enter' && handleEdit()}
+        role="textbox"
+        aria-readonly="true"
+        tabindex="0"
+      >
+        {task.content}
+      </span>
 
-        {#if !compact}
-          <div class="task-meta">
-            {#each task.projects as project}
-              <span class="meta-tag project">{project}</span>
-            {/each}
-            {#each task.contexts as context}
-              <span class="meta-tag context">{context}</span>
-            {/each}
-            {#each task.customTags as tag}
-              {#if !['⚡高能量', '😴低能量', '☕中等'].includes(tag)}
-                <span class="meta-tag custom">{tag}</span>
-              {/if}
-            {/each}
-            
-            <!-- Energy Level Visualization -->
-            {#if energyLevel}
-              <span class="meta-tag energy {energyLevel}" title="能量消耗: {energyTag}">
-                {#if energyLevel === 'high'}⚡{:else if energyLevel === 'medium'}☕{:else}😴{/if}
-              </span>
+      {#if !compact}
+        <div class="task-meta">
+          {#each task.projects as project}
+            <span class="meta-tag project">{project}</span>
+          {/each}
+          {#each task.contexts as context}
+            <span class="meta-tag context">{context}</span>
+          {/each}
+          {#each task.customTags as tag}
+            {#if !['⚡高能量', '😴低能量', '☕中等'].includes(tag)}
+              <span class="meta-tag custom">{tag}</span>
             {/if}
-          </div>
-        {/if}
+          {/each}
+
+          <!-- Energy Level Visualization -->
+          {#if energyLevel}
+            <span class="meta-tag energy {energyLevel}" title="能量消耗: {energyTag}">
+              {#if energyLevel === 'high'}⚡{:else if energyLevel === 'medium'}☕{:else}😴{/if}
+            </span>
+          {/if}
+        </div>
       {/if}
     </div>
 
@@ -293,13 +234,12 @@
     display: flex;
     flex-direction: column;
     padding: 10px 12px;
-    padding-left: 28px; /* Space for drag handle */
     background: var(--card-bg);
     border: 1px solid var(--border-subtle);
     border-left: 2px solid var(--priority-color);
     border-radius: var(--radius-sm);
     transition: all var(--transition-normal);
-    cursor: grab;
+    cursor: default;
     position: relative;
   }
 
@@ -344,13 +284,6 @@
   .task-card.completed .task-text {
     text-decoration: line-through;
     color: var(--text-muted);
-  }
-
-  .task-card.dragging {
-    opacity: 0.5;
-    cursor: grabbing;
-    transform: scale(0.98) rotate(1deg);
-    box-shadow: var(--shadow-lg);
   }
 
   /* Focus mode dimming */
@@ -419,41 +352,6 @@
 
   .task-card.compact {
     padding: 8px 10px;
-    padding-left: 26px;
-  }
-
-  /* Drag Handle */
-  .drag-handle {
-    position: absolute;
-    left: 6px;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 16px;
-    height: 20px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--text-muted);
-    opacity: 0;
-    transition: opacity var(--transition-fast), color var(--transition-fast);
-    cursor: grab;
-    border-radius: var(--radius-sm);
-  }
-
-  .task-card:hover .drag-handle,
-  .task-card.hovered .drag-handle,
-  .task-card.keyboard-focused .drag-handle {
-    opacity: 0.5;
-  }
-
-  .drag-handle:hover {
-    opacity: 1 !important;
-    color: var(--text-secondary);
-    background: var(--hover-bg);
-  }
-
-  .drag-handle:active {
-    cursor: grabbing;
   }
 
   .task-main {
@@ -517,25 +415,12 @@
     color: var(--text-primary);
     line-height: 1.5;
     word-break: break-word;
-    cursor: text;
+    cursor: pointer;
     transition: color var(--transition-fast);
   }
 
-  .edit-input {
-    width: 100%;
-    padding: 6px 10px;
-    font-size: 14px;
-    background: var(--input-bg);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-sm);
-    color: var(--text-primary);
-    outline: none;
-    transition: all var(--transition-fast);
-  }
-
-  .edit-input:focus {
-    border-color: var(--primary);
-    box-shadow: 0 0 0 3px var(--primary-bg);
+  .task-text:hover {
+    color: var(--primary);
   }
 
   .task-meta {
@@ -648,7 +533,7 @@
     display: flex;
     gap: 10px;
     margin-top: 8px;
-    padding-left: 30px;
+    padding-left: 0;
     font-size: 11px;
   }
 

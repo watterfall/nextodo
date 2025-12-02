@@ -100,6 +100,7 @@ export default {
     projectPlaceholder: 'e.g., FocusFlow, Website Redesign',
     mood: 'Mood',
     moodPlaceholder: 'Select mood/energy',
+    contextPlaceholder: 'e.g., home, office',
     moodOptions: {
       challenging: '🔥 Challenging',
       focused: '⚡ Focused',
@@ -129,8 +130,8 @@ export default {
   inbox: {
     title: 'Idea Pool',
     subtitle: 'Capture ideas, sort later',
-    hint: 'Drag tasks to zones below or click quick sort buttons',
-    dragHint: 'Drag to A/B/C/D zones to classify',
+    hint: 'Click tasks to edit and classify',
+    dragHint: 'Click to edit and move to A/B/C/D zones',
     moveTo: 'Move to',
     empty: 'Idea pool is empty',
     emptyHint: 'Add tasks using the input above',
