@@ -46,18 +46,19 @@
     other: todayTasks.filter(task => task.priority === 'E' || task.priority === 'F')
   });
 
-  // Today's Date
-  const todayDate = new Date().toLocaleDateString('zh-CN', { 
-    weekday: 'long', 
-    month: 'long', 
-    day: 'numeric' 
-  });
+  // Today's Date - use locale from settings
+  const locale = $derived(i18n.locale === 'zh-CN' ? 'zh-CN' : 'en-US');
+  const todayDate = $derived(new Date().toLocaleDateString(locale, {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric'
+  }));
 
   function getGreeting(): string {
     const hour = new Date().getHours();
-    if (hour < 12) return '早上好';
-    if (hour < 18) return '下午好';
-    return '晚上好';
+    if (hour < 12) return t('todayView.greeting.morning');
+    if (hour < 18) return t('todayView.greeting.afternoon');
+    return t('todayView.greeting.evening');
   }
 
   // DnD Handlers for Today's view to accept tasks
@@ -77,34 +78,34 @@
     <div class="view-header">
       <div class="header-content">
         <div class="date-label">{todayDate}</div>
-        <h1>{getGreeting()}，准备好专注了吗？</h1>
+        <h1>{getGreeting()}, {t('todayView.readyToFocus')}</h1>
         <p class="subtitle">
-          你有 <strong>{todayTasks.length}</strong> 个任务计划在今天完成。
+          {t('todayView.taskCount').replace('{count}', String(todayTasks.length))}
         </p>
       </div>
       
       <div class="header-actions">
         <div class="progress-card">
           <div class="progress-info">
-            <span>今日进度</span>
+            <span>{t('todayView.progress')}</span>
             <span class="percentage">{Math.round(progress)}%</span>
           </div>
           <div class="progress-bar">
             <div class="progress-fill" style:width="{progress}%"></div>
           </div>
         </div>
-        
-        <button 
-          class="inbox-toggle" 
+
+        <button
+          class="inbox-toggle"
           class:active={isInboxOpen}
           onclick={() => isInboxOpen = !isInboxOpen}
-          title={isInboxOpen ? "隐藏收集箱" : "显示收集箱 (用于规划)"}
+          title={isInboxOpen ? t('todayView.hideInbox') : t('todayView.showInbox')}
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
             <polyline points="22,6 12,13 2,6"></polyline>
           </svg>
-          <span class="count-badge">{tasks.tasksByPriority['E'].filter(task => !task.completed).length}</span>
+          <span class="count-badge">{tasks.tasksByPriority['F'].filter(task => !task.completed).length}</span>
         </button>
       </div>
     </div>
@@ -113,11 +114,11 @@
       {#if todayTasks.length === 0 && completedTodayTasks.length === 0}
         <div class="empty-state">
           <div class="empty-icon">☕</div>
-          <h3>今天没有计划任务</h3>
-          <p>享受你的闲暇时光，或者打开收集箱规划任务。</p>
+          <h3>{t('todayView.empty.title')}</h3>
+          <p>{t('todayView.empty.subtitle')}</p>
           {#if !isInboxOpen}
             <button class="btn-primary" onclick={() => isInboxOpen = true}>
-              从收集箱规划
+              {t('todayView.empty.planFromInbox')}
             </button>
           {/if}
         </div>
@@ -125,7 +126,7 @@
         <!-- High Priority Section -->
         {#if groupedTasks.high.length > 0}
           <section class="task-section high-priority">
-            <h3 class="section-title">🔥 核心与重要</h3>
+            <h3 class="section-title">{t('todayView.sections.highPriority')}</h3>
             <div class="task-list">
               {#each groupedTasks.high as task (task.id)}
                 <div animate:slide={{ duration: 200 }}>
@@ -139,7 +140,7 @@
         <!-- Standard Priority Section -->
         {#if groupedTasks.standard.length > 0}
           <section class="task-section">
-            <h3 class="section-title">📋 日常推进</h3>
+            <h3 class="section-title">{t('todayView.sections.standard')}</h3>
             <div class="task-list">
               {#each groupedTasks.standard as task (task.id)}
                 <div animate:slide={{ duration: 200 }}>
@@ -153,7 +154,7 @@
         <!-- Other Section -->
         {#if groupedTasks.other.length > 0}
           <section class="task-section">
-            <h3 class="section-title">📥 其他</h3>
+            <h3 class="section-title">{t('todayView.sections.other')}</h3>
             <div class="task-list">
               {#each groupedTasks.other as task (task.id)}
                 <div animate:slide={{ duration: 200 }}>
@@ -167,7 +168,7 @@
         <!-- Completed Section -->
         {#if completedTodayTasks.length > 0}
           <section class="task-section completed">
-            <h3 class="section-title">✅ 已完成</h3>
+            <h3 class="section-title">{t('todayView.sections.completed')}</h3>
             <div class="task-list">
               {#each completedTodayTasks as task (task.id)}
                 <div animate:slide={{ duration: 200 }}>

@@ -404,4 +404,29 @@ export default {
     saveFailed: '保存失败',
     externalChangeIgnored: '检测到外部数据变更，但由于当前有活动会话已忽略。请手动保存并刷新以避免冲突。',
   },
+
+  // Today View
+  todayView: {
+    greeting: {
+      morning: '早上好',
+      afternoon: '下午好',
+      evening: '晚上好',
+    },
+    readyToFocus: '准备好专注了吗？',
+    taskCount: '你有 {count} 个任务计划在今天完成。',
+    progress: '今日进度',
+    showInbox: '显示收集箱 (用于规划)',
+    hideInbox: '隐藏收集箱',
+    empty: {
+      title: '今天没有计划任务',
+      subtitle: '享受你的闲暇时光，或者打开收集箱规划任务。',
+      planFromInbox: '从收集箱规划',
+    },
+    sections: {
+      highPriority: '🔥 核心与重要',
+      standard: '📋 日常推进',
+      other: '📥 其他',
+      completed: '✅ 已完成',
+    },
+  },
 };

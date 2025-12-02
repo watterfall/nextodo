@@ -405,4 +405,29 @@ export default {
     saveFailed: 'Save failed',
     externalChangeIgnored: 'External data change detected but ignored due to active session. Please save and reload manually to avoid conflicts.',
   },
+
+  // Today View
+  todayView: {
+    greeting: {
+      morning: 'Good morning',
+      afternoon: 'Good afternoon',
+      evening: 'Good evening',
+    },
+    readyToFocus: 'Ready to focus?',
+    taskCount: 'You have {count} tasks planned for today.',
+    progress: "Today's Progress",
+    showInbox: 'Show Inbox (for planning)',
+    hideInbox: 'Hide Inbox',
+    empty: {
+      title: 'No tasks planned for today',
+      subtitle: 'Enjoy your free time, or open the inbox to plan tasks.',
+      planFromInbox: 'Plan from Inbox',
+    },
+    sections: {
+      highPriority: '🔥 Core & Important',
+      standard: '📋 Daily Progress',
+      other: '📥 Other',
+      completed: '✅ Completed',
+    },
+  },
 };
