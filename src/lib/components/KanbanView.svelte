@@ -4,7 +4,7 @@
   import TaskCard from './TaskCard.svelte';
   import { getTasksStore, changePriority, reorderTask } from '$lib/stores/tasks.svelte';
   import { getPomodoroStore } from '$lib/stores/pomodoro.svelte';
-  import { setDropTarget, clearDragState, getUIStore } from '$lib/stores/ui.svelte';
+  import { setDropTarget, clearDragState, getUIStore, showToast } from '$lib/stores/ui.svelte';
   import { countActiveByPriority } from '$lib/utils/quota';
   import { getI18nStore } from '$lib/i18n';
   import { dndzone, TRIGGERS, SHADOW_ITEM_MARKER_PROPERTY_NAME } from 'svelte-dnd-action';
@@ -115,6 +115,8 @@
           const sourcePriority = droppedTask.priority;
           const result = await changePriority(info.id, priority);
           if (!result.success) {
+            // Show error feedback to user
+            showToast(result.error || t('error.quotaExceeded'), 'error');
             // Revert all zones if failed
             for (const p of priorities) {
               dndItemsByPriority[p] = getTasksForPriority(p);

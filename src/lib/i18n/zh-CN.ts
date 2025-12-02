@@ -392,4 +392,11 @@ export default {
     recurrence: '重复',
     pomodoro: '番茄数',
   },
+
+  // Errors
+  error: {
+    quotaExceeded: '该优先级已达配额上限',
+    taskNotFound: '任务未找到',
+    saveFailed: '保存失败',
+  },
 };
