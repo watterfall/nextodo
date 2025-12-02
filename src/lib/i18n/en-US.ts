@@ -18,6 +18,7 @@ export default {
     trash: 'Trash',
     trashArchive: 'Trash & Archive',
     settings: 'Settings',
+    badges: 'Badges',
   },
 
   // Trash
@@ -188,6 +189,8 @@ export default {
     reflection: 'Weekly Review',
     nextFocus: 'Next Week Focus',
     biDaily: 'Bi-daily',
+    prev: 'Previous Period',
+    next: 'Next Period',
     stats: {
       planned: 'Planned',
       completed: 'Completed',
