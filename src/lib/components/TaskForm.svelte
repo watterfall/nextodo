@@ -88,7 +88,7 @@
       parts.push(`rec:${recurrence}`);
     }
     if (estimatedPomodoros && estimatedPomodoros > 0) {
-      parts.push(`est:${estimatedPomodoros}`);
+      parts.push(`🍅${estimatedPomodoros}`);
     }
 
     // Add selected priority

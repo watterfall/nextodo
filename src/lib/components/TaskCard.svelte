@@ -198,6 +198,7 @@
       <button
         class="pomodoro-btn"
         class:active={isActive}
+        class:kanban-hidden={kanbanMode}
         title={isActive ? i18n.t('task.focusInProgress') : i18n.t('task.clickToStartFocus')}
         onclick={(e) => { e.stopPropagation(); handleStartPomodoro(); }}
         disabled={isActive}
@@ -417,8 +418,9 @@
   }
 
   /* Hide pomodoro button in kanban mode when not hovered */
-  .pomodoro-btn-left.kanban-hidden {
-    display: none;
+  .pomodoro-btn-left.kanban-hidden,
+  .pomodoro-btn.kanban-hidden {
+    display: none !important;
   }
 
   .task-main {
