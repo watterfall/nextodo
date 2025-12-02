@@ -32,6 +32,22 @@
     energyTag === '☕中等' ? 'medium' : null
   );
 
+  // Helper to extract emoji from string (for minimal display)
+  const emojiRegex = /[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu;
+
+  function extractEmoji(text: string): string | null {
+    const match = text.match(emojiRegex);
+    return match ? match.join('') : null;
+  }
+
+  function getDisplayText(text: string): { display: string; isEmoji: boolean } {
+    const emoji = extractEmoji(text);
+    if (emoji && emoji.length > 0) {
+      return { display: emoji, isEmoji: true };
+    }
+    return { display: text, isEmoji: false };
+  }
+
   function handleCheck() {
     if (task.completed) {
       uncompleteTask(task.id);
@@ -120,6 +136,19 @@
       {/if}
     </button>
 
+    {#if !task.completed && task.pomodoros.estimated > 0}
+      <button
+        class="pomodoro-btn-left"
+        class:active={isActive}
+        title={isActive ? '专注进行中' : `${task.pomodoros.completed}/${task.pomodoros.estimated} 番茄`}
+        onclick={(e) => { e.stopPropagation(); handleStartPomodoro(); }}
+        disabled={isActive}
+      >
+        <span class="tomato-icon">🍅</span>
+        <span class="pomodoro-count">{task.pomodoros.completed}/{task.pomodoros.estimated}</span>
+      </button>
+    {/if}
+
     <div class="task-content">
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <span
@@ -136,14 +165,17 @@
       {#if !compact}
         <div class="task-meta">
           {#each task.projects as project}
-            <span class="meta-tag project">{project}</span>
+            {@const displayInfo = getDisplayText(project)}
+            <span class="meta-tag project" class:emoji-only={displayInfo.isEmoji} title={project}>{displayInfo.display}</span>
           {/each}
           {#each task.contexts as context}
-            <span class="meta-tag context">{context}</span>
+            {@const displayInfo = getDisplayText(context)}
+            <span class="meta-tag context" class:emoji-only={displayInfo.isEmoji} title={context}>{displayInfo.display}</span>
           {/each}
           {#each task.customTags as tag}
             {#if !['⚡高能量', '😴低能量', '☕中等'].includes(tag)}
-              <span class="meta-tag custom">{tag}</span>
+              {@const displayInfo = getDisplayText(tag)}
+              <span class="meta-tag custom" class:emoji-only={displayInfo.isEmoji} title={tag}>{displayInfo.display}</span>
             {/if}
           {/each}
 
@@ -157,19 +189,15 @@
       {/if}
     </div>
 
-    {#if !task.completed}
+    {#if !task.completed && task.pomodoros.estimated === 0}
       <button
         class="pomodoro-btn"
-        class:has-estimate={task.pomodoros.estimated > 0}
         class:active={isActive}
         title={isActive ? '专注进行中' : '点击开始专注'}
         onclick={(e) => { e.stopPropagation(); handleStartPomodoro(); }}
         disabled={isActive}
       >
         <span class="tomato-icon">🍅</span>
-        {#if task.pomodoros.estimated > 0}
-          <span class="pomodoro-count">{task.pomodoros.completed}/{task.pomodoros.estimated}</span>
-        {/if}
       </button>
     {/if}
   </div>
@@ -241,6 +269,14 @@
     transition: all var(--transition-normal);
     cursor: default;
     position: relative;
+    max-height: 100px;
+    overflow: hidden;
+  }
+
+  .task-card:hover,
+  .task-card.keyboard-focused {
+    max-height: none;
+    overflow: visible;
   }
 
   .task-card:hover {
@@ -468,6 +504,56 @@
   .meta-tag.energy.low {
     background: rgba(81, 207, 102, 0.12);
     color: #51cf66;
+  }
+
+  /* Emoji-only meta tags - compact display */
+  .meta-tag.emoji-only {
+    padding: 2px 4px;
+    font-size: 13px;
+    background: transparent;
+  }
+
+  /* Pomodoro button on the left (next to checkbox) */
+  .pomodoro-btn-left {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    color: var(--error, #ff6b6b);
+    font-size: 12px;
+    font-weight: 600;
+    padding: 3px 8px;
+    background: var(--error-bg, rgba(255, 107, 107, 0.12));
+    border-radius: var(--radius-sm);
+    border: none;
+    transition: all var(--transition-fast);
+    cursor: pointer;
+  }
+
+  .pomodoro-btn-left:hover:not(:disabled) {
+    background: var(--error, #ff6b6b);
+    color: white;
+    transform: scale(1.05);
+  }
+
+  .pomodoro-btn-left.active {
+    background: var(--error, #ff6b6b);
+    color: white;
+    animation: subtlePulse 2s ease-in-out infinite;
+  }
+
+  .pomodoro-btn-left:disabled {
+    cursor: default;
+  }
+
+  .pomodoro-btn-left .tomato-icon {
+    font-size: 12px;
+    line-height: 1;
+  }
+
+  .pomodoro-btn-left .pomodoro-count {
+    font-size: 11px;
+    font-weight: 600;
   }
 
   .pomodoro-btn {

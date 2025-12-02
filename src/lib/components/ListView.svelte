@@ -17,6 +17,22 @@
   const i18n = getI18nStore();
   const t = i18n.t;
 
+  // Helper to extract emoji from string (for minimal display)
+  const emojiRegex = /[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu;
+
+  function extractEmoji(text: string): string | null {
+    const match = text.match(emojiRegex);
+    return match ? match.join('') : null;
+  }
+
+  function getDisplayText(text: string): { display: string; isEmoji: boolean } {
+    const emoji = extractEmoji(text);
+    if (emoji && emoji.length > 0) {
+      return { display: emoji, isEmoji: true };
+    }
+    return { display: text, isEmoji: false };
+  }
+
   // Main priorities (A-E with quotas), F is handled separately as Idea Pool
   const mainPriorities: Priority[] = ['A', 'B', 'C', 'D', 'E'];
   const priorities: Priority[] = ['A', 'B', 'C', 'D', 'E', 'F'];
@@ -189,13 +205,6 @@
 
               <!-- Task metadata -->
               <div class="task-meta">
-                {#if dueLabel}
-                  <span class="due-badge" class:overdue={taskOverdue}>
-                    <span class="due-label">due:</span>
-                    <span class="due-date">{dueLabel}</span>
-                  </span>
-                {/if}
-
                 {#if task.pomodoros.estimated > 0}
                   <button
                     class="pomodoro-badge"
@@ -210,6 +219,27 @@
                       <span class="warning-icon">⚠</span>
                     {/if}
                   </button>
+                {/if}
+
+                {#each task.projects as project}
+                  {@const displayInfo = getDisplayText(project)}
+                  <span class="emoji-tag project" class:emoji-only={displayInfo.isEmoji} title={project}>{displayInfo.display}</span>
+                {/each}
+                {#each task.contexts as context}
+                  {@const displayInfo = getDisplayText(context)}
+                  <span class="emoji-tag context" class:emoji-only={displayInfo.isEmoji} title={context}>{displayInfo.display}</span>
+                {/each}
+                {#each task.customTags as tag}
+                  {#if !['⚡高能量', '😴低能量', '☕中等'].includes(tag)}
+                    {@const displayInfo = getDisplayText(tag)}
+                    <span class="emoji-tag custom" class:emoji-only={displayInfo.isEmoji} title={tag}>{displayInfo.display}</span>
+                  {/if}
+                {/each}
+
+                {#if dueLabel}
+                  <span class="due-badge" class:overdue={taskOverdue}>
+                    <span class="due-date">{dueLabel}</span>
+                  </span>
                 {/if}
 
                 <!-- Edit button -->
@@ -315,13 +345,27 @@
             </button>
             <span class="task-content">{task.content}</span>
             <div class="task-meta">
+              {#if task.pomodoros.estimated > 0}
+                <span class="pomodoro-badge">🍅 {task.pomodoros.estimated}</span>
+              {/if}
+              {#each task.projects as project}
+                {@const displayInfo = getDisplayText(project)}
+                <span class="emoji-tag project" class:emoji-only={displayInfo.isEmoji} title={project}>{displayInfo.display}</span>
+              {/each}
+              {#each task.contexts as context}
+                {@const displayInfo = getDisplayText(context)}
+                <span class="emoji-tag context" class:emoji-only={displayInfo.isEmoji} title={context}>{displayInfo.display}</span>
+              {/each}
+              {#each task.customTags as tag}
+                {#if !['⚡高能量', '😴低能量', '☕中等'].includes(tag)}
+                  {@const displayInfo = getDisplayText(tag)}
+                  <span class="emoji-tag custom" class:emoji-only={displayInfo.isEmoji} title={tag}>{displayInfo.display}</span>
+                {/if}
+              {/each}
               {#if dueLabel}
                 <span class="due-badge" class:overdue={taskOverdue}>
                   {dueLabel}
                 </span>
-              {/if}
-              {#if task.pomodoros.estimated > 0}
-                <span class="pomodoro-badge">🍅 {task.pomodoros.estimated}</span>
               {/if}
               <!-- Edit button -->
               <button
@@ -706,13 +750,40 @@
     color: var(--error, #ef4444);
   }
 
-  .due-label {
-    color: var(--text-muted);
-    font-weight: 400;
-  }
-
   .due-date {
     font-weight: 600;
+  }
+
+  /* Emoji tag styles */
+  .emoji-tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 6px;
+    font-size: 11px;
+    font-weight: 500;
+    border-radius: var(--radius-sm);
+    cursor: default;
+  }
+
+  .emoji-tag.project {
+    background: rgba(177, 151, 252, 0.12);
+    color: #b197fc;
+  }
+
+  .emoji-tag.context {
+    background: rgba(116, 192, 252, 0.12);
+    color: #74c0fc;
+  }
+
+  .emoji-tag.custom {
+    background: rgba(99, 230, 190, 0.12);
+    color: #63e6be;
+  }
+
+  .emoji-tag.emoji-only {
+    padding: 2px 3px;
+    font-size: 13px;
+    background: transparent;
   }
 
   /* Pomodoro Badge */
