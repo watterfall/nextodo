@@ -1,9 +1,9 @@
 <script lang="ts">
   import { getI18nStore } from '$lib/i18n';
-  import { getTasksStore, archiveCompleted } from '$lib/stores/tasks.svelte';
+  import { getTasksStore } from '$lib/stores/tasks.svelte';
   import { getPomodoroStore } from '$lib/stores/pomodoro.svelte';
   import { getUIStore, setViewMode, toggleSidebar, setSidebarCollapsed } from '$lib/stores/ui.svelte';
-  import { checkReviewBadges } from '$lib/stores/gamification.svelte';
+  import { isActivePriority } from '$lib/types';
   import { fade, slide, scale } from 'svelte/transition';
   import confetti from '$lib/components/Confetti.svelte';
 
@@ -15,23 +15,24 @@
 
   let step = $state(0);
   let showConfetti = $state(false);
-  
-  // Basic Stats
-  const completedCount = $derived(tasks.tasks.filter(task => task.completed).length);
-  const activeCount = $derived(tasks.tasks.filter(task => !task.completed).length);
-  const completedA = $derived(tasks.tasks.filter(task => task.completed && task.priority === 'A').length);
-  const activeA = $derived(tasks.tasks.filter(task => !task.completed && task.priority === 'A').length);
-  
+
+  // Basic Stats - G is completed, active is A-F
+  const completedCount = $derived(tasks.tasks.filter(task => task.priority === 'G').length);
+  const activeCount = $derived(tasks.tasks.filter(task => isActivePriority(task.priority)).length);
+  const completedA = $derived(tasks.completedTasks.filter(task => task.content.includes('[A]')).length); // Tasks completed from A
+  const activeA = $derived(tasks.tasks.filter(task => task.priority === 'A').length);
+
   // Challenge Level Calculation
   // Sweet spot: 70-90% completion rate of planned tasks (weighted by priority)
   const challengeScore = $derived.by(() => {
     // Weight: A=3, B=2, C=1
-    const getWeight = (p: string) => (p === 'A' ? 3 : p === 'B' ? 2 : 1);
-    
-    // Consider completed tasks + uncompleted tasks that were "planned" (due today or overdue)
-    // Simplifying: all active non-F (Idea Pool) tasks + all completed tasks
-    const relevantTasks = tasks.tasks.filter(task => task.priority !== 'F' || task.completed);
-    
+    const getWeight = (p: string) => (p === 'A' ? 3 : p === 'B' ? 2 : p === 'G' ? 2 : 1);
+
+    // Consider completed tasks (G) + uncompleted active tasks
+    const relevantTasks = tasks.tasks.filter(task =>
+      task.priority === 'G' || (isActivePriority(task.priority) && task.priority !== 'F')
+    );
+
     if (relevantTasks.length === 0) return 0;
 
     let totalPoints = 0;
@@ -40,7 +41,7 @@
     for (const task of relevantTasks) {
       const w = getWeight(task.priority);
       totalPoints += w;
-      if (task.completed) completedPoints += w;
+      if (task.priority === 'G') completedPoints += w;
     }
 
     if (totalPoints === 0) return 0;
@@ -71,7 +72,7 @@
   });
 
   // Analytics: Estimation Calibration
-  const estimatedTasks = $derived(tasks.tasks.filter(task => task.completed && task.pomodoros.estimated > 0));
+  const estimatedTasks = $derived(tasks.tasks.filter(task => task.priority === 'G' && task.pomodoros.estimated > 0));
   const estimationAccuracy = $derived.by(() => {
     if (estimatedTasks.length === 0) return 0;
     let totalDiff = 0;
@@ -111,25 +112,18 @@
   }
 
   function closeWizard() {
-    checkReviewBadges(); // Unlock badge
     step = 0;
     window.dispatchEvent(new CustomEvent('close-review'));
-    
+
     // Redirect to Week View and ensure Sidebar is open to access Inbox if we add it there
     setViewMode('week');
     // Ideally open Inbox too, but we haven't implemented the toggle yet
   }
 
-  async function handleArchive() {
-    await archiveCompleted();
-    nextStep();
-  }
-
   const steps = [
     { title: '准备回顾', icon: '🧘' },
-    { title: '成就与挑战', icon: '⛰️' }, // Renamed
+    { title: '成就与挑战', icon: '⛰️' },
     { title: '深度分析', icon: '📊' },
-    { title: '清理战场', icon: '🧹' },
     { title: '新的开始', icon: '🚀' }
   ];
 </script>
@@ -252,25 +246,6 @@
         </div>
 
       {:else if step === 3}
-        <div class="step-view" in:slide={{ axis: 'x', duration: 300 }}>
-          <div class="icon-large">🧹</div>
-          <h2>清理战场</h2>
-          <p class="description">
-            将 <strong>{completedCount}</strong> 个已完成任务移入归档。<br>
-            这将保持你的工作区整洁清爽。
-          </p>
-          <div class="action-preview">
-            <div class="file-stack">
-              {#each Array(Math.min(3, completedCount)) as _, i}
-                <div class="file-sheet" style:transform="translateY({i * -4}px) scale({1 - i * 0.05})"></div>
-              {/each}
-            </div>
-          </div>
-          <button class="btn-primary" onclick={handleArchive}>一键归档</button>
-          <button class="btn-text" onclick={nextStep}>跳过归档</button>
-        </div>
-
-      {:else if step === 4}
         <div class="step-view" in:slide={{ axis: 'x', duration: 300 }}>
           <div class="icon-large">🚀</div>
           <h2>规划未来</h2>
@@ -548,25 +523,6 @@
     padding: 1px 6px;
     border-radius: 10px;
     font-size: 11px;
-  }
-
-  .file-stack {
-    position: relative;
-    height: 60px;
-    width: 50px;
-    margin-bottom: 40px;
-  }
-
-  .file-sheet {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    height: 60px;
-    background: var(--card-bg);
-    border: 1px solid var(--border-color);
-    border-radius: 4px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
   }
 
   .warning-box {

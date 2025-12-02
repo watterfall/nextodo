@@ -16,17 +16,16 @@
   interface Props {
     onOpenSettings?: () => void;
     onOpenReview?: () => void;
-    onOpenBadges?: () => void;
-    onOpenTrash?: () => void;
+    onOpenHistory?: () => void;
   }
 
-  let { onOpenSettings, onOpenReview, onOpenBadges, onOpenTrash }: Props = $props();
+  let { onOpenSettings, onOpenReview, onOpenHistory }: Props = $props();
 
   const tasks = getTasksStore();
   const ui = getUIStore();
   const settings = getSettingsStore();
 
-  // Priority list for filtering
+  // Priority list for filtering (only active priorities, not G/H)
   const priorities: Priority[] = ['A', 'B', 'C', 'D', 'E', 'F'];
 
   // Extract unique projects, contexts, and tags from tasks
@@ -417,16 +416,11 @@
         {/if}
       </button>
 
-      <!-- Badges Button -->
-      <button class="footer-btn" onclick={(e) => { e.preventDefault(); e.stopPropagation(); console.log('Sidebar: Badge clicked'); onOpenBadges?.(); }} title={t('nav.badges') || '成就'}>
-        <span>🏆</span>
-      </button>
-
-      <!-- Trash Button -->
-      <button class="footer-btn" onclick={(e) => { e.preventDefault(); e.stopPropagation(); console.log('Sidebar: Trash clicked'); onOpenTrash?.(); }} title={t('nav.trashArchive') || '回收站与归档'}>
+      <!-- History Button (completed/cancelled tasks) -->
+      <button class="footer-btn" onclick={(e) => { e.preventDefault(); e.stopPropagation(); console.log('Sidebar: History clicked'); onOpenHistory?.(); }} title={t('nav.history') || '任务历史'}>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <polyline points="3 6 5 6 21 6"></polyline>
-          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+          <circle cx="12" cy="12" r="10"></circle>
+          <polyline points="12 6 12 12 16 14"></polyline>
         </svg>
       </button>
 
@@ -447,13 +441,10 @@
           <polyline points="14 2 14 8 20 8"></polyline>
         </svg>
       </button>
-      <button class="collapsed-btn" onclick={(e) => { e.preventDefault(); e.stopPropagation(); onOpenBadges?.(); }} title={t('nav.badges') || '成就'}>
-        <span>🏆</span>
-      </button>
-      <button class="collapsed-btn" onclick={(e) => { e.preventDefault(); e.stopPropagation(); onOpenTrash?.(); }} title={t('nav.trashArchive') || '回收站与归档'}>
+      <button class="collapsed-btn" onclick={(e) => { e.preventDefault(); e.stopPropagation(); onOpenHistory?.(); }} title={t('nav.history') || '任务历史'}>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <polyline points="3 6 5 6 21 6"></polyline>
-          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+          <circle cx="12" cy="12" r="10"></circle>
+          <polyline points="12 6 12 12 16 14"></polyline>
         </svg>
       </button>
       <button class="collapsed-btn" onclick={(e) => { e.preventDefault(); e.stopPropagation(); onOpenSettings?.(); }} title={t('settings.title')}>

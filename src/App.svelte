@@ -1,7 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import Sidebar from '$lib/components/Sidebar.svelte';
-  // import ZoneContainer from '$lib/components/ZoneContainer.svelte';
   import KanbanView from '$lib/components/KanbanView.svelte';
   import ListView from '$lib/components/ListView.svelte';
   import TaskForm from '$lib/components/TaskForm.svelte';
@@ -11,8 +10,7 @@
   import SettingsModal from '$lib/components/SettingsModal.svelte';
   import Confetti from '$lib/components/Confetti.svelte';
   import ImmersivePomodoro from '$lib/components/ImmersivePomodoro.svelte';
-  import BadgesModal from '$lib/components/BadgesModal.svelte';
-  import TrashArchiveModal from '$lib/components/TrashArchiveModal.svelte';
+  import HistoryModal from '$lib/components/HistoryModal.svelte';
   import TaskEditModal from '$lib/components/TaskEditModal.svelte';
 
   import {
@@ -63,10 +61,7 @@
   let unlistenFileWatcher: (() => void) | null = null;
   let isSettingsOpen = $state(false);
   let isReviewOpen = $state(false);
-  let isBadgesOpen = $state(false);
-  let isTrashOpen = $state(false);
-  // Remove local viewMode state, use ui store
-  // let viewMode = $state<ViewMode>('zones');
+  let isHistoryOpen = $state(false);
 
   onMount(async () => {
     // Initialize i18n first
@@ -185,13 +180,9 @@
       console.log('App: Opening review');
       isReviewOpen = true;
     }}
-    onOpenBadges={() => {
-      console.log('App: Opening badges');
-      isBadgesOpen = true;
-    }}
-    onOpenTrash={() => {
-      console.log('App: Opening trash');
-      isTrashOpen = true;
+    onOpenHistory={() => {
+      console.log('App: Opening history');
+      isHistoryOpen = true;
     }}
   />
 
@@ -354,14 +345,9 @@
     onClose={() => isSettingsOpen = false}
   />
 
-  <!-- Badges Modal -->
-  {#if isBadgesOpen}
-    <BadgesModal onClose={() => isBadgesOpen = false} />
-  {/if}
-
-  <!-- Trash/Archive Modal -->
-  {#if isTrashOpen}
-    <TrashArchiveModal onClose={() => isTrashOpen = false} />
+  <!-- History Modal (completed/cancelled tasks) -->
+  {#if isHistoryOpen}
+    <HistoryModal onClose={() => isHistoryOpen = false} />
   {/if}
 
   <!-- Task Edit Modal -->

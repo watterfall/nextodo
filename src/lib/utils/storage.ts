@@ -1,8 +1,7 @@
-import type { AppData, ActiveData, ArchiveData, PomodoroHistoryData, Task } from '$lib/types';
+import type { AppData, ActiveData, PomodoroHistoryData, Task } from '$lib/types';
 import {
   createDefaultAppData,
   createDefaultActiveData,
-  createDefaultArchiveData,
   createDefaultPomodoroHistoryData,
   createDefaultSettings
 } from '$lib/types';
@@ -73,7 +72,7 @@ export async function loadAppData(): Promise<AppData> {
 /**
  * Save app data to storage (writes to separated files)
  */
-export async function saveAppData(data: AppData, filesToSave: ('active' | 'archive' | 'pomodoro_history')[] = ['active', 'pomodoro_history']): Promise<void> {
+export async function saveAppData(data: AppData, filesToSave: ('active' | 'pomodoro_history')[] = ['active', 'pomodoro_history']): Promise<void> {
   data.lastModified = new Date().toISOString();
 
   if (isTauri()) {
@@ -93,53 +92,6 @@ export async function saveActiveData(data: ActiveData): Promise<void> {
     await saveFileTauri('active', data);
   } else {
     localStorage.setItem(STORAGE_KEYS.active, JSON.stringify(data));
-  }
-}
-
-/**
- * Save only archive data (cold data)
- */
-export async function saveArchiveData(data: ArchiveData): Promise<void> {
-  data.lastModified = new Date().toISOString();
-
-  if (isTauri()) {
-    await saveFileTauri('archive', data);
-  } else {
-    localStorage.setItem(STORAGE_KEYS.archive, JSON.stringify(data));
-  }
-}
-
-/**
- * Append tasks to archive (optimized for performance)
- */
-export async function appendArchiveTasks(tasks: Task[]): Promise<void> {
-  if (tasks.length === 0) return;
-
-  if (isTauri()) {
-    beginSave();
-    try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      await invoke('append_archive_tasks', {
-        newTasksJson: JSON.stringify(tasks)
-      });
-    } catch (error) {
-      console.error('Failed to append to archive:', error);
-      throw error;
-    } finally {
-      endSave();
-    }
-  } else {
-    // Web fallback: read, append, write
-    try {
-      const archiveStr = localStorage.getItem(STORAGE_KEYS.archive);
-      const archive = archiveStr ? JSON.parse(archiveStr) as ArchiveData : createDefaultArchiveData();
-      archive.tasks = [...archive.tasks, ...tasks];
-      archive.lastModified = new Date().toISOString();
-      localStorage.setItem(STORAGE_KEYS.archive, JSON.stringify(archive));
-    } catch (error) {
-      console.error('Failed to append to archive (web):', error);
-      throw error;
-    }
   }
 }
 
@@ -205,7 +157,7 @@ function loadFromLocalStorage(): AppData {
   if (legacy && !localStorage.getItem(STORAGE_KEYS.active)) {
     // Migrate from legacy format
     try {
-      const legacyData = JSON.parse(legacy) as AppData;
+      const legacyData = JSON.parse(legacy);
       const migrated = migrateData(legacyData);
 
       // Save to new format
@@ -224,21 +176,36 @@ function loadFromLocalStorage(): AppData {
   // Load from separated files
   try {
     const activeStr = localStorage.getItem(STORAGE_KEYS.active);
-    const archiveStr = localStorage.getItem(STORAGE_KEYS.archive);
     const pomodoroStr = localStorage.getItem(STORAGE_KEYS.pomodoroHistory);
 
     const active = activeStr ? JSON.parse(activeStr) as ActiveData : createDefaultActiveData();
-    // In web mode, we still load archive to be consistent, but in Tauri we skip it
-    const archive = archiveStr ? JSON.parse(archiveStr) as ArchiveData : createDefaultArchiveData();
     const pomodoro = pomodoroStr ? JSON.parse(pomodoroStr) as PomodoroHistoryData : createDefaultPomodoroHistoryData();
 
-    // Combine into AppData
+    // Combine into AppData - migrate old trash/archive to G/H priorities
+    let tasks = migrateTasks(active.tasks || []);
+
+    // Migrate old trash to H (cancelled) and old completed tasks to G (completed)
+    const oldTrash = (active as any).trash || [];
+    const oldArchive = localStorage.getItem(STORAGE_KEYS.archive);
+    if (oldTrash.length > 0) {
+      const migratedTrash = migrateTasks(oldTrash).map((t: any) => ({ ...t, priority: 'H' }));
+      tasks = [...tasks, ...migratedTrash];
+    }
+    if (oldArchive) {
+      try {
+        const archiveData = JSON.parse(oldArchive);
+        const migratedArchive = migrateTasks(archiveData.tasks || []).map((t: any) => ({ ...t, priority: 'G', completed: true }));
+        tasks = [...tasks, ...migratedArchive];
+        localStorage.removeItem(STORAGE_KEYS.archive); // Clean up old archive
+      } catch (e) {
+        console.error('Failed to migrate archive:', e);
+      }
+    }
+
     return {
-      version: active.version,
+      version: active.version || '4.0',
       lastModified: active.lastModified,
-      tasks: migrateTasks(active.tasks || []),
-      archive: migrateTasks(archive.tasks || []),
-      trash: migrateTasks(active.trash || []),
+      tasks,
       reviews: active.reviews || [],
       customTagGroups: active.customTagGroups || {
         energy: ['⚡高能量', '😴低能量', '☕中等'],
@@ -263,16 +230,9 @@ function saveToLocalStorage(data: AppData): void {
       version: data.version,
       lastModified: data.lastModified,
       tasks: data.tasks,
-      trash: data.trash,
       reviews: data.reviews,
       customTagGroups: data.customTagGroups,
       settings: data.settings
-    };
-
-    const archive: ArchiveData = {
-      version: data.version,
-      lastModified: data.lastModified,
-      tasks: data.archive
     };
 
     const pomodoroHistory: PomodoroHistoryData = {
@@ -282,7 +242,6 @@ function saveToLocalStorage(data: AppData): void {
     };
 
     localStorage.setItem(STORAGE_KEYS.active, JSON.stringify(active));
-    localStorage.setItem(STORAGE_KEYS.archive, JSON.stringify(archive));
     localStorage.setItem(STORAGE_KEYS.pomodoroHistory, JSON.stringify(pomodoroHistory));
   } catch (error) {
     console.error('Failed to save to localStorage:', error);
@@ -305,21 +264,37 @@ async function loadFromTauri(): Promise<AppData> {
 
     // Read separated files
     const activeContent = await invoke<string | null>('read_data_file', { fileType: 'active' });
-    // OPTIMIZATION: Do NOT load archive data into memory on startup
-    // const archiveContent = await invoke<string | null>('read_data_file', { fileType: 'archive' });
     const pomodoroContent = await invoke<string | null>('read_data_file', { fileType: 'pomodoro_history' });
 
     const active = activeContent ? JSON.parse(activeContent) as ActiveData : createDefaultActiveData();
-    // const archive = archiveContent ? JSON.parse(archiveContent) as ArchiveData : createDefaultArchiveData();
     const pomodoro = pomodoroContent ? JSON.parse(pomodoroContent) as PomodoroHistoryData : createDefaultPomodoroHistoryData();
+
+    // Migrate old trash/archive to G/H priorities
+    let tasks = migrateTasks(active.tasks || []);
+    const oldTrash = (active as any).trash || [];
+    if (oldTrash.length > 0) {
+      const migratedTrash = migrateTasks(oldTrash).map((t: any) => ({ ...t, priority: 'H' }));
+      tasks = [...tasks, ...migratedTrash];
+    }
+
+    // Migrate old archive file if it exists
+    try {
+      const archiveContent = await invoke<string | null>('read_data_file', { fileType: 'archive' });
+      if (archiveContent) {
+        const archiveData = JSON.parse(archiveContent);
+        const migratedArchive = migrateTasks(archiveData.tasks || []).map((t: any) => ({ ...t, priority: 'G', completed: true }));
+        tasks = [...tasks, ...migratedArchive];
+        console.log('Migrated archive tasks to G priority');
+      }
+    } catch (e) {
+      // Archive file doesn't exist or failed to parse - that's fine
+    }
 
     // Combine into AppData
     return {
-      version: active.version || '3.0',
+      version: active.version || '4.0',
       lastModified: active.lastModified,
-      tasks: migrateTasks(active.tasks || []),
-      archive: [], // Empty archive in memory to save RAM
-      trash: migrateTasks(active.trash || []),
+      tasks,
       reviews: active.reviews || [],
       customTagGroups: active.customTagGroups || {
         energy: ['⚡高能量', '😴低能量', '☕中等'],
@@ -349,7 +324,6 @@ async function saveToTauri(data: AppData, filesToSave: string[] = ['active', 'po
       version: data.version,
       lastModified: data.lastModified,
       tasks: data.tasks,
-      trash: data.trash,
       reviews: data.reviews,
       customTagGroups: data.customTagGroups,
       settings: data.settings
@@ -438,34 +412,58 @@ function migrateSettings(settings: any): AppData['settings'] {
 /**
  * Migrate data from older versions
  */
-function migrateData(data: AppData): AppData {
+function migrateData(data: any): AppData {
   // Add version if missing
   if (!data.version) {
     data.version = '1.0';
   }
 
-  // Migrate from older versions
-  if (data.version < '3.0') {
-    // Add new fields that might be missing
-    data.reviews = data.reviews || [];
-    data.pomodoroHistory = data.pomodoroHistory || [];
-    data.customTagGroups = data.customTagGroups || {
-      energy: ['⚡高能量', '😴低能量', '☕中等'],
-      type: ['📞电话', '💻编码', '✍️写作', '🤝会议']
-    };
+  // Ensure required fields exist
+  data.reviews = data.reviews || [];
+  data.pomodoroHistory = data.pomodoroHistory || [];
+  data.customTagGroups = data.customTagGroups || {
+    energy: ['⚡高能量', '😴低能量', '☕中等'],
+    type: ['📞电话', '💻编码', '✍️写作', '🤝会议']
+  };
+  data.settings = migrateSettings(data.settings);
 
-    // Migrate tasks
-    data.tasks = migrateTasks(data.tasks || []);
-    data.archive = migrateTasks(data.archive || []);
-    data.trash = migrateTasks(data.trash || []);
+  // Migrate tasks
+  let tasks = migrateTasks(data.tasks || []);
 
-    // Migrate settings
-    data.settings = migrateSettings(data.settings);
+  // Migrate from version < 4.0 (convert archive/trash to G/H priorities)
+  if (data.version < '4.0') {
+    // Migrate old archive to G (completed) priority
+    if (data.archive && data.archive.length > 0) {
+      const migratedArchive = migrateTasks(data.archive).map((t: any) => ({ ...t, priority: 'G', completed: true }));
+      tasks = [...tasks, ...migratedArchive];
+    }
 
-    data.version = '3.0';
+    // Migrate old trash to H (cancelled) priority
+    if (data.trash && data.trash.length > 0) {
+      const migratedTrash = migrateTasks(data.trash).map((t: any) => ({ ...t, priority: 'H' }));
+      tasks = [...tasks, ...migratedTrash];
+    }
+
+    // Also migrate any completed tasks that are still in active tasks to G
+    tasks = tasks.map((t: any) => {
+      if (t.completed && t.priority !== 'G' && t.priority !== 'H') {
+        return { ...t, priority: 'G' };
+      }
+      return t;
+    });
+
+    data.version = '4.0';
   }
 
-  return data;
+  return {
+    version: data.version,
+    lastModified: data.lastModified || new Date().toISOString(),
+    tasks,
+    reviews: data.reviews,
+    customTagGroups: data.customTagGroups,
+    pomodoroHistory: data.pomodoroHistory,
+    settings: data.settings
+  };
 }
 
 /**

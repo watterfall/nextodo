@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Task, Priority } from '$lib/types';
-  import { PRIORITY_CONFIG, isThresholdPassed } from '$lib/types';
-  import { completeTask, uncompleteTask, deleteTask, changePriority } from '$lib/stores/tasks.svelte';
+  import { PRIORITY_CONFIG, isThresholdPassed, isActivePriority } from '$lib/types';
+  import { completeTask, uncompleteTask, cancelTask, changePriority } from '$lib/stores/tasks.svelte';
   import { openEditModal, getUIStore, showToast } from '$lib/stores/ui.svelte';
   import { startPomodoro, getPomodoroStore } from '$lib/stores/pomodoro.svelte';
   import { formatRecurrence } from '$lib/utils/recurrence';
@@ -52,9 +52,11 @@
   }
 
   function handleCheck() {
-    if (task.completed) {
+    if (task.priority === 'G') {
+      // Task is completed, restore it
       uncompleteTask(task.id);
-    } else {
+    } else if (isActivePriority(task.priority)) {
+      // Task is active, complete it
       completeTask(task.id);
     }
   }
@@ -67,9 +69,9 @@
     openEditModal(task);
   }
 
-  function handleDelete() {
-    deleteTask(task.id);
-    showToast(i18n.t('message.taskMovedToTrash'), 'info');
+  function handleCancel() {
+    cancelTask(task.id);
+    showToast(i18n.t('message.taskCancelled') || '任务已取消', 'info');
   }
 
   function handlePriorityChange(newPriority: Priority) {
@@ -80,8 +82,10 @@
   }
 
   const config = $derived(PRIORITY_CONFIG[task.priority]);
-  const isTaskOverdue = $derived(isOverdue(task.dueDate));
+  const isTaskOverdue = $derived(isActivePriority(task.priority) && isOverdue(task.dueDate));
   const dueDateLabel = $derived(task.dueDate ? getRelativeDayLabel(parseISODate(task.dueDate)) : null);
+  const isCompleted = $derived(task.priority === 'G');
+  const isCancelled = $derived(task.priority === 'H');
 
   // Check if task is dormant (has threshold date in the future)
   const isDormant = $derived(!isThresholdPassed(task));
@@ -109,9 +113,10 @@
   class="task-card"
   class:compact
   class:kanban-mode={kanbanMode}
-  class:completed={task.completed}
+  class:completed={isCompleted}
+  class:cancelled={isCancelled}
   class:active={isActive}
-  class:overdue={isTaskOverdue && !task.completed}
+  class:overdue={isTaskOverdue}
   class:dormant={isDormant}
   class:scheduled-too-far={isScheduledTooFar}
   class:focus-dimmed={isFocusDimmed}
@@ -129,18 +134,24 @@
   <div class="task-main">
     <button
       class="checkbox"
-      class:checked={task.completed}
+      class:checked={isCompleted}
+      class:cancelled={isCancelled}
       onclick={handleCheck}
-      aria-label={task.completed ? i18n.t('task.markIncomplete') : i18n.t('task.markComplete')}
+      aria-label={isCompleted ? i18n.t('task.markIncomplete') : i18n.t('task.markComplete')}
     >
-      {#if task.completed}
+      {#if isCompleted}
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
           <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+      {:else if isCancelled}
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
         </svg>
       {/if}
     </button>
 
-    {#if !task.completed && task.pomodoros.estimated > 0}
+    {#if isActivePriority(task.priority) && task.pomodoros.estimated > 0}
       {@const remaining = Math.max(0, task.pomodoros.estimated - task.pomodoros.completed)}
       {#if remaining > 0}
         <button
@@ -224,7 +235,7 @@
 
   <!-- Action buttons - hover reveal -->
   <div class="task-actions" class:visible={isHovered || isFocused}>
-    {#if !task.completed && !compact}
+    {#if isActivePriority(task.priority) && !compact}
       <button
         class="action-btn play"
         onclick={handleStartPomodoro}
@@ -250,12 +261,14 @@
         <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
       </svg>
     </button>
-    <button class="action-btn delete" onclick={handleDelete} title={i18n.t('action.delete')}>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <polyline points="3 6 5 6 21 6"></polyline>
-        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-      </svg>
-    </button>
+    {#if isActivePriority(task.priority)}
+      <button class="action-btn cancel" onclick={handleCancel} title={i18n.t('action.cancel') || '取消任务'}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+    {/if}
   </div>
 
   {#if showPriority}
@@ -322,12 +335,24 @@
 
   .task-card.completed {
     opacity: 0.55;
-    border-left-color: var(--text-muted);
+    border-left-color: var(--priority-color);
   }
 
   .task-card.completed .task-text {
     text-decoration: line-through;
     color: var(--text-muted);
+  }
+
+  .task-card.cancelled {
+    opacity: 0.45;
+    border-left-color: var(--text-muted);
+    border-left-style: dashed;
+  }
+
+  .task-card.cancelled .task-text {
+    text-decoration: line-through;
+    color: var(--text-muted);
+    font-style: italic;
   }
 
   /* Focus mode dimming */
@@ -485,6 +510,17 @@
   .checkbox.checked {
     background: var(--priority-color);
     animation: checkComplete 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .checkbox.cancelled {
+    background: var(--text-muted);
+    border-color: var(--text-muted);
+  }
+
+  .checkbox.cancelled svg {
+    width: 10px;
+    height: 10px;
+    color: white;
   }
 
   @keyframes checkComplete {
@@ -767,9 +803,9 @@
     background: var(--primary-bg);
   }
 
-  .action-btn.delete:hover {
-    color: var(--error);
-    background: var(--error-bg);
+  .action-btn.cancel:hover {
+    color: var(--text-muted);
+    background: var(--hover-bg);
   }
 
   .action-btn:disabled {
