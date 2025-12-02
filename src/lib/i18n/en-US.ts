@@ -399,5 +399,6 @@ export default {
     quotaExceeded: 'Priority quota limit reached',
     taskNotFound: 'Task not found',
     saveFailed: 'Save failed',
+    externalChangeIgnored: 'External data change detected but ignored due to active session. Please save and reload manually to avoid conflicts.',
   },
 };

@@ -398,5 +398,6 @@ export default {
     quotaExceeded: '该优先级已达配额上限',
     taskNotFound: '任务未找到',
     saveFailed: '保存失败',
+    externalChangeIgnored: '检测到外部数据变更，但由于当前有活动会话已忽略。请手动保存并刷新以避免冲突。',
   },
 };
