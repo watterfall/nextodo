@@ -18,6 +18,7 @@ export default {
     trash: '回收站',
     trashArchive: '回收站与归档',
     settings: '设置',
+    badges: '成就',
   },
 
   // Trash
@@ -189,6 +190,8 @@ export default {
     reflection: '本周回顾',
     nextFocus: '下周重点',
     biDaily: '双日制',
+    prev: '上一个周期',
+    next: '下一个周期',
     stats: {
       planned: '计划',
       completed: '完成',
