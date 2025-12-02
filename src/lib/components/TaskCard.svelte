@@ -144,7 +144,7 @@
       <button
         class="pomodoro-btn-left"
         class:active={isActive}
-        class:kanban-hidden={kanbanMode && !isHovered && !isActive}
+        class:kanban-hidden={kanbanMode}
         title={isActive ? i18n.t('task.focusInProgress') : i18n.t('task.pomodoroProgress', { completed: task.pomodoros.completed, estimated: task.pomodoros.estimated })}
         onclick={(e) => { e.stopPropagation(); handleStartPomodoro(); }}
         disabled={isActive}
