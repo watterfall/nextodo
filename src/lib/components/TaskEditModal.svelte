@@ -28,6 +28,50 @@
   let estimatedPomodoros = $state<number>(task.pomodoros.estimated);
   let recurrence = $state(task.recurrence?.pattern || task.recurrence?.customPattern || '');
 
+  // Extract unique existing projects, contexts, and tags for autocomplete
+  const existingProjects = $derived([...new Set(tasks.tasks.flatMap(t => t.projects.map(p => p.replace(/^\+/, ''))))].sort());
+  const existingTags = $derived([...new Set(tasks.tasks.flatMap(t => t.customTags.map(tag => tag.replace(/^#/, ''))))].sort());
+
+  // Mood options
+  const moodOptions = $derived([
+    { value: '', label: t('taskForm.moodPlaceholder'), emoji: '' },
+    { value: 'challenging', label: t('taskForm.moodOptions.challenging'), emoji: '🔥' },
+    { value: 'focused', label: t('taskForm.moodOptions.focused'), emoji: '⚡' },
+    { value: 'calm', label: t('taskForm.moodOptions.calm'), emoji: '😌' },
+    { value: 'motivated', label: t('taskForm.moodOptions.motivated'), emoji: '💪' },
+    { value: 'creative', label: t('taskForm.moodOptions.creative'), emoji: '🎨' },
+    { value: 'routine', label: t('taskForm.moodOptions.routine'), emoji: '📋' },
+    { value: 'tired', label: t('taskForm.moodOptions.tired') || '😴 疲惫', emoji: '😴' },
+    { value: 'anxious', label: t('taskForm.moodOptions.anxious') || '😰 焦虑', emoji: '😰' },
+    { value: 'excited', label: t('taskForm.moodOptions.excited') || '🤩 兴奋', emoji: '🤩' },
+    { value: 'neutral', label: t('taskForm.moodOptions.neutral') || '😐 平淡', emoji: '😐' }
+  ]);
+
+  // Extract mood from context
+  let mood = $state('');
+  $effect(() => {
+    // Try to find a mood in existing contexts
+    const moodContext = task.contexts.find(c => {
+      const val = c.replace(/^@/, '');
+      // Check if it matches any mood value (with or without emoji)
+      return moodOptions.some(m => m.value && val.includes(m.value));
+    });
+    
+    if (moodContext) {
+      // Extract the mood value
+      const val = moodContext.replace(/^@/, '');
+      const match = moodOptions.find(m => m.value && val.includes(m.value));
+      if (match) {
+        mood = match.value;
+        // Remove mood from context text field to avoid duplication
+        context = task.contexts
+          .filter(c => c !== moodContext)
+          .map(c => c.replace(/^@/, ''))
+          .join(', ');
+      }
+    }
+  });
+
   // Priority options
   const priorityOptions: Priority[] = ['A', 'B', 'C', 'D', 'E', 'F'];
 
@@ -83,6 +127,19 @@
     const contexts = context.trim()
       ? context.trim().split(/[,\s]+/).filter(Boolean).map(c => '@' + c)
       : [];
+    
+    // Add mood context if selected
+    if (mood) {
+      const selectedMood = moodOptions.find(m => m.value === mood);
+      if (selectedMood && selectedMood.value) {
+        // Check if already present (to avoid double add if user manually typed it back)
+        const moodStr = '@' + selectedMood.emoji + selectedMood.value;
+        const simpleMoodStr = '@' + selectedMood.value;
+        if (!contexts.some(c => c.includes(selectedMood.value))) {
+          contexts.push(moodStr);
+        }
+      }
+    }
 
     // Preserve energy tags if they exist
     const existingEnergyTags = task.customTags.filter(t => ['⚡高能量', '😴低能量', '☕中等'].includes(t));
@@ -215,7 +272,13 @@
             class="field-input"
             bind:value={project}
             placeholder={t('taskForm.projectPlaceholder')}
+            list="edit-project-suggestions"
           />
+          <datalist id="edit-project-suggestions">
+            {#each existingProjects as p}
+              <option value={p}></option>
+            {/each}
+          </datalist>
         </div>
 
         <div class="field-group">
@@ -223,12 +286,11 @@
             <span class="label-icon" style:color="#74c0fc">@</span>
             {t('taskForm.mood')}
           </label>
-          <input
-            type="text"
-            class="field-input"
-            bind:value={context}
-            placeholder={t('taskForm.contextPlaceholder')}
-          />
+          <select class="field-input mood-select" bind:value={mood}>
+            {#each moodOptions as option}
+              <option value={option.value}>{option.label}</option>
+            {/each}
+          </select>
         </div>
 
         <div class="field-group">
@@ -241,7 +303,13 @@
             class="field-input"
             bind:value={tags}
             placeholder={t('taskForm.tagsPlaceholder')}
+            list="edit-tag-suggestions"
           />
+          <datalist id="edit-tag-suggestions">
+            {#each existingTags as tag}
+              <option value={tag}></option>
+            {/each}
+          </datalist>
         </div>
       </div>
 

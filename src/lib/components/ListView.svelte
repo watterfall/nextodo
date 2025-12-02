@@ -206,15 +206,15 @@
               <!-- Task metadata -->
               <div class="task-meta">
                 {#if task.pomodoros.estimated > 0}
-                  {@const remaining = task.pomodoros.estimated - task.pomodoros.completed}
+                  {@const remaining = Math.max(0, task.pomodoros.estimated - task.pomodoros.completed)}
                   {#if remaining > 0}
                     <button
                       class="pomodoro-badge"
                       class:active={isActive}
                       class:warning={pomodoroCheck.outOfRange}
                       onclick={(e) => { e.stopPropagation(); handleStartPomodoro(task); }}
-                      title={pomodoroCheck.warning || `剩余 ${remaining} 个番茄钟`}
-                      aria-label={`剩余 ${remaining} 个番茄钟${pomodoroCheck.outOfRange ? '，' + pomodoroCheck.warning : ''}`}
+                      title={pomodoroCheck.warning || t('task.pomodoroRemaining', { remaining })}
+                      aria-label={`${t('task.pomodoroRemaining', { remaining })}${pomodoroCheck.outOfRange ? '，' + pomodoroCheck.warning : ''}`}
                     >
                       🍅 {remaining}
                       {#if pomodoroCheck.outOfRange}
@@ -349,7 +349,7 @@
             <span class="task-content">{task.content}</span>
             <div class="task-meta">
               {#if task.pomodoros.estimated > 0}
-                {@const remaining = task.pomodoros.estimated - task.pomodoros.completed}
+                {@const remaining = Math.max(0, task.pomodoros.estimated - task.pomodoros.completed)}
                 {#if remaining > 0}
                   <span class="pomodoro-badge">🍅 {remaining}</span>
                 {/if}

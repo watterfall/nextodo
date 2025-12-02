@@ -141,7 +141,7 @@
     </button>
 
     {#if !task.completed && task.pomodoros.estimated > 0}
-      {@const remaining = task.pomodoros.estimated - task.pomodoros.completed}
+      {@const remaining = Math.max(0, task.pomodoros.estimated - task.pomodoros.completed)}
       {#if remaining > 0}
         <button
           class="pomodoro-btn-left"
@@ -198,16 +198,7 @@
     </div>
 
     {#if !task.completed && task.pomodoros.estimated === 0}
-      <button
-        class="pomodoro-btn"
-        class:active={isActive}
-        class:kanban-hidden={kanbanMode}
-        title={isActive ? i18n.t('task.focusInProgress') : i18n.t('task.clickToStartFocus')}
-        onclick={(e) => { e.stopPropagation(); handleStartPomodoro(); }}
-        disabled={isActive}
-      >
-        <span class="tomato-icon">🍅</span>
-      </button>
+      <!-- Show nothing for tasks with no estimate or exceeded estimate to keep interface clean -->
     {/if}
   </div>
 
@@ -240,9 +231,17 @@
         title={i18n.t('task.startFocus')}
         disabled={isActive}
       >
-        <svg viewBox="0 0 24 24" fill="currentColor">
-          <polygon points="5 3 19 12 5 21 5 3"></polygon>
-        </svg>
+        {#if kanbanMode && task.pomodoros.estimated > 0}
+          <span style="font-size: 12px; margin-right: 2px;">🍅</span>
+          {@const remaining = Math.max(0, task.pomodoros.estimated - task.pomodoros.completed)}
+          {#if remaining > 0}
+             <span style="font-size: 10px; font-weight: 700;">{remaining}</span>
+          {/if}
+        {:else}
+          <svg viewBox="0 0 24 24" fill="currentColor">
+            <polygon points="5 3 19 12 5 21 5 3"></polygon>
+          </svg>
+        {/if}
       </button>
     {/if}
     <button class="action-btn edit" onclick={handleEdit} title={i18n.t('action.edit')}>
@@ -406,6 +405,20 @@
     overflow: hidden;
   }
 
+  .task-card.kanban-mode .pomodoro-btn-left {
+    padding: 2px 4px;
+    gap: 2px;
+    font-size: 10px;
+  }
+
+  .task-card.kanban-mode .pomodoro-btn-left .tomato-icon {
+    font-size: 10px;
+  }
+
+  .task-card.kanban-mode .pomodoro-btn-left .pomodoro-count {
+    font-size: 10px;
+  }
+
   .task-card.kanban-mode:hover,
   .task-card.kanban-mode.keyboard-focused {
     max-height: none;
@@ -426,10 +439,22 @@
     display: none !important;
   }
 
+  /* Adjust action-btn for text content */
+  .action-btn.play {
+    width: auto;
+    min-width: 26px;
+    padding: 0 6px;
+    gap: 2px;
+  }
+
   .task-main {
     display: flex;
     align-items: flex-start;
-    gap: 12px;
+    gap: 8px; /* Reduced gap from 12px */
+  }
+
+  .task-card.kanban-mode .task-main {
+    gap: 6px; /* Even tighter gap for kanban mode */
   }
 
   .checkbox {

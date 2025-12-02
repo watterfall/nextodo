@@ -168,7 +168,7 @@
                 </div>
                 <div class="item-meta">
                   <span class="days-remaining" class:urgent={item.daysRemaining <= 2}>
-                    {item.daysRemaining > 0 ? `${item.daysRemaining}${t('settings.days') || '天'}` : t('trash.expiring') || '即将删除'}
+                    {item.daysRemaining > 0 ? t('trash.daysRemaining', { days: item.daysRemaining }) : t('trash.expiring')}
                   </span>
                   <button class="restore-btn" onclick={() => handleRestore(item.id)}>
                     {t('task.restore')}

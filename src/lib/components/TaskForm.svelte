@@ -1,9 +1,11 @@
 <script lang="ts">
   import type { Priority } from '$lib/types';
   import { PRIORITY_CONFIG } from '$lib/types';
-  import { addTask } from '$lib/stores/tasks.svelte';
+  import { addTask, getTasksStore } from '$lib/stores/tasks.svelte';
   import { showToast } from '$lib/stores/ui.svelte';
   import { getI18nStore } from '$lib/i18n';
+  import { validateQuota } from '$lib/utils/quota';
+  import { slide } from 'svelte/transition';
 
   interface Props {
     onSubmit?: () => void;
@@ -12,6 +14,7 @@
   let { onSubmit }: Props = $props();
 
   const i18n = getI18nStore();
+  const tasks = getTasksStore();
   const t = i18n.t;
 
   let content = $state('');
@@ -38,6 +41,10 @@
     { value: 'motivated', label: t('taskForm.moodOptions.motivated'), emoji: '💪' },
     { value: 'creative', label: t('taskForm.moodOptions.creative'), emoji: '🎨' },
     { value: 'routine', label: t('taskForm.moodOptions.routine'), emoji: '📋' },
+    { value: 'tired', label: t('taskForm.moodOptions.tired') || '😴 疲惫', emoji: '😴' },
+    { value: 'anxious', label: t('taskForm.moodOptions.anxious') || '😰 焦虑', emoji: '😰' },
+    { value: 'excited', label: t('taskForm.moodOptions.excited') || '🤩 兴奋', emoji: '🤩' },
+    { value: 'neutral', label: t('taskForm.moodOptions.neutral') || '😐 平淡', emoji: '😐' }
   ]);
 
   const recurrenceOptions = $derived([
@@ -100,6 +107,18 @@
   function handleSubmit() {
     if (!content.trim()) return;
 
+    // Check quota for selected priority
+    const quotaError = validateQuota(tasks.tasks, selectedPriority);
+    if (quotaError) {
+      // Soft warning - show toast but allow adding?
+      // User request: "have feedback, can skip execution (special case), allowed but shouldn't happen often"
+      // We will show a confirm dialog or just a warning toast. 
+      // For a form submission, a confirm dialog is better.
+      if (!confirm(quotaError + '\n' + t('action.continueAnyway') + '?')) {
+        return;
+      }
+    }
+
     const taskString = buildTaskString();
     const result = addTask(taskString);
 
@@ -126,6 +145,28 @@
   }
 
   function handleKeydown(e: KeyboardEvent) {
+    if (showSuggestions && filteredSuggestions.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        activeSuggestionIndex = (activeSuggestionIndex + 1) % filteredSuggestions.length;
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        activeSuggestionIndex = (activeSuggestionIndex - 1 + filteredSuggestions.length) % filteredSuggestions.length;
+        return;
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        insertSuggestion(filteredSuggestions[activeSuggestionIndex]);
+        return;
+      }
+      if (e.key === 'Escape') {
+        showSuggestions = false;
+        return;
+      }
+    }
+
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
       e.preventDefault();
       handleSubmit();
@@ -149,13 +190,123 @@
     }, 200);
   }
 
+  let showSuggestions = $state(false);
+  let suggestionType = $state<'project' | 'context' | 'tag' | null>(null);
+  let suggestionQuery = $state('');
+  let activeSuggestionIndex = $state(0);
+
+  // Extract unique existing projects, contexts, and tags
+  const existingProjects = $derived([...new Set(tasks.tasks.flatMap(t => t.projects))].sort());
+  const existingContexts = $derived([...new Set(tasks.tasks.flatMap(t => t.contexts))].sort());
+  const existingTags = $derived([...new Set(tasks.tasks.flatMap(t => t.customTags))].sort());
+
+  // Also include predefined mood options in context suggestions
+  const moodContexts = $derived(moodOptions.filter(m => m.value).map(m => m.emoji + m.value));
+  const allContexts = $derived([...new Set([...existingContexts, ...moodContexts])].sort());
+
+  const filteredSuggestions = $derived.by(() => {
+    if (!suggestionType || !suggestionQuery && suggestionType !== 'project' && suggestionType !== 'context' && suggestionType !== 'tag') return [];
+    
+    // For dedicated inputs (when no specific query but field focused), show all
+    // For autocomplete (when query exists), filter
+    
+    let source: string[] = [];
+    if (suggestionType === 'project') source = existingProjects;
+    else if (suggestionType === 'context') source = allContexts;
+    else if (suggestionType === 'tag') source = existingTags;
+
+    if (!suggestionQuery) return source; // Show all if just focused
+    return source.filter(item => item.toLowerCase().includes(suggestionQuery.toLowerCase()));
+  });
+
+  // Dedicated input handlers
+  function handleProjectInput(e: Event) {
+    const input = e.target as HTMLInputElement;
+    project = input.value;
+    // Show suggestions logic could be shared but simplistic approach:
+    // We'll use a datalist for simplicity and native behavior as requested "pop up existing"
+    // Or we can wire up the custom suggestion menu.
+    // Given "mouse click into input... directly pop up", a custom menu or datalist works.
+    // Datalist is easiest to implement "pop up".
+  }
+
   function handleContentInput(e: Event) {
     const input = e.target as HTMLInputElement;
-    content = input.value;
-    if (input.value.trim().length > 0 && !hasStartedTyping) {
+    const value = input.value;
+    const cursorPos = input.selectionStart || 0;
+    
+    content = value;
+    
+    // Simple autocomplete trigger detection
+    // Look for the last special char before cursor
+    const lastPlus = value.lastIndexOf('+', cursorPos);
+    const lastAt = value.lastIndexOf('@', cursorPos);
+    const lastHash = value.lastIndexOf('#', cursorPos);
+    
+    // Determine which one is active (closest to cursor and no spaces after)
+    // A more robust parser would be better, but this works for basic cases
+    let activeChar = null;
+    let activeIndex = -1;
+    
+    if (lastPlus > activeIndex && !value.slice(lastPlus, cursorPos).includes(' ')) { activeChar = '+'; activeIndex = lastPlus; }
+    if (lastAt > activeIndex && !value.slice(lastAt, cursorPos).includes(' ')) { activeChar = '@'; activeIndex = lastAt; }
+    if (lastHash > activeIndex && !value.slice(lastHash, cursorPos).includes(' ')) { activeChar = '#'; activeIndex = lastHash; }
+    
+    if (activeChar) {
+      suggestionType = activeChar === '+' ? 'project' : activeChar === '@' ? 'context' : 'tag';
+      suggestionQuery = value.slice(activeIndex + 1, cursorPos);
+      showSuggestions = true;
+      activeSuggestionIndex = 0;
+    } else {
+      showSuggestions = false;
+      suggestionType = null;
+    }
+
+    if (value.trim().length > 0 && !hasStartedTyping) {
       hasStartedTyping = true;
-      // Show expanded form after user starts typing
       isExpanded = true;
+    }
+  }
+
+  function insertSuggestion(item: string) {
+    if (!suggestionType) return;
+    
+    // Find the replacement range
+    // We need to re-evaluate active index as in handleInputInput because we don't store it
+    // Or just replace the current word
+    // Simplified: replacing the query part
+    
+    // For robust replacement, we need to know where we started. 
+    // Let's re-find the trigger.
+    // This assumes insertion at end or we need to track cursor more carefully.
+    // For MVP, assume we are typing at the end or track cursor better?
+    // Let's use a regex replace for the last occurrence of the pattern if we can't track perfectly.
+    // Better: use the stored query.
+    
+    // Find the last occurrence of trigger+query
+    const trigger = suggestionType === 'project' ? '+' : suggestionType === 'context' ? '@' : '#';
+    const toReplace = trigger + suggestionQuery;
+    const lastIndex = content.lastIndexOf(toReplace);
+    
+    if (lastIndex >= 0) {
+      const before = content.slice(0, lastIndex);
+      const after = content.slice(lastIndex + toReplace.length);
+      content = before + trigger + item + ' ' + after;
+      
+      // Reset
+      showSuggestions = false;
+      suggestionType = null;
+      
+      // Keep focus
+      const input = document.querySelector('.content-input') as HTMLInputElement;
+      if (input) {
+        setTimeout(() => {
+          input.focus();
+          // Move cursor to end of inserted item
+          const newPos = before.length + trigger.length + item.length + 1;
+          input.setSelectionRange(newPos, newPos);
+        }, 0);
+      }
     }
   }
 
@@ -187,6 +338,26 @@
         onblur={handleInputBlur}
         placeholder={t('taskForm.placeholder')}
       />
+
+      <!-- Autocomplete Suggestions -->
+      {#if showSuggestions && filteredSuggestions.length > 0}
+        <div class="suggestions-menu" transition:slide={{ duration: 150 }}>
+          {#each filteredSuggestions as item, index}
+            <button
+              class="suggestion-item"
+              class:active={index === activeSuggestionIndex}
+              onmousedown={(e) => { e.preventDefault(); insertSuggestion(item); }}
+            >
+              <span class="suggestion-icon">
+                {#if suggestionType === 'project'}+
+                {:else if suggestionType === 'context'}@
+                {:else}#{/if}
+              </span>
+              <span class="suggestion-text">{item}</span>
+            </button>
+          {/each}
+        </div>
+      {/if}
 
       <!-- Syntax Preview Tags -->
       {#if detectedPatterns.length > 0 && content.trim()}
@@ -251,7 +422,13 @@
             class="field-input"
             bind:value={project}
             placeholder={t('taskForm.projectPlaceholder')}
+            list="project-suggestions"
           />
+          <datalist id="project-suggestions">
+            {#each existingProjects as p}
+              <option value={p}></option>
+            {/each}
+          </datalist>
         </div>
 
         <div class="field-group">
@@ -276,7 +453,13 @@
             class="field-input"
             bind:value={tags}
             placeholder={t('taskForm.tagsPlaceholder')}
+            list="tag-suggestions"
           />
+          <datalist id="tag-suggestions">
+            {#each existingTags as tag}
+              <option value={tag}></option>
+            {/each}
+          </datalist>
         </div>
       </div>
 
@@ -398,6 +581,50 @@
     display: flex;
     align-items: center;
     gap: 8px;
+  }
+
+  .suggestions-menu {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    min-width: 200px;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+    z-index: 100;
+    max-height: 200px;
+    overflow-y: auto;
+    margin-top: 4px;
+    display: flex;
+    flex-direction: column;
+    padding: 4px;
+  }
+
+  .suggestion-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    border: none;
+    background: transparent;
+    color: var(--text-primary);
+    cursor: pointer;
+    font-size: 13px;
+    border-radius: var(--radius-sm);
+    text-align: left;
+    width: 100%;
+  }
+
+  .suggestion-item:hover,
+  .suggestion-item.active {
+    background: var(--primary-bg);
+    color: var(--primary);
+  }
+
+  .suggestion-icon {
+    font-weight: 700;
+    opacity: 0.7;
   }
 
   .content-input {

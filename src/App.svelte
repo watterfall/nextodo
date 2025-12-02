@@ -177,10 +177,22 @@
   </div>
 {:else}
   <Sidebar
-    onOpenSettings={() => isSettingsOpen = true}
-    onOpenReview={() => isReviewOpen = true}
-    onOpenBadges={() => isBadgesOpen = true}
-    onOpenTrash={() => isTrashOpen = true}
+    onOpenSettings={() => {
+      console.log('App: Opening settings');
+      isSettingsOpen = true;
+    }}
+    onOpenReview={() => {
+      console.log('App: Opening review');
+      isReviewOpen = true;
+    }}
+    onOpenBadges={() => {
+      console.log('App: Opening badges');
+      isBadgesOpen = true;
+    }}
+    onOpenTrash={() => {
+      console.log('App: Opening trash');
+      isTrashOpen = true;
+    }}
   />
 
   <main class="main-content">

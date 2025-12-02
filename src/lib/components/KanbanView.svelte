@@ -12,6 +12,8 @@
   import { dndzone } from 'svelte-dnd-action';
   import { flip } from 'svelte/animate';
   import { dndConfig } from '$lib/utils/motion';
+  import { validateQuota, canAddTask } from '$lib/utils/quota';
+  import { showToast } from '$lib/stores/ui.svelte';
 
   const tasks = getTasksStore();
   const pomodoro = getPomodoroStore();
@@ -52,6 +54,37 @@
   function handleDndFinalize(priority: Priority, e: CustomEvent<DndEvent<Task>>) {
     isDragging = false;
     columnItems[priority] = e.detail.items;
+    
+    // Check quota if item was moved (length changed or different items)
+    // We approximate "moved" by checking if this drop event adds a task that wasn't there before
+    // Or simpler: just check quota after move. The move already happened in UI but we can revert or warn.
+    // Since reorderTask updates the store, we should check *before* calling it if we want to block,
+    // but dndzone already updated local state visually.
+    
+    // Let's check if we are adding a task to this column from another column
+    const previousTasks = tasks.tasksByPriority[priority].filter(t => !t.completed);
+    const newTasks = e.detail.items;
+    
+    // If newTasks has more items, or different items (moved from elsewhere)
+    // We can just check the quota for the target priority
+    if (priority !== 'F') { // F has no quota
+      // Calculate projected count: current count - (1 if we are moving out) + (1 if moving in)
+      // This is complex during drag.
+      
+      // Simpler approach: Check if the operation results in exceeding quota
+      // e.detail.items contains the tasks that WOULD be in this column
+      const newCount = newTasks.length;
+      const quota = PRIORITY_CONFIG[priority].quota;
+      
+      if (newCount > quota && quota !== Infinity) {
+        // Quota exceeded
+        const confirmMsg = t('message.quotaExceeded', { priority }) + '. ' + t('action.continueAnyway');
+        // Ideally we'd show a modal, but standard confirm is safer for synchronous dnd flow
+        // or we just show a toast warning but allow it (soft limit) as requested
+        showToast(t('message.quotaExceeded', { priority }), 'warning');
+      }
+    }
+
     reorderTask(priority, e.detail.items);
   }
 
