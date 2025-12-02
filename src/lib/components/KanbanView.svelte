@@ -234,6 +234,7 @@
                 {task}
                 compact={priority === 'D'}
                 isFocused={focusedTaskId === task.id}
+                kanbanMode={true}
               />
             </div>
           {/each}
@@ -246,7 +247,7 @@
           <div class="completed-section">
             <span class="completed-label">{t('filter.completed')} ({completedTasks.length})</span>
             {#each completedTasks.slice(0, 2) as task (task.id)}
-              <TaskCard {task} compact={true} />
+              <TaskCard {task} compact={true} kanbanMode={true} />
             {/each}
             {#if completedTasks.length > 2}
               <span class="more-count">+{completedTasks.length - 2}</span>
@@ -284,11 +285,11 @@
         onfinalize={(e) => handleDndFinalize('F', e)}
       >
         {#each ideaPoolTasks as task (task.id)}
-          <div 
+          <div
             class="pool-task-item"
             animate:flip={{ duration: dndConfig.flipDurationMs }}
           >
-            <TaskCard {task} compact />
+            <TaskCard {task} compact kanbanMode={true} />
           </div>
         {/each}
         {#if ideaPoolTasks.length === 0}

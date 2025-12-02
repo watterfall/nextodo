@@ -159,7 +159,8 @@ export function parseISODate(dateStr: string): Date {
 }
 
 /**
- * Get relative day label
+ * Get relative day label with friendly text
+ * Uses soft/friendly labels like "tomorrow", "day after tomorrow", "this week"
  */
 export function getRelativeDayLabel(date: Date): string {
   const today = new Date();
@@ -170,12 +171,35 @@ export function getRelativeDayLabel(date: Date): string {
 
   const diffDays = Math.round((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 
+  // Past dates
+  if (diffDays < 0) {
+    if (diffDays === -1) return '昨天';
+    if (diffDays === -2) return '前天';
+    if (diffDays >= -7) return `${Math.abs(diffDays)}天前`;
+    return formatDateShort(date);
+  }
+
+  // Future dates - use friendly labels
   if (diffDays === 0) return '今天';
   if (diffDays === 1) return '明天';
-  if (diffDays === -1) return '昨天';
-  if (diffDays > 0 && diffDays <= 7) return `${diffDays}天后`;
-  if (diffDays < 0 && diffDays >= -7) return `${Math.abs(diffDays)}天前`;
+  if (diffDays === 2) return '后天';
 
+  // Within current cycle (2 days) - very subtle
+  // Days 3-7: show "this week" style
+  if (diffDays <= 7) {
+    const dayNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+    const dayOfWeek = target.getDay();
+    return `本${dayNames[dayOfWeek]}`;
+  }
+
+  // Next week
+  if (diffDays <= 14) {
+    const dayNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+    const dayOfWeek = target.getDay();
+    return `下${dayNames[dayOfWeek]}`;
+  }
+
+  // Beyond 2 weeks - show date
   return formatDateShort(date);
 }
 

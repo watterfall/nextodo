@@ -2,7 +2,6 @@
   import { getTasksStore } from '$lib/stores/tasks.svelte';
   import { fade, scale } from 'svelte/transition';
   import { getI18nStore } from '$lib/i18n';
-  import { onMount } from 'svelte';
 
   interface Props {
     onClose: () => void;
@@ -13,22 +12,11 @@
   const i18n = getI18nStore();
   const t = i18n.t;
 
-  // Track if component is mounted
-  let isMounted = $state(false);
-
-  onMount(() => {
-    isMounted = true;
-    return () => { isMounted = false; };
-  });
-
-  // Get store directly - it should be initialized by App.svelte before this modal is shown
-  const tasksStore = getTasksStore();
-
-  // Access badges with defensive fallback - only access when mounted
+  // Access badges with defensive fallback
   const badges = $derived.by(() => {
-    if (!isMounted) return [];
     try {
-      return tasksStore.appData?.badges ?? [];
+      const tasksStore = getTasksStore();
+      return tasksStore?.appData?.badges ?? [];
     } catch {
       return [];
     }

@@ -107,18 +107,44 @@ export function formatDateLocale(date: Date | string): string {
     .replace('DD', day);
 }
 
-// Get relative date string
+// Get relative date string with friendly labels
 export function getRelativeDate(date: Date | string): string {
   const d = typeof date === 'string' ? new Date(date) : date;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  d.setHours(0, 0, 0, 0);
+  const targetDate = new Date(d);
+  targetDate.setHours(0, 0, 0, 0);
 
-  const diff = Math.floor((d.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  const diff = Math.floor((targetDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 
+  // Past dates
+  if (diff < 0) {
+    if (diff === -1) return _currentLocale.date.yesterday;
+    if (diff === -2) return _currentLocale.date.dayBeforeYesterday || '前天';
+    if (diff >= -7) return _currentLocale.date.daysAgo?.replace('{days}', String(Math.abs(diff))) || `${Math.abs(diff)}天前`;
+    return formatDateLocale(d);
+  }
+
+  // Future dates - use friendly labels
   if (diff === 0) return _currentLocale.date.today;
   if (diff === 1) return _currentLocale.date.tomorrow;
-  if (diff === -1) return _currentLocale.date.yesterday;
+  if (diff === 2) return _currentLocale.date.dayAfterTomorrow || '后天';
+
+  // Within this week (days 3-7)
+  if (diff <= 7) {
+    const dayNames = _currentLocale.date.weekdaysShort || ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+    const dayOfWeek = targetDate.getDay();
+    const prefix = _currentLocale.date.thisWeekPrefix || '本';
+    return `${prefix}${dayNames[dayOfWeek]}`;
+  }
+
+  // Next week (days 8-14)
+  if (diff <= 14) {
+    const dayNames = _currentLocale.date.weekdaysShort || ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+    const dayOfWeek = targetDate.getDay();
+    const prefix = _currentLocale.date.nextWeekPrefix || '下';
+    return `${prefix}${dayNames[dayOfWeek]}`;
+  }
 
   return formatDateLocale(d);
 }
