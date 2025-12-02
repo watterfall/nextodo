@@ -13,9 +13,10 @@
     compact?: boolean;
     showPriority?: boolean;
     isFocused?: boolean;
+    kanbanMode?: boolean;
   }
 
-  let { task, compact = false, showPriority = false, isFocused = false }: Props = $props();
+  let { task, compact = false, showPriority = false, isFocused = false, kanbanMode = false }: Props = $props();
 
   const ui = getUIStore();
   const pomodoro = getPomodoroStore();
@@ -107,6 +108,7 @@
 <div
   class="task-card"
   class:compact
+  class:kanban-mode={kanbanMode}
   class:completed={task.completed}
   class:active={isActive}
   class:overdue={isTaskOverdue && !task.completed}
@@ -142,6 +144,7 @@
       <button
         class="pomodoro-btn-left"
         class:active={isActive}
+        class:kanban-hidden={kanbanMode && !isHovered && !isActive}
         title={isActive ? i18n.t('task.focusInProgress') : i18n.t('task.pomodoroProgress', { completed: task.pomodoros.completed, estimated: task.pomodoros.estimated })}
         onclick={(e) => { e.stopPropagation(); handleStartPomodoro(); }}
         disabled={isActive}
@@ -204,7 +207,7 @@
     {/if}
   </div>
 
-  {#if !compact && (task.dueDate || task.recurrence || task.thresholdDate)}
+  {#if !compact && !kanbanMode && (task.dueDate || task.recurrence || task.thresholdDate)}
     <div class="task-footer">
       {#if task.thresholdDate && isDormant}
         <span class="threshold-date" title={i18n.t('task.dormantUntil')}>
@@ -390,6 +393,32 @@
 
   .task-card.compact {
     padding: 8px 10px;
+  }
+
+  /* Kanban mode - consistent card heights and hover-reveal pomodoro */
+  .task-card.kanban-mode {
+    min-height: 60px;
+    max-height: 60px;
+    overflow: hidden;
+  }
+
+  .task-card.kanban-mode:hover,
+  .task-card.kanban-mode.keyboard-focused {
+    max-height: none;
+  }
+
+  .task-card.kanban-mode .task-meta {
+    display: none;
+  }
+
+  .task-card.kanban-mode:hover .task-meta,
+  .task-card.kanban-mode.keyboard-focused .task-meta {
+    display: flex;
+  }
+
+  /* Hide pomodoro button in kanban mode when not hovered */
+  .pomodoro-btn-left.kanban-hidden {
+    display: none;
   }
 
   .task-main {
