@@ -93,7 +93,7 @@
 <div class="immersive-overlay" style:background={getBackgroundColor()}>
   <div class="immersive-content">
     <!-- Exit button -->
-    <button class="exit-btn" onclick={onClose} title="退出沉浸模式 (Esc)">
+    <button class="exit-btn" onclick={onClose} title={t('pomodoro.immersive.exitTitle')}>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <line x1="18" y1="6" x2="6" y2="18"></line>
         <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -143,29 +143,29 @@
     </div>
 
     <!-- Controls -->
-    <div class="controls" role="group" aria-label="计时器控制">
+    <div class="controls" role="group" aria-label={t('pomodoro.immersive.timerControls')}>
       {#if pomodoro.isRunning}
-        <button class="control-btn pause" onclick={pausePomodoro} aria-label="暂停" title="暂停">
+        <button class="control-btn pause" onclick={pausePomodoro} aria-label={t('pomodoro.pause')} title={t('pomodoro.pause')}>
           <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
             <rect x="6" y="4" width="4" height="16" rx="1"></rect>
             <rect x="14" y="4" width="4" height="16" rx="1"></rect>
           </svg>
         </button>
       {:else}
-        <button class="control-btn play" onclick={resumePomodoro} aria-label="继续" title="继续">
+        <button class="control-btn play" onclick={resumePomodoro} aria-label={t('pomodoro.resume')} title={t('pomodoro.resume')}>
           <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
             <polygon points="5,3 19,12 5,21"></polygon>
           </svg>
         </button>
       {/if}
 
-      <button class="control-btn stop" onclick={stopPomodoro} aria-label="停止" title="停止">
+      <button class="control-btn stop" onclick={stopPomodoro} aria-label={t('pomodoro.stop')} title={t('pomodoro.stop')}>
         <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
           <rect x="4" y="4" width="16" height="16" rx="2"></rect>
         </svg>
       </button>
 
-      <button class="control-btn skip" onclick={skipSession} aria-label="跳过" title="跳过">
+      <button class="control-btn skip" onclick={skipSession} aria-label={t('pomodoro.skip')} title={t('pomodoro.skip')}>
         <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
           <polygon points="5,4 15,12 5,20"></polygon>
           <rect x="15" y="4" width="4" height="16"></rect>
@@ -173,7 +173,7 @@
       </button>
 
       {#if pomodoro.state === 'work'}
-        <button class="control-btn interrupt" onclick={openInterruptionInput} title="记录中断 (I)">
+        <button class="control-btn interrupt" onclick={openInterruptionInput} title={t('pomodoro.immersive.recordInterruption')}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="10"></circle>
             <line x1="12" y1="8" x2="12" y2="12"></line>
@@ -188,7 +188,7 @@
       <span class="tomato-icon">🍅</span>
       <span class="count">× {pomodoro.todayCount}</span>
       {#if pomodoro.state === 'work' && pomodoro.interruptionCount > 0}
-        <span class="interruption-count" title="本次中断次数">
+        <span class="interruption-count" title={t('pomodoro.immersive.interruptionCount')}>
           ⚡ {pomodoro.interruptionCount}
         </span>
       {/if}
@@ -196,9 +196,9 @@
 
     <!-- Keyboard hint -->
     <div class="keyboard-hint">
-      <kbd>Space</kbd> 暂停/继续
-      <kbd>I</kbd> 记录中断
-      <kbd>Esc</kbd> 退出
+      <kbd>Space</kbd> {t('pomodoro.immersive.keyboardPauseResume')}
+      <kbd>I</kbd> {t('pomodoro.immersive.keyboardInterrupt')}
+      <kbd>Esc</kbd> {t('pomodoro.immersive.keyboardExit')}
     </div>
   </div>
 
@@ -206,17 +206,17 @@
   {#if showInterruptionInput}
     <div class="interruption-modal" transition:fade={{ duration: 150 }}>
       <div class="modal-card" transition:scale={{ start: 0.95, duration: 200 }}>
-        <h3>记录中断原因</h3>
-        <input 
-          type="text" 
-          bind:value={interruptionReason} 
-          placeholder="例如：老板电话、同事询问..." 
+        <h3>{t('pomodoro.immersive.interruptionTitle')}</h3>
+        <input
+          type="text"
+          bind:value={interruptionReason}
+          placeholder={t('pomodoro.immersive.interruptionPlaceholder')}
           onkeydown={(e) => e.key === 'Enter' && submitInterruption()}
           autofocus
         />
         <div class="modal-actions">
-          <button class="btn-cancel" onclick={cancelInterruption}>取消</button>
-          <button class="btn-confirm" onclick={submitInterruption}>记录</button>
+          <button class="btn-cancel" onclick={cancelInterruption}>{t('action.cancel')}</button>
+          <button class="btn-confirm" onclick={submitInterruption}>{t('pomodoro.immersive.record')}</button>
         </div>
       </div>
     </div>

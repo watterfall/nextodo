@@ -180,6 +180,18 @@ export default {
     selectTask: 'Select a task to start',
     immersiveMode: 'Immersive Mode',
     exitImmersive: 'Exit Immersive',
+    immersive: {
+      exitTitle: 'Exit immersive mode (Esc)',
+      timerControls: 'Timer controls',
+      recordInterruption: 'Record interruption (I)',
+      interruptionCount: 'Interruptions this session',
+      keyboardPauseResume: 'Pause/Resume',
+      keyboardInterrupt: 'Record interruption',
+      keyboardExit: 'Exit',
+      interruptionTitle: 'Record interruption reason',
+      interruptionPlaceholder: 'e.g., phone call, colleague question...',
+      record: 'Record',
+    },
   },
 
   // Unit/Review
