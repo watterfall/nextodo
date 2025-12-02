@@ -3,7 +3,11 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::Write;
 use std::path::PathBuf;
-use tauri::Manager;
+use std::sync::atomic::Ordering;
+use std::sync::Arc;
+use tauri::{Manager, State};
+
+use crate::WatcherState;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SystemInfo {
@@ -389,5 +393,21 @@ pub fn append_archive_tasks(
     fs::rename(&temp_path, &archive_path)
         .map_err(|e| format!("Failed to rename temp file: {}", e))?;
 
+    Ok(())
+}
+
+/// Suspend the file watcher (used during drag-and-drop operations)
+#[tauri::command]
+pub fn suspend_watcher(watcher_state: State<'_, Arc<WatcherState>>) -> Result<(), String> {
+    watcher_state.paused.store(true, Ordering::SeqCst);
+    println!("File watcher suspended");
+    Ok(())
+}
+
+/// Resume the file watcher (called after drag-and-drop completes)
+#[tauri::command]
+pub fn resume_watcher(watcher_state: State<'_, Arc<WatcherState>>) -> Result<(), String> {
+    watcher_state.paused.store(false, Ordering::SeqCst);
+    println!("File watcher resumed");
     Ok(())
 }

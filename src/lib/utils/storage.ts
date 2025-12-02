@@ -19,7 +19,7 @@ const STORAGE_KEYS = {
 // Anti-deadlock: Use a counter instead of boolean to handle concurrent saves
 let saveOperationCount = 0;
 let lastSaveCompleteTime = 0;
-const SAVE_COOLDOWN_MS = 2000; // Ignore file changes within this window after save
+const SAVE_COOLDOWN_MS = 200; // Ignore file changes within this window after save
 
 // Debounce timeout for file watcher
 let fileWatcherDebounceTimer: ReturnType<typeof setTimeout> | null = null;

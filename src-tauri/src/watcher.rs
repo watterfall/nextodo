@@ -1,14 +1,18 @@
 use notify::{Config, RecommendedWatcher, RecursiveMode, Watcher, EventKind};
+use std::sync::atomic::Ordering;
 use std::sync::mpsc::channel;
+use std::sync::Arc;
 use std::time::Duration;
 use std::collections::HashSet;
 use tauri::{AppHandle, Emitter, Manager};
+
+use crate::WatcherState;
 
 /// Data files to watch
 const WATCHED_FILES: &[&str] = &["active.json", "archive.json", "pomodoro_history.json"];
 
 /// Start watching the data files for external changes
-pub fn start_watcher(app_handle: AppHandle) -> notify::Result<()> {
+pub fn start_watcher(app_handle: AppHandle, watcher_state: Arc<WatcherState>) -> notify::Result<()> {
     let (tx, rx) = channel();
 
     let mut watcher = RecommendedWatcher::new(
@@ -41,6 +45,11 @@ pub fn start_watcher(app_handle: AppHandle) -> notify::Result<()> {
             match rx.recv() {
                 Ok(event) => {
                     if let Ok(event) = event {
+                        // Check if watcher is paused (during DnD operations)
+                        if watcher_state.paused.load(Ordering::SeqCst) {
+                            continue;
+                        }
+
                         // Only process modify/create events
                         let is_write_event = matches!(
                             event.kind,
@@ -63,6 +72,12 @@ pub fn start_watcher(app_handle: AppHandle) -> notify::Result<()> {
 
                                 // Check if it's a watched file
                                 if let Some(file_type) = get_file_type(&file_name_str) {
+                                    // Double-check pause state before emitting
+                                    if watcher_state.paused.load(Ordering::SeqCst) {
+                                        println!("Skipping file change (watcher paused): {} (type: {})", file_name_str, file_type);
+                                        continue;
+                                    }
+
                                     // Deduplicate events (same file within short period)
                                     let event_key = format!("{}:{}", file_type, std::time::SystemTime::now()
                                         .duration_since(std::time::UNIX_EPOCH)
