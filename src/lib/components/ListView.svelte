@@ -11,6 +11,7 @@
   import { isOverdue, getRelativeDayLabel, parseISODate } from '$lib/utils/unitCalc';
   import { validatePomodoroEstimate } from '$lib/utils/quota';
   import { isTauri } from '$lib/utils/storage';
+  import { invoke } from '@tauri-apps/api/core';
 
   const tasks = getTasksStore();
   const ui = getUIStore();
@@ -71,7 +72,6 @@
         setDropTarget(priority);
         // Suspend file watcher when drag starts to prevent race condition
         if (isTauri()) {
-          const { invoke } = await import('@tauri-apps/api/core');
           await invoke('suspend_watcher');
         }
       }
@@ -83,6 +83,7 @@
       const { items, info } = e.detail;
       // Filter out shadow items using the correct property access
       const cleanItems = items.filter(item => !(item as any)[SHADOW_ITEM_MARKER_PROPERTY_NAME]);
+      // 1. Optimistic UI Update
       dndItemsByPriority[priority] = [...cleanItems];
 
       try {
@@ -126,9 +127,8 @@
           clearDragState();
         }
       } finally {
-        // Resume file watcher after DnD completes (success or failure)
+        // 2. Resume Watcher (Always run this, even on error)
         if (isTauri()) {
-          const { invoke } = await import('@tauri-apps/api/core');
           await invoke('resume_watcher');
         }
       }

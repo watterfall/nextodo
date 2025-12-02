@@ -116,9 +116,9 @@ export async function reloadData(fileType: string): Promise<void> {
 }
 
 // Persist changes
-async function persist(): Promise<void> {
+async function persist(filesToSave: ('active' | 'archive' | 'pomodoro_history')[] = ['active']): Promise<void> {
   try {
-    await saveAppData(appData);
+    await saveAppData(appData, filesToSave);
   } catch (error) {
     lastError = error instanceof Error ? error.message : 'Failed to save data';
     console.error('Failed to persist data:', error);

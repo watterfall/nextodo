@@ -10,6 +10,7 @@
   import { dndzone, TRIGGERS, SHADOW_ITEM_MARKER_PROPERTY_NAME } from 'svelte-dnd-action';
   import { flip } from 'svelte/animate';
   import { dndConfig, areTaskArraysEqual, type DndConsiderEvent, type DndFinalizeEvent } from '$lib/utils/motion';
+  import { isTauri } from '$lib/utils/storage';
 
   // Shared DnD type for cross-zone dragging
   const DND_TYPE = 'task-priority-zone';
@@ -67,6 +68,12 @@
     if (info.trigger === TRIGGERS.DRAG_STARTED) {
       isDndActive = true;
       setDropTarget(priority);
+      // Suspend file watcher
+      if (isTauri()) {
+        import('@tauri-apps/api/core').then(({ invoke }) => {
+          invoke('suspend_watcher');
+        });
+      }
     }
   }
 
@@ -77,33 +84,40 @@
     const cleanItems = items.filter(item => !item[SHADOW_ITEM_MARKER_PROPERTY_NAME as keyof Task]);
     dndItems = cleanItems;
 
-    if (info.trigger === TRIGGERS.DROPPED_INTO_ZONE) {
-      // Item was dropped into this zone
-      const droppedTask = cleanItems.find(task => task.id === info.id);
-      if (droppedTask && droppedTask.priority !== priority) {
-        // Change priority for items from other zones
-        const result = await changePriority(info.id, priority);
-        if (!result.success) {
-          // Show error feedback to user
-          showToast(result.error || t('error.quotaExceeded'), 'error');
-          // Revert on failure
-          dndItems = [...activeTasks];
+    try {
+      if (info.trigger === TRIGGERS.DROPPED_INTO_ZONE) {
+        // Item was dropped into this zone
+        const droppedTask = cleanItems.find(task => task.id === info.id);
+        if (droppedTask && droppedTask.priority !== priority) {
+          // Change priority for items from other zones
+          const result = await changePriority(info.id, priority);
+          if (!result.success) {
+            // Show error feedback to user
+            showToast(result.error || t('error.quotaExceeded'), 'error');
+            // Revert on failure
+            dndItems = [...activeTasks];
+          } else {
+            // Refresh with fresh data from store
+            dndItems = [...activeTasks];
+          }
         } else {
-          // Refresh with fresh data from store
-          dndItems = [...activeTasks];
+          // Reorder within same zone
+          const newOrder = cleanItems.map(task => task.id);
+          await reorderTask(priority, newOrder);
         }
-      } else {
-        // Reorder within same zone
-        const newOrder = cleanItems.map(task => task.id);
-        await reorderTask(priority, newOrder);
+      } else if (info.trigger === TRIGGERS.DROPPED_OUTSIDE_OF_ANY) {
+        // Reset if dropped outside
+        dndItems = [...activeTasks];
       }
-    } else if (info.trigger === TRIGGERS.DROPPED_OUTSIDE_OF_ANY) {
-      // Reset if dropped outside
-      dndItems = [...activeTasks];
+    } finally {
+      isDndActive = false;
+      clearDragState();
+      // Resume file watcher
+      if (isTauri()) {
+        const { invoke } = await import('@tauri-apps/api/core');
+        await invoke('resume_watcher');
+      }
     }
-
-    isDndActive = false;
-    clearDragState();
   }
 
   // Legacy drag handlers for fallback

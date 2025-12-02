@@ -19,11 +19,11 @@ const STORAGE_KEYS = {
 // Anti-deadlock: Use a counter instead of boolean to handle concurrent saves
 let saveOperationCount = 0;
 let lastSaveCompleteTime = 0;
-const SAVE_COOLDOWN_MS = 200; // Ignore file changes within this window after save
+const SAVE_COOLDOWN_MS = 2000; // Ignore file changes within this window after save
 
 // Debounce timeout for file watcher
 let fileWatcherDebounceTimer: ReturnType<typeof setTimeout> | null = null;
-const FILE_WATCHER_DEBOUNCE_MS = 300;
+const FILE_WATCHER_DEBOUNCE_MS = 500;
 
 /**
  * Mark that a save operation is starting
@@ -73,11 +73,11 @@ export async function loadAppData(): Promise<AppData> {
 /**
  * Save app data to storage (writes to separated files)
  */
-export async function saveAppData(data: AppData): Promise<void> {
+export async function saveAppData(data: AppData, filesToSave: ('active' | 'archive' | 'pomodoro_history')[] = ['active', 'pomodoro_history']): Promise<void> {
   data.lastModified = new Date().toISOString();
 
   if (isTauri()) {
-    await saveToTauri(data);
+    await saveToTauri(data, filesToSave);
   } else {
     saveToLocalStorage(data);
   }
@@ -337,7 +337,7 @@ async function loadFromTauri(): Promise<AppData> {
 /**
  * Save to Tauri file system using atomic writes
  */
-async function saveToTauri(data: AppData): Promise<void> {
+async function saveToTauri(data: AppData, filesToSave: string[] = ['active', 'pomodoro_history']): Promise<void> {
   // Mark save operation as starting
   beginSave();
 
@@ -355,33 +355,30 @@ async function saveToTauri(data: AppData): Promise<void> {
       settings: data.settings
     };
 
-    // NOTE: We no longer save archive here because it's managed via appendArchiveTasks
-    // But if we ever need to update the whole archive, we should use a dedicated method
-    
-    // However, if data.archive contains something (e.g. from web fallback or full load),
-    // we might inadvertently overwrite the file with partial data if we are not careful.
-    // In the new "offload" model, appData.archive is expected to be EMPTY.
-    // If it is NOT empty, it means we might have loaded it.
-    // For safety, we will NOT write archive.json here. Archive updates should be append-only.
-
     const pomodoroHistory: PomodoroHistoryData = {
       version: data.version,
       lastModified: data.lastModified,
       sessions: data.pomodoroHistory
     };
 
-    // Write all files atomically (in parallel)
-    await Promise.all([
-      invoke('atomic_write_file', {
+    const promises = [];
+
+    if (filesToSave.includes('active')) {
+      promises.push(invoke('atomic_write_file', {
         fileType: 'active',
         content: JSON.stringify(active, null, 2)
-      }),
-      // SKIP archive write
-      invoke('atomic_write_file', {
+      }));
+    }
+
+    if (filesToSave.includes('pomodoro_history')) {
+      promises.push(invoke('atomic_write_file', {
         fileType: 'pomodoro_history',
         content: JSON.stringify(pomodoroHistory, null, 2)
-      })
-    ]);
+      }));
+    }
+
+    // Write all files atomically (in parallel)
+    await Promise.all(promises);
   } catch (error) {
     console.error('Failed to save to Tauri:', error);
     throw error;

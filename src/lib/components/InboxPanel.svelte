@@ -9,6 +9,7 @@
   import { dndzone, TRIGGERS, SHADOW_ITEM_MARKER_PROPERTY_NAME } from 'svelte-dnd-action';
   import { flip } from 'svelte/animate';
   import { dndConfig, areTaskArraysEqual, type DndConsiderEvent, type DndFinalizeEvent } from '$lib/utils/motion';
+  import { isTauri } from '$lib/utils/storage';
 
   const tasks = getTasksStore();
   const pomodoro = getPomodoroStore();
@@ -75,6 +76,12 @@
 
     if (info.trigger === TRIGGERS.DRAG_STARTED) {
       isDndActive = true;
+      // Suspend file watcher
+      if (isTauri()) {
+        import('@tauri-apps/api/core').then(({ invoke }) => {
+          invoke('suspend_watcher');
+        });
+      }
     }
   }
 
@@ -85,31 +92,38 @@
     const cleanItems = items.filter(item => !item[SHADOW_ITEM_MARKER_PROPERTY_NAME as keyof Task]);
     dndItems = cleanItems;
 
-    if (info.trigger === TRIGGERS.DROPPED_INTO_ZONE) {
-      const droppedTask = cleanItems.find(task => task.id === info.id);
-      if (droppedTask && droppedTask.priority !== 'F') {
-        // Item came from another priority - change its priority to F
-        const result = await changePriority(info.id, 'F');
-        if (!result.success) {
-          // Show error feedback to user
-          showToast(result.error || t('error.quotaExceeded'), 'error');
-          // Revert on failure
-          dndItems = [...inboxTasks];
+    try {
+      if (info.trigger === TRIGGERS.DROPPED_INTO_ZONE) {
+        const droppedTask = cleanItems.find(task => task.id === info.id);
+        if (droppedTask && droppedTask.priority !== 'F') {
+          // Item came from another priority - change its priority to F
+          const result = await changePriority(info.id, 'F');
+          if (!result.success) {
+            // Show error feedback to user
+            showToast(result.error || t('error.quotaExceeded'), 'error');
+            // Revert on failure
+            dndItems = [...inboxTasks];
+          } else {
+            // Refresh with fresh data from store
+            dndItems = [...inboxTasks];
+          }
         } else {
-          // Refresh with fresh data from store
-          dndItems = [...inboxTasks];
+          // Reorder within inbox (F zone)
+          const newOrder = cleanItems.map(task => task.id);
+          await reorderTask('F', newOrder);
         }
-      } else {
-        // Reorder within inbox (F zone)
-        const newOrder = cleanItems.map(task => task.id);
-        await reorderTask('F', newOrder);
+      } else if (info.trigger === TRIGGERS.DROPPED_OUTSIDE_OF_ANY) {
+        // Reset if dropped outside
+        dndItems = [...inboxTasks];
       }
-    } else if (info.trigger === TRIGGERS.DROPPED_OUTSIDE_OF_ANY) {
-      // Reset if dropped outside
-      dndItems = [...inboxTasks];
+    } finally {
+      isDndActive = false;
+      // Resume file watcher
+      if (isTauri()) {
+        const { invoke } = await import('@tauri-apps/api/core');
+        await invoke('resume_watcher');
+      }
     }
-
-    isDndActive = false;
   }
 </script>
 

@@ -13,6 +13,7 @@
   import { dndConfig, areTaskArraysEqual, type DndConsiderEvent, type DndFinalizeEvent } from '$lib/utils/motion';
   import { onMount, tick } from 'svelte';
   import { isTauri } from '$lib/utils/storage';
+  import { invoke } from '@tauri-apps/api/core';
 
   const tasks = getTasksStore();
   const pomodoro = getPomodoroStore();
@@ -99,7 +100,6 @@
         setDropTarget(priority);
         // Suspend file watcher when drag starts to prevent race condition
         if (isTauri()) {
-          const { invoke } = await import('@tauri-apps/api/core');
           await invoke('suspend_watcher');
         }
       }
@@ -112,6 +112,7 @@
 
       // Filter out shadow placeholders using correct property access
       const cleanItems = items.filter(item => !(item as any)[SHADOW_ITEM_MARKER_PROPERTY_NAME]);
+      // 1. Optimistic UI Update
       dndItemsByPriority[priority] = [...cleanItems];
 
       try {
@@ -155,9 +156,8 @@
           clearDragState();
         }
       } finally {
-        // Resume file watcher after DnD completes (success or failure)
+        // 2. Resume Watcher (Always run this, even on error)
         if (isTauri()) {
-          const { invoke } = await import('@tauri-apps/api/core');
           await invoke('resume_watcher');
         }
       }

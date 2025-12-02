@@ -9,6 +9,7 @@
   import { flip } from 'svelte/animate';
   import { isToday } from '$lib/utils/unitCalc';
   import { dndConfig, areTaskArraysEqual, type DndConsiderEvent, type DndFinalizeEvent } from '$lib/utils/motion';
+  import { isTauri } from '$lib/utils/storage';
 
   const tasks = getTasksStore();
   const i18n = getI18nStore();
@@ -84,6 +85,12 @@
 
     if (info.trigger === TRIGGERS.DRAG_STARTED) {
       activeDndColumn = dateStr;
+      // Suspend file watcher when drag starts
+      if (isTauri()) {
+        import('@tauri-apps/api/core').then(({ invoke }) => {
+          invoke('suspend_watcher');
+        });
+      }
     }
   }
 
@@ -94,28 +101,35 @@
     const cleanItems = items.filter(item => !(item as any)[SHADOW_ITEM_MARKER_PROPERTY_NAME]);
     columns[dateStr] = [...cleanItems];
 
-    if (info.trigger === TRIGGERS.DROPPED_INTO_ZONE) {
-      const droppedTask = cleanItems.find(task => task.id === info.id);
-      if (droppedTask) {
-        const oldDateStr = droppedTask.dueDate;
-        // Only update if the due date actually changed
-        if (oldDateStr !== dateStr) {
-          await updateTask(info.id, { dueDate: dateStr });
-          // Refresh both source and target columns
-          if (oldDateStr && columns[oldDateStr]) {
-            columns[oldDateStr] = getTasksForDate(oldDateStr);
+    try {
+      if (info.trigger === TRIGGERS.DROPPED_INTO_ZONE) {
+        const droppedTask = cleanItems.find(task => task.id === info.id);
+        if (droppedTask) {
+          const oldDateStr = droppedTask.dueDate;
+          // Only update if the due date actually changed
+          if (oldDateStr !== dateStr) {
+            await updateTask(info.id, { dueDate: dateStr });
+            // Refresh both source and target columns
+            if (oldDateStr && columns[oldDateStr]) {
+              columns[oldDateStr] = getTasksForDate(oldDateStr);
+            }
+            columns[dateStr] = getTasksForDate(dateStr);
           }
-          columns[dateStr] = getTasksForDate(dateStr);
         }
+      } else if (info.trigger === TRIGGERS.DROPPED_OUTSIDE_OF_ANY) {
+        // Revert all columns
+        weekDays.forEach(day => {
+          columns[day.dateStr] = getTasksForDate(day.dateStr);
+        });
       }
-    } else if (info.trigger === TRIGGERS.DROPPED_OUTSIDE_OF_ANY) {
-      // Revert all columns
-      weekDays.forEach(day => {
-        columns[day.dateStr] = getTasksForDate(day.dateStr);
-      });
+    } finally {
+      activeDndColumn = null;
+      // Resume file watcher
+      if (isTauri()) {
+        const { invoke } = await import('@tauri-apps/api/core');
+        await invoke('resume_watcher');
+      }
     }
-
-    activeDndColumn = null;
   }
 </script>
 
