@@ -1,6 +1,7 @@
 <script lang="ts">
   import { getI18nStore } from '$lib/i18n';
-  import { getTasksStore, archiveCompleted } from '$lib/stores/tasks.svelte';
+  import { getTasksStore } from '$lib/stores/tasks.svelte';
+  import { isActivePriority } from '$lib/types';
   import { fade, scale } from 'svelte/transition';
 
   const tasks = getTasksStore();
@@ -10,8 +11,9 @@
   let { onClose }: { onClose: () => void } = $props();
 
   // Tasks older than 30 days that are not A priority and not recurring
+  // Exclude G (completed) and H (cancelled) tasks
   const staleTasks = $derived(tasks.tasks.filter(task => {
-    if (task.completed || task.priority === 'A' || task.recurrence) return false;
+    if (!isActivePriority(task.priority) || task.priority === 'A' || task.recurrence) return false;
 
     const created = new Date(task.createdAt);
     const now = new Date();

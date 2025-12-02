@@ -1,11 +1,10 @@
-import type { Task, Priority, FilterState, UnitInfo, AppData, ActiveData, ArchiveData, PomodoroHistoryData } from '$lib/types';
-import { createEmptyTask, createDefaultAppData, isThresholdPassed, calculateEZoneAge } from '$lib/types';
-import { loadAppData, saveAppData, reloadFile, appendArchiveTasks } from '$lib/utils/storage';
+import type { Task, Priority, FilterState, UnitInfo, AppData, ActiveData, PomodoroHistoryData } from '$lib/types';
+import { createEmptyTask, createDefaultAppData, isThresholdPassed, calculateEZoneAge, isActivePriority, ACTIVE_PRIORITIES } from '$lib/types';
+import { loadAppData, saveAppData, reloadFile } from '$lib/utils/storage';
 import { applyHighlanderRule, canAddTask, validateQuota } from '$lib/utils/quota';
 import { createTaskFromInput } from '$lib/utils/parser';
 import { processRecurringTasks, createNextOccurrence } from '$lib/utils/recurrence';
 import { getCurrentUnit, isDateInUnit, isToday, isOverdue, isThisWeek } from '$lib/utils/unitCalc';
-import { checkBadges } from '$lib/stores/gamification.svelte'; // Import checkBadges
 import { t } from '$lib/i18n';
 
 // Main app state
@@ -39,23 +38,10 @@ export async function initializeData(): Promise<void> {
     appData = await loadAppData();
 
     // Process recurring tasks
-    const newRecurringTasks = processRecurringTasks(appData.tasks);
+    const newRecurringTasks = processRecurringTasks(appData.tasks.filter(t => isActivePriority(t.priority)));
     let dataChanged = newRecurringTasks.length > 0;
     if (dataChanged) {
       appData.tasks = [...appData.tasks, ...newRecurringTasks];
-    }
-
-    // Cleanup trash items older than 7 days
-    const now = new Date();
-    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    const trashBefore = appData.trash.length;
-    appData.trash = appData.trash.filter(task => {
-      const deletedAt = task.completedAt ? new Date(task.completedAt) : new Date(task.createdAt);
-      return deletedAt > sevenDaysAgo;
-    });
-    if (appData.trash.length !== trashBefore) {
-      dataChanged = true;
-      console.log(`Cleaned up ${trashBefore - appData.trash.length} expired trash items`);
     }
 
     if (dataChanged) {
@@ -83,18 +69,10 @@ export async function reloadData(fileType: string): Promise<void> {
           version: activeData.version,
           lastModified: activeData.lastModified,
           tasks: activeData.tasks || [],
-          trash: activeData.trash || [],
           reviews: activeData.reviews || [],
           customTagGroups: activeData.customTagGroups || appData.customTagGroups,
-          settings: activeData.settings || appData.settings,
-          badges: activeData.badges || appData.badges // Ensure badges are reloaded
+          settings: activeData.settings || appData.settings
         };
-        break;
-      }
-      case 'archive': {
-        // OPTIMIZATION: Do not reload full archive into memory when changed
-        // Just log it or show a notification if needed
-        console.log('Archive file changed externally, but skipping reload to save memory');
         break;
       }
       case 'pomodoro_history': {
@@ -181,19 +159,29 @@ export async function updateTask(taskId: string, updates: Partial<Task>): Promis
   await persist();
 }
 
+// Cancel a task (move to H priority)
+export async function cancelTask(taskId: string): Promise<void> {
+  appData.tasks = appData.tasks.map(task => {
+    if (task.id === taskId && isActivePriority(task.priority)) {
+      return {
+        ...task,
+        priority: 'H' as Priority,
+        completedAt: new Date().toISOString()
+      };
+    }
+    return task;
+  });
+  await persist();
+}
+
+// Alias for backward compatibility - now cancels task instead of deleting
 export async function deleteTask(taskId: string): Promise<void> {
-  const task = appData.tasks.find(t => t.id === taskId);
-  if (task) {
-    // Move to trash
-    appData.trash = [...appData.trash, { ...task, completedAt: new Date().toISOString() }];
-    appData.tasks = appData.tasks.filter(t => t.id !== taskId);
-    await persist();
-  }
+  return cancelTask(taskId);
 }
 
 export async function completeTask(taskId: string): Promise<void> {
   // Find the task first to check for recurrence
-  const taskToComplete = appData.tasks.find(t => t.id === taskId && !t.completed);
+  const taskToComplete = appData.tasks.find(t => t.id === taskId && isActivePriority(t.priority));
   let nextRecurringTask: Task | null = null;
 
   // Create next occurrence before modifying the task
@@ -201,11 +189,12 @@ export async function completeTask(taskId: string): Promise<void> {
     nextRecurringTask = createNextOccurrence(taskToComplete);
   }
 
-  // Mark task as completed
+  // Move task to G (completed) priority
   appData.tasks = appData.tasks.map(task => {
-    if (task.id === taskId && !task.completed) {
+    if (task.id === taskId && isActivePriority(task.priority)) {
       return {
         ...task,
+        priority: 'G' as Priority,
         completed: true,
         completedAt: new Date().toISOString()
       };
@@ -215,26 +204,25 @@ export async function completeTask(taskId: string): Promise<void> {
 
   // Add next recurring task
   if (nextRecurringTask) {
-    const quotaError = validateQuota(appData.tasks, nextRecurringTask.priority);
+    const quotaError = validateQuota(appData.tasks.filter(t => isActivePriority(t.priority)), nextRecurringTask.priority);
     if (!quotaError) {
       if (nextRecurringTask.priority === 'A') {
-        appData.tasks = applyHighlanderRule(appData.tasks, nextRecurringTask);
+        appData.tasks = applyHighlanderRule(appData.tasks.filter(t => isActivePriority(t.priority)), nextRecurringTask);
       }
       appData.tasks = [...appData.tasks, nextRecurringTask];
     }
   }
 
   await persist();
-  
-  // Check badges after completion
-  checkBadges();
 }
 
+// Restore a task from G (completed) or H (cancelled) back to active state
 export async function uncompleteTask(taskId: string): Promise<void> {
   appData.tasks = appData.tasks.map(task => {
-    if (task.id === taskId && task.completed) {
+    if (task.id === taskId && (task.priority === 'G' || task.priority === 'H')) {
       return {
         ...task,
+        priority: 'F' as Priority, // Restore to Idea Pool by default
         completed: false,
         completedAt: null
       };
@@ -245,36 +233,31 @@ export async function uncompleteTask(taskId: string): Promise<void> {
   await persist();
 }
 
-export async function archiveCompleted(): Promise<void> {
-  const completed = appData.tasks.filter(t => t.completed);
-  if (completed.length === 0) return;
-  
-  // Use appendArchiveTasks instead of loading/saving entire archive
-  try {
-    await appendArchiveTasks(completed);
-    
-    // Remove from active tasks
-    appData.tasks = appData.tasks.filter(t => !t.completed);
-    
-    // Save only active data
-    await persist();
-  } catch (error) {
-    lastError = error instanceof Error ? error.message : 'Failed to archive tasks';
-    console.error('Failed to archive tasks:', error);
+// Restore a task to a specific priority
+export async function restoreTask(taskId: string, targetPriority: Priority = 'F'): Promise<void> {
+  // Only allow restoring to active priorities
+  if (!isActivePriority(targetPriority)) {
+    targetPriority = 'F';
   }
+
+  appData.tasks = appData.tasks.map(task => {
+    if (task.id === taskId && (task.priority === 'G' || task.priority === 'H')) {
+      return {
+        ...task,
+        priority: targetPriority,
+        completed: false,
+        completedAt: null
+      };
+    }
+    return task;
+  });
+
+  await persist();
 }
 
-export async function restoreFromTrash(taskId: string): Promise<void> {
-  const task = appData.trash.find(t => t.id === taskId);
-  if (task) {
-    appData.tasks = [...appData.tasks, { ...task, completed: false, completedAt: null }];
-    appData.trash = appData.trash.filter(t => t.id !== taskId);
-    await persist();
-  }
-}
-
-export async function emptyTrash(): Promise<void> {
-  appData.trash = [];
+// Permanently delete a task (remove from G/H)
+export async function permanentlyDeleteTask(taskId: string): Promise<void> {
+  appData.tasks = appData.tasks.filter(t => t.id !== taskId);
   await persist();
 }
 
@@ -284,9 +267,15 @@ export async function changePriority(taskId: string, newPriority: Priority): Pro
     return { success: false, error: 'Task not found' };
   }
 
-  // Check quota for new priority
-  const otherTasks = appData.tasks.filter(t => t.id !== taskId);
-  if (!canAddTask(otherTasks, newPriority)) {
+  // Only allow changing to active priorities (A-F) through this function
+  // Use completeTask or cancelTask for G/H
+  if (!isActivePriority(newPriority)) {
+    return { success: false, error: 'Cannot change to hidden priority directly' };
+  }
+
+  // Check quota for new priority (only among active tasks)
+  const otherActiveTasks = appData.tasks.filter(t => t.id !== taskId && isActivePriority(t.priority));
+  if (!canAddTask(otherActiveTasks, newPriority)) {
     return { success: false, error: t('message.quotaExceeded', { priority: newPriority }) };
   }
 
@@ -309,50 +298,31 @@ export async function incrementPomodoro(taskId: string): Promise<void> {
   });
 
   await persist();
-  
-  // Check badges after pomodoro
-  checkBadges();
 }
 
 // Reorder tasks within a priority zone (for drag-and-drop) or move between zones
 export async function reorderTask(priority: Priority, newOrderedTasks: Task[]): Promise<void> {
+  // Only allow reordering to active priorities
+  if (!isActivePriority(priority)) {
+    return;
+  }
+
   const newIds = new Set(newOrderedTasks.map(t => t.id));
-  
-  // 1. Get all tasks that are NOT in the new list
-  // This includes:
-  // - Tasks in other priorities that weren't moved
-  // - Tasks that were in this priority but moved OUT (if this is the source zone)
+
+  // Get all tasks that are NOT in the new list
   const otherTasks = appData.tasks.filter(t => !newIds.has(t.id));
 
-  // 2. Update priority for tasks in the new list
+  // Update priority for tasks in the new list
   const updatedNewTasks = newOrderedTasks.map(t => {
     if (t.priority !== priority) {
-       // If priority changed to A, applying Highlander rule might be complex here 
-       // as we are doing a bulk update.
-       // For now, we trust the user's drag action.
-       // We could apply quota checks here if needed.
        return { ...t, priority };
     }
     return t;
   });
 
-  // 3. Reconstruct the task list
-  // Place the new ordered tasks first (or we could try to maintain relative order of others)
-  // But simplistic append is usually fine if we only care about order within priority
-  // To preserve "global" order somewhat, we might want to interleave, but 
-  // since we render by priority, appending is safe for the view.
-  // Actually, to keep 'trash' or 'archive' separation clear (they are separate arrays), 
-  // we only touch appData.tasks.
-  
   appData.tasks = [...otherTasks, ...updatedNewTasks];
 
   await persist();
-  
-  // Check badges if priority changed to A (Challenger badge)
-  // We can do a quick check if any task changed to A
-  if (priority === 'A' && newOrderedTasks.some(t => t.priority !== 'A')) {
-      checkBadges();
-  }
 }
 
 // Filter operations
@@ -382,9 +352,10 @@ export function setCurrentUnit(unit: UnitInfo): void {
   currentUnit = unit;
 }
 
-// Derived values
+// Derived values - only active priorities (A-F) shown in main views
 const filteredTasks = $derived.by(() => {
-  let tasks = appData.tasks;
+  // Start with only active tasks (exclude G/H)
+  let tasks = appData.tasks.filter(t => isActivePriority(t.priority));
 
   // Filter by threshold date (unless showing future tasks)
   if (!filter.showFutureTasks) {
@@ -420,14 +391,8 @@ const filteredTasks = $derived.by(() => {
     tasks = tasks.filter(t => t.customTags.includes(filter.tag!));
   }
 
-  // Apply completed filter
-  if (!filter.showCompleted) {
-    tasks = tasks.filter(t => !t.completed);
-  }
-
   // Apply due filter
   if (filter.dueFilter === 'today') {
-    // Include both today's tasks AND overdue tasks (consistent with TodayView)
     tasks = tasks.filter(t => t.dueDate && (isToday(t.dueDate) || isOverdue(t.dueDate)));
   } else if (filter.dueFilter === 'thisWeek') {
     tasks = tasks.filter(t => t.dueDate && isThisWeek(t.dueDate));
@@ -450,19 +415,46 @@ const tasksByPriority = $derived.by(() => {
     C: [],
     D: [],
     E: [],
-    F: []
+    F: [],
+    G: [],
+    H: []
   };
 
   for (const task of filteredTasks) {
-    byPriority[task.priority].push(task);
+    if (byPriority[task.priority]) {
+      byPriority[task.priority].push(task);
+    }
   }
 
   return byPriority;
 });
 
+// Completed tasks (G priority)
+const completedTasks = $derived(
+  appData.tasks.filter(t => t.priority === 'G')
+    .sort((a, b) => {
+      const dateA = a.completedAt ? new Date(a.completedAt).getTime() : 0;
+      const dateB = b.completedAt ? new Date(b.completedAt).getTime() : 0;
+      return dateB - dateA;
+    })
+);
+
+// Cancelled tasks (H priority)
+const cancelledTasks = $derived(
+  appData.tasks.filter(t => t.priority === 'H')
+    .sort((a, b) => {
+      const dateA = a.completedAt ? new Date(a.completedAt).getTime() : 0;
+      const dateB = b.completedAt ? new Date(b.completedAt).getTime() : 0;
+      return dateB - dateA;
+    })
+);
+
+// Only count active tasks for projects/contexts
+const activeTasks = $derived(appData.tasks.filter(t => isActivePriority(t.priority)));
+
 const allProjects = $derived.by(() => {
   const projects = new Set<string>();
-  for (const task of appData.tasks) {
+  for (const task of activeTasks) {
     for (const project of task.projects) {
       projects.add(project);
     }
@@ -472,7 +464,7 @@ const allProjects = $derived.by(() => {
 
 const allContexts = $derived.by(() => {
   const contexts = new Set<string>();
-  for (const task of appData.tasks) {
+  for (const task of activeTasks) {
     for (const context of task.contexts) {
       contexts.add(context);
     }
@@ -482,7 +474,7 @@ const allContexts = $derived.by(() => {
 
 const projectCounts = $derived.by(() => {
   const counts: Record<string, number> = {};
-  for (const task of appData.tasks.filter(t => !t.completed)) {
+  for (const task of activeTasks) {
     for (const project of task.projects) {
       counts[project] = (counts[project] || 0) + 1;
     }
@@ -492,7 +484,7 @@ const projectCounts = $derived.by(() => {
 
 const contextCounts = $derived.by(() => {
   const counts: Record<string, number> = {};
-  for (const task of appData.tasks.filter(t => !t.completed)) {
+  for (const task of activeTasks) {
     for (const context of task.contexts) {
       counts[context] = (counts[context] || 0) + 1;
     }
@@ -501,31 +493,31 @@ const contextCounts = $derived.by(() => {
 });
 
 const dueTodayCount = $derived(
-  appData.tasks.filter(t => !t.completed && t.dueDate && (isToday(t.dueDate) || isOverdue(t.dueDate))).length
+  activeTasks.filter(t => t.dueDate && (isToday(t.dueDate) || isOverdue(t.dueDate))).length
 );
 
 const dueThisWeekCount = $derived(
-  appData.tasks.filter(t => !t.completed && t.dueDate && isThisWeek(t.dueDate)).length
+  activeTasks.filter(t => t.dueDate && isThisWeek(t.dueDate)).length
 );
 
 const overdueCount = $derived(
-  appData.tasks.filter(t => !t.completed && isOverdue(t.dueDate)).length
+  activeTasks.filter(t => isOverdue(t.dueDate)).length
 );
 
 const futureTasksCount = $derived(
-  appData.tasks.filter(t => !t.completed && !isThresholdPassed(t)).length
+  activeTasks.filter(t => !isThresholdPassed(t)).length
 );
 
 const dailyRecurringCount = $derived(
-  appData.tasks.filter(t => !t.completed && t.recurrence?.pattern === '1d').length
+  activeTasks.filter(t => t.recurrence?.pattern === '1d').length
 );
 
 const weeklyRecurringCount = $derived(
-  appData.tasks.filter(t => !t.completed && t.recurrence?.pattern === '1w').length
+  activeTasks.filter(t => t.recurrence?.pattern === '1w').length
 );
 
 const completedTodayCount = $derived(
-  appData.tasks.filter(t => t.completed && t.completedAt && isToday(t.completedAt)).length
+  appData.tasks.filter(t => t.priority === 'G' && t.completedAt && isToday(t.completedAt)).length
 );
 
 // F zone (Idea Pool) aging tasks
@@ -545,8 +537,9 @@ export function getTasksStore() {
   return {
     get appData() { return appData; },
     get tasks() { return appData.tasks; },
-    get archive() { return appData.archive; },
-    get trash() { return appData.trash; },
+    get activeTasks() { return activeTasks; },
+    get completedTasks() { return completedTasks; },
+    get cancelledTasks() { return cancelledTasks; },
     get isLoading() { return isLoading; },
     get lastError() { return lastError; },
     get currentUnit() { return currentUnit; },

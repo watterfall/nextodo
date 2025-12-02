@@ -1,6 +1,7 @@
 // Priority levels
 // A-E are work priorities with quotas, F is the Idea Pool (unlimited)
-export type Priority = 'A' | 'B' | 'C' | 'D' | 'E' | 'F';
+// G is for completed tasks, H is for cancelled tasks (both hidden by default)
+export type Priority = 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H';
 
 // Recurrence patterns - extended to support more patterns
 export type RecurrencePattern =
@@ -70,24 +71,6 @@ export interface PomodoroSession {
   interruptionReasons?: string[];
 }
 
-// Gamification: Badge types
-export type BadgeId = 
-  | 'planner_novice' 
-  | 'flow_master' 
-  | 'early_bird' 
-  | 'challenger' 
-  | 'consistency_3'
-  | 'consistency_7'
-  | 'deep_diver';
-
-export interface Badge {
-  id: BadgeId;
-  name: string;
-  description: string;
-  icon: string;
-  unlockedAt?: string; // ISO date string if unlocked
-}
-
 // Custom tag groups
 export interface CustomTagGroups {
   energy: string[];
@@ -123,15 +106,12 @@ export interface ActiveData {
   version: string;
   lastModified: string;
   tasks: Task[];
-  trash: Task[];
   reviews: UnitReview[];
   customTagGroups: CustomTagGroups;
-  // NEW: Earned badges
-  badges: Badge[];
   settings: Settings;
 }
 
-// Archive data file structure (cold data)
+// Archive data file structure (cold data) - DEPRECATED, kept for migration
 export interface ArchiveData {
   version: string;
   lastModified: string;
@@ -150,13 +130,9 @@ export interface AppData {
   version: string;
   lastModified: string;
   tasks: Task[];
-  archive: Task[];
-  trash: Task[];
   reviews: UnitReview[];
   customTagGroups: CustomTagGroups;
   pomodoroHistory: PomodoroSession[];
-  // NEW: Earned badges
-  badges: Badge[];
   settings: Settings;
 }
 
@@ -230,6 +206,24 @@ export const PRIORITY_CONFIG: Record<Priority, PriorityConfig> = {
     bgColor: 'var(--priority-f-bg, rgba(92, 99, 106, 0.08))',
     borderColor: 'var(--priority-f-border, rgba(92, 99, 106, 0.2))',
     pomodoroRange: { min: 0, max: Infinity, recommended: 0 }  // No constraints
+  },
+  G: {
+    name: '已完成',
+    quota: Infinity,
+    description: '已完成的任务',
+    color: 'var(--priority-g-color, #51cf66)',
+    bgColor: 'var(--priority-g-bg, rgba(81, 207, 102, 0.08))',
+    borderColor: 'var(--priority-g-border, rgba(81, 207, 102, 0.2))',
+    pomodoroRange: { min: 0, max: Infinity, recommended: 0 }
+  },
+  H: {
+    name: '已取消',
+    quota: Infinity,
+    description: '已取消的任务',
+    color: 'var(--priority-h-color, #868e96)',
+    bgColor: 'var(--priority-h-bg, rgba(134, 142, 150, 0.08))',
+    borderColor: 'var(--priority-h-border, rgba(134, 142, 150, 0.2))',
+    pomodoroRange: { min: 0, max: Infinity, recommended: 0 }
   }
 };
 
@@ -307,16 +301,14 @@ export function createDefaultSettings(): Settings {
 // Create default active data
 export function createDefaultActiveData(): ActiveData {
   return {
-    version: '3.0',
+    version: '4.0',
     lastModified: new Date().toISOString(),
     tasks: [],
-    trash: [],
     reviews: [],
     customTagGroups: {
       energy: ['⚡高能量', '😴低能量', '☕中等'],
       type: ['📞电话', '💻编码', '✍️写作', '🤝会议']
     },
-    badges: [],
     settings: createDefaultSettings()
   };
 }
@@ -342,18 +334,15 @@ export function createDefaultPomodoroHistoryData(): PomodoroHistoryData {
 // Create default app data (combined)
 export function createDefaultAppData(): AppData {
   return {
-    version: '3.0',
+    version: '4.0',
     lastModified: new Date().toISOString(),
     tasks: [],
-    archive: [],
-    trash: [],
     reviews: [],
     customTagGroups: {
       energy: ['⚡高能量', '😴低能量', '☕中等'],
       type: ['📞电话', '💻编码', '✍️写作', '🤝会议']
     },
     pomodoroHistory: [],
-    badges: [],
     settings: createDefaultSettings()
   };
 }
@@ -384,4 +373,20 @@ export function calculateFZoneAge(task: Task, unitDays: number = 7): number {
 // Backward compatibility alias
 export function calculateEZoneAge(task: Task, unitDays: number = 7): number {
   return calculateFZoneAge(task, unitDays);
+}
+
+// Active priorities (shown in main views)
+export const ACTIVE_PRIORITIES: Priority[] = ['A', 'B', 'C', 'D', 'E', 'F'];
+
+// Hidden priorities (completed/cancelled)
+export const HIDDEN_PRIORITIES: Priority[] = ['G', 'H'];
+
+// Check if a task is in an active (visible) priority
+export function isActivePriority(priority: Priority): boolean {
+  return ACTIVE_PRIORITIES.includes(priority);
+}
+
+// Check if a task is completed (G) or cancelled (H)
+export function isHiddenPriority(priority: Priority): boolean {
+  return HIDDEN_PRIORITIES.includes(priority);
 }
