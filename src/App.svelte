@@ -27,6 +27,7 @@
     initKeyboardShortcuts,
     registerKeyboardCallbacks,
     hideToast,
+    showToast,
     closeSearch,
     exitImmersiveMode,
     setViewMode // Import this
@@ -110,10 +111,12 @@
       // Conflict protection: Don't reload if user is editing or pomodoro is active
       if (ui.editingTaskId) {
         console.log('Skipping reload - user is editing a task');
+        showToast(t('error.externalChangeIgnored') || 'External data change detected but ignored due to active session. Please save and reload manually to avoid conflicts.', 'warning');
         return;
       }
       if (pomodoro.state !== 'idle') {
         console.log('Skipping reload - pomodoro is active');
+        showToast(t('error.externalChangeIgnored') || 'External data change detected but ignored due to active session. Please save and reload manually to avoid conflicts.', 'warning');
         return;
       }
       console.log('External file change detected, reloading:', fileType);
