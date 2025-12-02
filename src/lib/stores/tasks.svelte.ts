@@ -313,24 +313,45 @@ export async function incrementPomodoro(taskId: string): Promise<void> {
   checkBadges();
 }
 
-// Reorder tasks within a priority zone (for drag-and-drop)
-export async function reorderTask(priority: Priority, newOrder: string[]): Promise<void> {
-  // Get tasks in this priority
-  const priorityTasks = appData.tasks.filter(t => t.priority === priority && !t.completed);
-  const otherTasks = appData.tasks.filter(t => t.priority !== priority || t.completed);
+// Reorder tasks within a priority zone (for drag-and-drop) or move between zones
+export async function reorderTask(priority: Priority, newOrderedTasks: Task[]): Promise<void> {
+  const newIds = new Set(newOrderedTasks.map(t => t.id));
+  
+  // 1. Get all tasks that are NOT in the new list
+  // This includes:
+  // - Tasks in other priorities that weren't moved
+  // - Tasks that were in this priority but moved OUT (if this is the source zone)
+  const otherTasks = appData.tasks.filter(t => !newIds.has(t.id));
 
-  // Create a map for quick lookup
-  const taskMap = new Map(priorityTasks.map(t => [t.id, t]));
+  // 2. Update priority for tasks in the new list
+  const updatedNewTasks = newOrderedTasks.map(t => {
+    if (t.priority !== priority) {
+       // If priority changed to A, applying Highlander rule might be complex here 
+       // as we are doing a bulk update.
+       // For now, we trust the user's drag action.
+       // We could apply quota checks here if needed.
+       return { ...t, priority };
+    }
+    return t;
+  });
 
-  // Reorder based on newOrder array
-  const reorderedPriorityTasks = newOrder
-    .map(id => taskMap.get(id))
-    .filter((t): t is Task => t !== undefined);
-
-  // Combine reordered priority tasks with other tasks
-  appData.tasks = [...reorderedPriorityTasks, ...otherTasks];
+  // 3. Reconstruct the task list
+  // Place the new ordered tasks first (or we could try to maintain relative order of others)
+  // But simplistic append is usually fine if we only care about order within priority
+  // To preserve "global" order somewhat, we might want to interleave, but 
+  // since we render by priority, appending is safe for the view.
+  // Actually, to keep 'trash' or 'archive' separation clear (they are separate arrays), 
+  // we only touch appData.tasks.
+  
+  appData.tasks = [...otherTasks, ...updatedNewTasks];
 
   await persist();
+  
+  // Check badges if priority changed to A (Challenger badge)
+  // We can do a quick check if any task changed to A
+  if (priority === 'A' && newOrderedTasks.some(t => t.priority !== 'A')) {
+      checkBadges();
+  }
 }
 
 // Filter operations

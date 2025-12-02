@@ -44,6 +44,14 @@ export const flipDefaults = {
   easing: easings.smoothOut
 };
 
+// Drag and Drop configuration
+export const dndConfig = {
+  flipDurationMs: 250,
+  dragDisabled: false,
+  dropTargetStyle: {}, // Handled via CSS classes usually
+  dropTargetClasses: ['drop-target']
+};
+
 // CSS transition strings for common animations
 export const transitions = {
   all: `all ${durations.normal}ms ${easings.standard}`,

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { getTasksStore, completeTask, uncompleteTask } from '$lib/stores/tasks.svelte';
+  import { getTasksStore, completeTask, uncompleteTask, reorderTask } from '$lib/stores/tasks.svelte';
   import { getI18nStore } from '$lib/i18n';
   import { slide } from 'svelte/transition';
   import { PRIORITY_CONFIG, type Priority, type Task, isThresholdPassed } from '$lib/types';
@@ -7,6 +7,9 @@
   import { startPomodoro, getPomodoroStore } from '$lib/stores/pomodoro.svelte';
   import { isOverdue, getRelativeDayLabel, parseISODate } from '$lib/utils/unitCalc';
   import { validatePomodoroEstimate } from '$lib/utils/quota';
+  import { dndzone } from 'svelte-dnd-action';
+  import { flip } from 'svelte/animate';
+  import { dndConfig } from '$lib/utils/motion';
 
   const tasks = getTasksStore();
   const ui = getUIStore();
@@ -16,9 +19,37 @@
 
   // Main priorities (A-E with quotas), F is handled separately as Idea Pool
   const mainPriorities: Priority[] = ['A', 'B', 'C', 'D', 'E'];
+  const priorities: Priority[] = ['A', 'B', 'C', 'D', 'E', 'F'];
+
+  // Local state for DnD items
+  let columnItems = $state<Record<Priority, Task[]>>({
+    A: [], B: [], C: [], D: [], E: [], F: []
+  });
+
+  let isDragging = $state(false);
+
+  // Sync from store when not dragging
+  $effect(() => {
+    if (!isDragging) {
+      priorities.forEach(p => {
+        columnItems[p] = tasks.tasksByPriority[p].filter(t => !t.completed);
+      });
+    }
+  });
+
+  function handleDndConsider(priority: Priority, e: CustomEvent<DndEvent<Task>>) {
+    isDragging = true;
+    columnItems[priority] = e.detail.items;
+  }
+
+  function handleDndFinalize(priority: Priority, e: CustomEvent<DndEvent<Task>>) {
+    isDragging = false;
+    columnItems[priority] = e.detail.items;
+    reorderTask(priority, e.detail.items);
+  }
 
   function getTasksForPriority(priority: Priority) {
-    return tasks.tasksByPriority[priority].filter(task => !task.completed);
+    return columnItems[priority];
   }
 
   // Task actions
@@ -68,14 +99,14 @@
   let showIdeaPool = $state(true);
 
   // Idea Pool (F zone) state
-  const ideaPoolTasks = $derived(getTasksForPriority('F'));
+  const ideaPoolTasks = $derived(columnItems['F']);
 </script>
 
 <div class="list-view-container">
   <!-- Main tasks area - clean list style grouped by priority -->
   <div class="list-main" class:expanded={!showIdeaPool}>
     {#each mainPriorities as priority}
-      {@const priorityTasks = getTasksForPriority(priority)}
+      {@const priorityTasks = columnItems[priority]}
       {@const config = PRIORITY_CONFIG[priority]}
       <section
         class="priority-section"
@@ -109,7 +140,12 @@
         </div>
 
         <!-- Task List - Clean horizontal list items -->
-        <div class="task-list">
+        <div 
+          class="task-list"
+          use:dndzone={{ items: priorityTasks, flipDurationMs: dndConfig.flipDurationMs, dropTargetStyle: { outline: `2px solid ${config.color}`, outlineOffset: '-2px', borderRadius: '8px' } }}
+          onconsider={(e) => handleDndConsider(priority, e)}
+          onfinalize={(e) => handleDndFinalize(priority, e)}
+        >
           {#each priorityTasks as task (task.id)}
             {@const dueLabel = getTaskDueLabel(task)}
             {@const taskOverdue = isTaskOverdue(task)}
@@ -127,6 +163,7 @@
               class:pomodoro-warning={pomodoroCheck.outOfRange}
               style:--priority-color={config.color}
               ondblclick={() => handleEdit(task)}
+              animate:flip={{ duration: dndConfig.flipDurationMs }}
             >
               <!-- Left priority border indicator -->
               <div class="priority-indicator"></div>
@@ -247,7 +284,13 @@
     </div>
 
     {#if showIdeaPool}
-      <div class="pool-tasks" transition:slide>
+      <div 
+        class="pool-tasks" 
+        transition:slide
+        use:dndzone={{ items: ideaPoolTasks, flipDurationMs: dndConfig.flipDurationMs, dropTargetStyle: { outline: `2px solid ${PRIORITY_CONFIG.F.color}`, outlineOffset: '-2px', borderRadius: '8px' } }}
+        onconsider={(e) => handleDndConsider('F', e)}
+        onfinalize={(e) => handleDndFinalize('F', e)}
+      >
         {#each ideaPoolTasks as task (task.id)}
           {@const dueLabel = getTaskDueLabel(task)}
           {@const taskOverdue = isTaskOverdue(task)}
@@ -257,6 +300,7 @@
             class="pool-task-row"
             style:--priority-color={PRIORITY_CONFIG.F.color}
             ondblclick={() => handleEdit(task)}
+            animate:flip={{ duration: dndConfig.flipDurationMs }}
           >
             <button
               class="task-checkbox"

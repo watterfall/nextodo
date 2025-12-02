@@ -2,13 +2,16 @@
   import type { Task, Priority } from '$lib/types';
   import { PRIORITY_CONFIG } from '$lib/types';
   import TaskCard from './TaskCard.svelte';
-  import { getTasksStore } from '$lib/stores/tasks.svelte';
+  import { getTasksStore, reorderTask } from '$lib/stores/tasks.svelte';
   import { getPomodoroStore } from '$lib/stores/pomodoro.svelte';
   import { getUIStore, openEditModal } from '$lib/stores/ui.svelte';
   import { countActiveByPriority } from '$lib/utils/quota';
   import { getI18nStore } from '$lib/i18n';
   import { slide } from 'svelte/transition';
   import { tick } from 'svelte';
+  import { dndzone } from 'svelte-dnd-action';
+  import { flip } from 'svelte/animate';
+  import { dndConfig } from '$lib/utils/motion';
 
   const tasks = getTasksStore();
   const pomodoro = getPomodoroStore();
@@ -24,8 +27,37 @@
   // Focus mode check
   const isFocusMode = $derived(pomodoro.state === 'work' && pomodoro.activeTaskId !== null);
 
+  // Local state for DnD items
+  // We need to maintain a local copy because dndzone updates it during drag
+  let columnItems = $state<Record<Priority, Task[]>>({
+    A: [], B: [], C: [], D: [], E: [], F: []
+  });
+
+  let isDragging = $state(false);
+
+  // Sync from store when not dragging
+  $effect(() => {
+    if (!isDragging) {
+      priorities.forEach(p => {
+        columnItems[p] = tasks.tasksByPriority[p].filter(t => !t.completed);
+      });
+    }
+  });
+
+  function handleDndConsider(priority: Priority, e: CustomEvent<DndEvent<Task>>) {
+    isDragging = true;
+    columnItems[priority] = e.detail.items;
+  }
+
+  function handleDndFinalize(priority: Priority, e: CustomEvent<DndEvent<Task>>) {
+    isDragging = false;
+    columnItems[priority] = e.detail.items;
+    reorderTask(priority, e.detail.items);
+  }
+
   // Idea Pool (F zone) derived values
-  const ideaPoolTasks = $derived(getTasksForPriority('F'));
+  // Use columnItems for F zone as well to support DnD
+  const ideaPoolTasks = $derived(columnItems['F']);
   const ideaPoolDimmed = $derived(isFocusMode && !hasActiveTaskInColumn('F'));
 
   // Keyboard navigation state
@@ -35,10 +67,6 @@
 
   // Quick Action panel toggle state
   let showQuickAction = $state(true);
-
-  function getTasksForPriority(priority: Priority) {
-    return tasks.tasksByPriority[priority].filter(task => !task.completed);
-  }
 
   function getCompletedForPriority(priority: Priority) {
     return tasks.tasksByPriority[priority].filter(task => task.completed);
@@ -64,7 +92,7 @@
 
     if (!focusedPriority) return;
 
-    const currentTasks = getTasksForPriority(focusedPriority);
+    const currentTasks = columnItems[focusedPriority];
     const priorityIndex = priorities.indexOf(focusedPriority);
 
     switch (e.key) {
@@ -91,7 +119,7 @@
         e.preventDefault();
         if (priorityIndex < priorities.length - 1) {
           focusedPriority = priorities[priorityIndex + 1];
-          const newTasks = getTasksForPriority(focusedPriority);
+          const newTasks = columnItems[focusedPriority];
           focusedTaskIndex = Math.min(focusedTaskIndex, Math.max(0, newTasks.length - 1));
           if (newTasks.length === 0) focusedTaskIndex = -1;
           updateFocus();
@@ -103,7 +131,7 @@
         e.preventDefault();
         if (priorityIndex > 0) {
           focusedPriority = priorities[priorityIndex - 1];
-          const newTasks = getTasksForPriority(focusedPriority);
+          const newTasks = columnItems[focusedPriority];
           focusedTaskIndex = Math.min(focusedTaskIndex, Math.max(0, newTasks.length - 1));
           if (newTasks.length === 0) focusedTaskIndex = -1;
           updateFocus();
@@ -113,7 +141,7 @@
       case 'Enter':
         e.preventDefault();
         if (focusedPriority && focusedTaskIndex >= 0) {
-          const task = getTasksForPriority(focusedPriority)[focusedTaskIndex];
+          const task = columnItems[focusedPriority][focusedTaskIndex];
           if (task) {
             // Open edit modal for the task
             openEditModal(task);
@@ -134,7 +162,7 @@
 
   function updateFocus() {
     if (focusedPriority && focusedTaskIndex >= 0) {
-      const task = getTasksForPriority(focusedPriority)[focusedTaskIndex];
+      const task = columnItems[focusedPriority][focusedTaskIndex];
       if (task) {
         focusedTaskId = task.id;
         tick().then(() => {
@@ -169,7 +197,7 @@
   <div class="kanban-main" class:expanded={!showQuickAction}>
     {#each mainPriorities as priority}
       {@const config = PRIORITY_CONFIG[priority]}
-      {@const activeTasks = getTasksForPriority(priority)}
+      {@const activeTasks = columnItems[priority]}
       {@const completedTasks = getCompletedForPriority(priority)}
       {@const isFull = counts[priority] >= config.quota}
       {@const isDimmed = isFocusMode && !hasActiveTaskInColumn(priority)}
@@ -178,6 +206,7 @@
         class="priority-column"
         class:is-full={isFull}
         class:focus-dimmed={isDimmed}
+        class:drop-target={false} 
         style:--card-color={config.color}
         role="region"
         aria-label={t(`priority.${priority}`)}
@@ -188,12 +217,18 @@
           <span class="column-count">{counts[priority]}</span>
         </div>
 
-        <div class="column-tasks">
+        <div 
+          class="column-tasks" 
+          use:dndzone={{ items: activeTasks, flipDurationMs: dndConfig.flipDurationMs, dropTargetStyle: { outline: `2px solid ${config.color}`, outlineOffset: '-2px', borderRadius: '8px' } }}
+          onconsider={(e) => handleDndConsider(priority, e)}
+          onfinalize={(e) => handleDndFinalize(priority, e)}
+        >
           {#each activeTasks as task (task.id)}
             <div
               class="task-item-wrapper"
               id={`task-${task.id}`}
               tabindex={focusedTaskId === task.id ? 0 : -1}
+              animate:flip={{ duration: dndConfig.flipDurationMs }}
             >
               <TaskCard
                 {task}
@@ -241,9 +276,18 @@
     </div>
 
     {#if showQuickAction}
-      <div class="pool-tasks" transition:slide>
+      <div 
+        class="pool-tasks" 
+        transition:slide
+        use:dndzone={{ items: ideaPoolTasks, flipDurationMs: dndConfig.flipDurationMs, dropTargetStyle: { outline: `2px solid ${PRIORITY_CONFIG.F.color}`, outlineOffset: '-2px', borderRadius: '8px' } }}
+        onconsider={(e) => handleDndConsider('F', e)}
+        onfinalize={(e) => handleDndFinalize('F', e)}
+      >
         {#each ideaPoolTasks as task (task.id)}
-          <div class="pool-task-item">
+          <div 
+            class="pool-task-item"
+            animate:flip={{ duration: dndConfig.flipDurationMs }}
+          >
             <TaskCard {task} compact />
           </div>
         {/each}
