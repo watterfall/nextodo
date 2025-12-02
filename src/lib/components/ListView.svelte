@@ -81,35 +81,43 @@
 
       if (info.trigger === TRIGGERS.DROPPED_INTO_ZONE) {
         const droppedTask = cleanItems.find(task => task.id === info.id);
-        if (droppedTask && droppedTask.priority !== priority) {
-          // Task came from another zone - change its priority
-          const sourcePriority = droppedTask.priority;
-          const result = await changePriority(info.id, priority);
-          if (!result.success) {
-            // Show error feedback to user
-            showToast(result.error || t('error.quotaExceeded'), 'error');
-            // Revert all zones if failed
-            for (const p of allPriorities) {
-              dndItemsByPriority[p] = getTasksForPriority(p);
+        // Only process if droppedTask exists (this is the target zone)
+        // If droppedTask is undefined, this is the source zone and we should skip processing
+        if (droppedTask) {
+          if (droppedTask.priority !== priority) {
+            // Task came from another zone - change its priority
+            const sourcePriority = droppedTask.priority;
+            const result = await changePriority(info.id, priority);
+            if (!result.success) {
+              // Show error feedback to user
+              showToast(result.error || t('error.quotaExceeded'), 'error');
+              // Revert all zones if failed
+              for (const p of allPriorities) {
+                dndItemsByPriority[p] = getTasksForPriority(p);
+              }
+            } else {
+              // Update both source and target zones with fresh data from store
+              dndItemsByPriority[sourcePriority] = getTasksForPriority(sourcePriority);
+              dndItemsByPriority[priority] = getTasksForPriority(priority);
             }
           } else {
-            // Update both source and target zones with fresh data from store
-            dndItemsByPriority[sourcePriority] = getTasksForPriority(sourcePriority);
-            dndItemsByPriority[priority] = getTasksForPriority(priority);
+            // Reorder within zone
+            await reorderTask(priority, cleanItems.map(task => task.id));
           }
-        } else {
-          await reorderTask(priority, cleanItems.map(task => task.id));
+          // Clear drag state only when we've processed the drop (target zone)
+          activeDndPriority = null;
+          clearDragState();
         }
+        // If droppedTask is undefined, this is the source zone - don't clear state yet
       } else if (info.trigger === TRIGGERS.DROPPED_OUTSIDE_OF_ANY) {
         // Revert all zones
         for (const p of allPriorities) {
           dndItemsByPriority[p] = getTasksForPriority(p);
         }
+        // Clear drag state for cancelled drops
+        activeDndPriority = null;
+        clearDragState();
       }
-
-      // Clear drag state after async operations complete
-      activeDndPriority = null;
-      clearDragState();
     };
   }
 
