@@ -10,6 +10,7 @@
   import { startPomodoro, getPomodoroStore } from '$lib/stores/pomodoro.svelte';
   import { isOverdue, getRelativeDayLabel, parseISODate } from '$lib/utils/unitCalc';
   import { validatePomodoroEstimate } from '$lib/utils/quota';
+  import { isTauri } from '$lib/utils/storage';
 
   const tasks = getTasksStore();
   const ui = getUIStore();
@@ -60,7 +61,7 @@
 
   // DnD handlers
   function handleDndConsider(priority: Priority) {
-    return (e: DndConsiderEvent) => {
+    return async (e: DndConsiderEvent) => {
       const { items, info } = e.detail;
       // Clone the items array to ensure reactivity
       dndItemsByPriority[priority] = [...items];
@@ -68,6 +69,11 @@
       if (info.trigger === TRIGGERS.DRAG_STARTED) {
         activeDndPriority = priority;
         setDropTarget(priority);
+        // Suspend file watcher when drag starts to prevent race condition
+        if (isTauri()) {
+          const { invoke } = await import('@tauri-apps/api/core');
+          await invoke('suspend_watcher');
+        }
       }
     };
   }
@@ -79,44 +85,52 @@
       const cleanItems = items.filter(item => !(item as any)[SHADOW_ITEM_MARKER_PROPERTY_NAME]);
       dndItemsByPriority[priority] = [...cleanItems];
 
-      if (info.trigger === TRIGGERS.DROPPED_INTO_ZONE) {
-        const droppedTask = cleanItems.find(task => task.id === info.id);
-        // Only process if droppedTask exists (this is the target zone)
-        // If droppedTask is undefined, this is the source zone and we should skip processing
-        if (droppedTask) {
-          if (droppedTask.priority !== priority) {
-            // Task came from another zone - change its priority
-            const sourcePriority = droppedTask.priority;
-            const result = await changePriority(info.id, priority);
-            if (!result.success) {
-              // Show error feedback to user
-              showToast(result.error || t('error.quotaExceeded'), 'error');
-              // Revert all zones if failed
-              for (const p of allPriorities) {
-                dndItemsByPriority[p] = getTasksForPriority(p);
+      try {
+        if (info.trigger === TRIGGERS.DROPPED_INTO_ZONE) {
+          const droppedTask = cleanItems.find(task => task.id === info.id);
+          // Only process if droppedTask exists (this is the target zone)
+          // If droppedTask is undefined, this is the source zone and we should skip processing
+          if (droppedTask) {
+            if (droppedTask.priority !== priority) {
+              // Task came from another zone - change its priority
+              const sourcePriority = droppedTask.priority;
+              const result = await changePriority(info.id, priority);
+              if (!result.success) {
+                // Show error feedback to user
+                showToast(result.error || t('error.quotaExceeded'), 'error');
+                // Revert all zones if failed
+                for (const p of allPriorities) {
+                  dndItemsByPriority[p] = getTasksForPriority(p);
+                }
+              } else {
+                // Update both source and target zones with fresh data from store
+                dndItemsByPriority[sourcePriority] = getTasksForPriority(sourcePriority);
+                dndItemsByPriority[priority] = getTasksForPriority(priority);
               }
             } else {
-              // Update both source and target zones with fresh data from store
-              dndItemsByPriority[sourcePriority] = getTasksForPriority(sourcePriority);
-              dndItemsByPriority[priority] = getTasksForPriority(priority);
+              // Reorder within zone
+              await reorderTask(priority, cleanItems.map(task => task.id));
             }
-          } else {
-            // Reorder within zone
-            await reorderTask(priority, cleanItems.map(task => task.id));
+            // Clear drag state only when we've processed the drop (target zone)
+            activeDndPriority = null;
+            clearDragState();
           }
-          // Clear drag state only when we've processed the drop (target zone)
+          // If droppedTask is undefined, this is the source zone - don't clear state yet
+        } else if (info.trigger === TRIGGERS.DROPPED_OUTSIDE_OF_ANY) {
+          // Revert all zones
+          for (const p of allPriorities) {
+            dndItemsByPriority[p] = getTasksForPriority(p);
+          }
+          // Clear drag state for cancelled drops
           activeDndPriority = null;
           clearDragState();
         }
-        // If droppedTask is undefined, this is the source zone - don't clear state yet
-      } else if (info.trigger === TRIGGERS.DROPPED_OUTSIDE_OF_ANY) {
-        // Revert all zones
-        for (const p of allPriorities) {
-          dndItemsByPriority[p] = getTasksForPriority(p);
+      } finally {
+        // Resume file watcher after DnD completes (success or failure)
+        if (isTauri()) {
+          const { invoke } = await import('@tauri-apps/api/core');
+          await invoke('resume_watcher');
         }
-        // Clear drag state for cancelled drops
-        activeDndPriority = null;
-        clearDragState();
       }
     };
   }
