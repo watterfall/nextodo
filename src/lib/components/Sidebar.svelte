@@ -41,13 +41,13 @@
   
     // Count tasks per project/context/tag
     function getProjectCount(project: string): number {
-      return tasks.tasks.filter(task => !task.completed && task.projects.includes(project)).length;
+      return tasks.activeTasks.filter(task => task.projects.includes(project)).length;
     }
     function getContextCount(context: string): number {
-      return tasks.tasks.filter(task => !task.completed && task.contexts.includes(context)).length;
+      return tasks.activeTasks.filter(task => task.contexts.includes(context)).length;
     }
     function getTagCount(tag: string): number {
-      return tasks.tasks.filter(task => !task.completed && task.customTags.includes(tag)).length;
+      return tasks.activeTasks.filter(task => task.customTags.includes(tag)).length;
     }
 
   let dueDatesExpanded = $state(true);
