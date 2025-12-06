@@ -232,7 +232,8 @@ function saveToLocalStorage(data: AppData): void {
       tasks: data.tasks,
       reviews: data.reviews,
       customTagGroups: data.customTagGroups,
-      settings: data.settings
+      settings: data.settings,
+      gamification: data.gamification
     };
 
     const pomodoroHistory: PomodoroHistoryData = {
@@ -326,7 +327,8 @@ async function saveToTauri(data: AppData, filesToSave: string[] = ['active', 'po
       tasks: data.tasks,
       reviews: data.reviews,
       customTagGroups: data.customTagGroups,
-      settings: data.settings
+      settings: data.settings,
+      gamification: data.gamification
     };
 
     const pomodoroHistory: PomodoroHistoryData = {
