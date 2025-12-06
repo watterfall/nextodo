@@ -119,6 +119,26 @@
       }
     }
 
+    // Check for syntax patterns or if form is expanded
+    if (!isExpanded) {
+      // Check for syntax (priority, project, context, tag, due date, etc.)
+      const hasSyntax = /[!+@#~]/.test(content) || 
+                        content.includes('due:') || 
+                        content.includes('thr:') || 
+                        content.includes('rec:') || 
+                        content.includes('🍅') ||
+                        content.includes('p:');
+      
+      if (!hasSyntax) {
+        // Not comprehensive enough, expand to encourage adding details
+        isExpanded = true;
+        // Keep focus on input
+        const input = document.querySelector('.content-input') as HTMLInputElement;
+        if (input) input.focus();
+        return;
+      }
+    }
+
     const taskString = buildTaskString();
     const result = addTask(taskString);
 
@@ -183,7 +203,8 @@
   function handleInputBlur() {
     // Delay to allow clicking on other fields
     setTimeout(() => {
-      if (!content.trim()) {
+      // Only hide if empty AND not expanded
+      if (!content.trim() && !isExpanded) {
         showSyntaxHint = false;
         hasStartedTyping = false;
       }
@@ -264,7 +285,7 @@
 
     if (value.trim().length > 0 && !hasStartedTyping) {
       hasStartedTyping = true;
-      isExpanded = true;
+      // Do not auto-expand
     }
   }
 

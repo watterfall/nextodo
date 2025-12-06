@@ -98,7 +98,7 @@
       showConfirmation({
         title: t('message.priorityChangeTitle') || 'Priority Change',
         message: confirmCheck.message || t('message.confirmPriorityChange'),
-        confirmText: t('task.continueAnyway'),
+        confirmText: t('action.continueAnyway'),
         cancelText: t('action.cancel'),
         onConfirm: () => {
           priorityChangeConfirmed = true;

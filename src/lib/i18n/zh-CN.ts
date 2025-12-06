@@ -384,6 +384,7 @@ export default {
     save: '保存',
     cancel: '取消',
     confirm: '确认',
+    continueAnyway: '确认',
     delete: '删除',
     edit: '编辑',
     close: '关闭',

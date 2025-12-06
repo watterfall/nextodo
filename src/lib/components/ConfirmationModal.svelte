@@ -48,7 +48,7 @@
           {ui.confirmationData.cancelText || t('action.cancel')}
         </button>
         <button class="btn btn-warning" onclick={handleConfirmationConfirm}>
-          {ui.confirmationData.confirmText || t('task.continueAnyway')}
+          {ui.confirmationData.confirmText || t('action.continueAnyway')}
         </button>
       </div>
     </div>

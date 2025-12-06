@@ -385,6 +385,7 @@ export default {
     save: 'Save',
     cancel: 'Cancel',
     confirm: 'Confirm',
+    continueAnyway: 'Confirm',
     delete: 'Delete',
     edit: 'Edit',
     close: 'Close',
