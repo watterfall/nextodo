@@ -5,7 +5,7 @@
 **FocusFlow** is a focus-first task management desktop application that combines GTD (Getting Things Done) methodology with the Pomodoro technique. Built with Tauri, Svelte 5, and Rust, it provides cross-platform support with a 5-tier priority system, bi-daily work units, and periodic reviews.
 
 **Version:** 2.0.0
-**Data Version:** 3.0
+**Data Version:** 4.0
 **License:** MIT
 
 ## Architecture
@@ -28,7 +28,7 @@
 /
 ├── src/                          # Frontend (Svelte/TypeScript)
 │   ├── lib/
-│   │   ├── components/           # Svelte components (23 files)
+│   │   ├── components/           # Svelte components (24 files)
 │   │   ├── stores/               # Svelte 5 runes state management (6 stores)
 │   │   ├── utils/                # Business logic utilities (6 files)
 │   │   ├── types/                # TypeScript type definitions
@@ -78,7 +78,9 @@
 | `TagPicker.svelte` | Tag selection widget |
 | `Confetti.svelte` | Celebration animation |
 | `TaskEditModal.svelte` | Modal for editing existing tasks with form fields |
-| `TrashArchiveModal.svelte` | View trash, completed tasks, and archived tasks |
+| `ConfirmationModal.svelte` | Reusable confirmation dialog for destructive actions |
+| `CalendarView.svelte` | Monthly calendar view with task scheduling |
+| `HistoryModal.svelte` | View completed and cancelled tasks history |
 
 ### Store Architecture
 
@@ -157,7 +159,7 @@ import TaskCard from '$lib/components/TaskCard.svelte';
 All types are centralized in `src/lib/types/index.ts`. Key types:
 
 - **Task** - Core task entity with priority, dates, pomodoros, recurrence, threshold dates
-- **Priority** - `'A' | 'B' | 'C' | 'D' | 'E' | 'F'` (with quotas: 1, 2, 3, 4, 5, Infinity)
+- **Priority** - `'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H'` (A-E with quotas 1-5, F=Infinity, G=completed, H=cancelled)
 - **AppData** - Combined in-memory data structure
 - **ActiveData** / **ArchiveData** / **PomodoroHistoryData** - Separated file structures
 - **Settings** - Application configuration
@@ -165,7 +167,7 @@ All types are centralized in `src/lib/types/index.ts`. Key types:
 - **UnitReview** - Bi-daily unit review data
 - **Badge** / **BadgeId** - Gamification achievement types
 - **PomodoroSession** - Timer session with interruption tracking
-- **ViewMode** - `'kanban' | 'list'` (currently active views)
+- **ViewMode** - `'kanban' | 'list' | 'calendar'` (main view modes)
 
 ### Factory Functions
 
@@ -187,6 +189,10 @@ createDefaultAppData(): AppData
 isThresholdPassed(task: Task): boolean     // Check if threshold date allows visibility
 calculateFZoneAge(task: Task): number      // Units task has been in F-zone (Idea Pool)
 calculateEZoneAge(task: Task): number      // Backward compat alias for calculateFZoneAge
+isWithinRetentionPeriod(task: Task): boolean  // Check if completed task is in retention window
+getRetentionRemaining(task: Task): { hours, minutes } | null  // Remaining retention time
+isActivePriority(priority: Priority): boolean  // Check if priority is A-F (visible)
+isHiddenPriority(priority: Priority): boolean  // Check if priority is G or H (hidden)
 
 // From utils/quota.ts
 countActiveByPriority(tasks: Task[]): Record<Priority, number>
@@ -267,8 +273,24 @@ The Highlander Rule applies - only one A-priority task per unit:
 | D | 4 | Temporary/unplanned tasks (25-75 min, 1-3 pomodoros) |
 | E | 5 | Quick tasks (<15 min, 0-1 pomodoros) |
 | F | ∞ | Idea Pool - collect ideas, unsorted tasks |
+| G | ∞ | Completed tasks (hidden, moved here on completion) |
+| H | ∞ | Cancelled tasks (hidden, moved here on cancellation) |
 
 Use quota utilities from `src/lib/utils/quota.ts` for validation.
+
+### Completed Task Retention
+
+Completed tasks (G priority) remain visible for a retention period based on their original priority:
+
+| Original Priority | Retention Period |
+|-------------------|------------------|
+| A | 12 hours |
+| B | 10 hours |
+| C | 8 hours |
+| D | 6 hours |
+| E/F | 4 hours |
+
+Use `isWithinRetentionPeriod()` and `getRetentionRemaining()` from types to check retention status.
 
 ### Bi-Daily Units
 
@@ -293,22 +315,33 @@ import { dndConfig, flipDefaults } from '$lib/utils/motion';
 
 ### Gamification / Badges
 
-Badge system defined in `src/lib/stores/gamification.svelte.ts`:
+Badge and leveling system defined in `src/lib/stores/gamification.svelte.ts`:
 
-| Badge ID | Name | Condition |
-|----------|------|-----------|
-| `planner_novice` | 计划新手 | Complete first review |
-| `challenger` | 挑战者 | Complete an A-priority task |
-| `flow_master` | 心流大师 | 4 consecutive pomodoros without interruption |
-| `early_bird` | 早起鸟 | Complete task before 9 AM |
-| `deep_diver` | 深潜者 | 10 hours cumulative deep work |
-| `consistency_3` | 持之以恒 | 3 consecutive days with output |
-| `consistency_7` | 习惯养成 | 7 consecutive days with output |
+| Badge ID | Name | Condition | XP Reward |
+|----------|------|-----------|-----------|
+| `first_step` | First Step | Complete first task | 50 |
+| `pomodoro_novice` | Focus Novice | Complete 5 pomodoros | 100 |
+| `pomodoro_master` | Focus Master | Complete 100 pomodoros | 1000 |
+| `challenge_crusher` | Challenge Crusher | Complete 5 A-priority tasks | 500 |
+| `consistency_is_key` | Consistency | Maintain a 3-day streak | 300 |
+| `sustainable_worker` | Sustainable Worker | 3 "perfect days" (healthy completion rate) | 400 |
+
+**Level Progression:**
+
+| Level | Title | XP Required |
+|-------|-------|-------------|
+| 1 | Novice Planner | 0 |
+| 2 | Task Apprentice | 500 |
+| 3 | Focus Adept | 1500 |
+| 4 | Productivity Pro | 3000 |
+| 5 | Zen Master | 6000 |
 
 ```typescript
-import { checkBadges, checkReviewBadges } from '$lib/stores/gamification.svelte';
-checkBadges();        // Check task/pomodoro badges
-checkReviewBadges();  // Check review completion badge
+import { getGamificationStore } from '$lib/stores/gamification.svelte';
+const store = getGamificationStore();
+store.recordTaskCompletion(task);  // Record task completion (+10 XP)
+store.recordPomodoro();            // Record pomodoro completion (+5 XP)
+store.checkBadges();               // Check and unlock badges
 ```
 
 ## Tauri IPC Commands
@@ -491,38 +524,46 @@ Theme is stored in settings and applied via CSS custom properties in `app.css`. 
 
 ### Adding a New View Mode
 
-1. Add to `ViewMode` type in `src/lib/types/index.ts`
-2. Create component in `src/lib/components/`
-3. Add routing logic in `App.svelte`
-4. Add navigation in `Sidebar.svelte`
-5. Add i18n keys for view name
+1. Add to `ViewMode` type in `src/lib/types/index.ts` (currently: `'kanban' | 'list' | 'calendar'`)
+2. Create component in `src/lib/components/` (e.g., `CalendarView.svelte`)
+3. Add routing logic in `App.svelte` (switch statement on viewMode)
+4. Add navigation in `Sidebar.svelte` (icon and click handler)
+5. Add i18n keys for view name in both `zh-CN.ts` and `en-US.ts`
 
 ### Adding a New Badge
 
-1. Add badge ID to `BadgeId` type in `src/lib/types/index.ts`
-2. Add badge definition in `BADGE_DEFINITIONS` in `src/lib/stores/gamification.svelte.ts`
-3. Add unlock condition logic in `checkBadges()` or create new check function
-4. Update `BadgesModal.svelte` BADGES array for display
+1. Add badge definition to `BADGE_DEFINITIONS` array in `src/lib/stores/gamification.svelte.ts`:
+   - `id`: Unique badge identifier
+   - `name`: Display name
+   - `description`: Badge description
+   - `icon`: Emoji icon
+   - `condition`: Function that takes `GamificationStats` and returns boolean
+   - `xpReward`: XP reward when badge is unlocked
+2. Add any new stats to `GamificationStats` interface if needed
+3. Update `recordTaskCompletion()` or `recordPomodoro()` to track new stats
+4. Badge modal automatically displays from store state
 
 ## File Reference
 
 | File | Purpose | Approx Lines |
 |------|---------|--------------|
-| `src/App.svelte` | Root component, layout, routing | ~720 |
-| `src/lib/stores/tasks.svelte.ts` | Central state management | ~570 |
-| `src/lib/stores/ui.svelte.ts` | UI state, modals, keyboard shortcuts | ~215 |
+| `src/App.svelte` | Root component, layout, routing | ~785 |
+| `src/lib/stores/tasks.svelte.ts` | Central state management | ~690 |
+| `src/lib/stores/ui.svelte.ts` | UI state, modals, keyboard shortcuts | ~250 |
 | `src/lib/utils/storage.ts` | Data persistence layer | ~610 |
 | `src/lib/utils/parser.ts` | Task input parsing | ~410 |
 | `src/lib/utils/motion.ts` | Animation configs, DnD types | ~190 |
 | `src/lib/utils/quota.ts` | Priority quota utilities | ~160 |
-| `src/lib/types/index.ts` | Type definitions | ~390 |
-| `src/lib/components/Sidebar.svelte` | Navigation and filters | ~1160 |
+| `src/lib/types/index.ts` | Type definitions | ~455 |
+| `src/lib/components/Sidebar.svelte` | Navigation and filters | ~1180 |
 | `src/lib/components/ListView.svelte` | List view by priority | ~190 |
 | `src/lib/components/KanbanView.svelte` | Kanban board view | ~200 |
+| `src/lib/components/CalendarView.svelte` | Monthly calendar view | ~375 |
 | `src/lib/components/TaskEditModal.svelte` | Task edit modal with form | ~200 |
-| `src/lib/components/TrashArchiveModal.svelte` | Trash/archive viewer | ~180 |
-| `src/lib/stores/gamification.svelte.ts` | Badge system | ~115 |
-| `src-tauri/src/commands.rs` | Backend IPC handlers | ~395 |
+| `src/lib/components/HistoryModal.svelte` | Completed/cancelled tasks viewer | ~395 |
+| `src/lib/components/ConfirmationModal.svelte` | Reusable confirmation dialog | ~175 |
+| `src/lib/stores/gamification.svelte.ts` | Badge system | ~230 |
+| `src-tauri/src/commands.rs` | Backend IPC handlers | ~415 |
 | `src-tauri/src/watcher.rs` | File system watcher | ~80 |
 
 ## Rust Dependencies
