@@ -105,12 +105,12 @@ async function persist(filesToSave: ('active' | 'archive' | 'pomodoro_history')[
 }
 
 // Task operations
-export async function addTask(input: string): Promise<{ success: boolean; error?: string }> {
+export async function addTask(input: string, force = false): Promise<{ success: boolean; error?: string }> {
   const task = createTaskFromInput(input);
 
   // Validate quota
   const quotaError = validateQuota(appData.tasks, task.priority);
-  if (quotaError) {
+  if (quotaError && !force) {
     return { success: false, error: quotaError };
   }
 
@@ -125,9 +125,9 @@ export async function addTask(input: string): Promise<{ success: boolean; error?
   return { success: true };
 }
 
-export async function addTaskDirect(task: Task): Promise<{ success: boolean; error?: string }> {
+export async function addTaskDirect(task: Task, force = false): Promise<{ success: boolean; error?: string }> {
   const quotaError = validateQuota(appData.tasks, task.priority);
-  if (quotaError) {
+  if (quotaError && !force) {
     return { success: false, error: quotaError };
   }
 

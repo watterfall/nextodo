@@ -104,10 +104,10 @@
     return parts.join(' ');
   }
 
-  function handleSubmit() {
+  async function handleSubmit() {
     if (!content.trim()) return;
 
-    // Check quota for selected priority
+    // Check quota for selected priority (pre-emptive check for UI selection)
     const quotaError = validateQuota(tasks.tasks, selectedPriority);
     if (quotaError) {
       // Soft warning - show toast but allow adding?
@@ -140,7 +140,14 @@
     }
 
     const taskString = buildTaskString();
-    const result = addTask(taskString);
+    let result = await addTask(taskString);
+
+    // If failed due to quota (e.g. typed !A explicitly), prompt and retry force
+    if (!result.success && result.error && (result.error.includes(t('error.quotaExceeded')) || result.error.includes('quota') || result.error.includes('配额'))) {
+        if (confirm(result.error + '\n' + t('action.continueAnyway') + '?')) {
+             result = await addTask(taskString, true);
+        }
+    }
 
     if (result.success) {
       resetForm();
