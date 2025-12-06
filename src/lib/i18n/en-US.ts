@@ -156,7 +156,7 @@ export default {
     uncomplete: 'Uncomplete',
     archive: 'Archive',
     restore: 'Restore',
-    continueAnyway: 'Continue anyway',
+    continueAnyway: 'Confirm',
     moveToTrash: 'Move to Trash',
     emptyTrash: 'Empty Trash',
     noTasks: 'No tasks',

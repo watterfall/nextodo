@@ -274,6 +274,7 @@
       {@const completedTasks = getCompletedForPriority(priority)}
       {@const isFull = counts[priority] >= config.quota}
       {@const isDimmed = isFocusMode && !hasActiveTaskInColumn(priority)}
+      {@const recentlyCompletedTasks = getRecentlyCompletedForPriority(priority)}
 
       <div
         class="priority-column"
@@ -317,7 +318,6 @@
         </div>
 
         <!-- Recently completed tasks within retention period -->
-        {@const recentlyCompletedTasks = getRecentlyCompletedForPriority(priority)}
         {#if recentlyCompletedTasks.length > 0}
           <div class="recently-completed-section">
             <button

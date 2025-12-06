@@ -81,7 +81,8 @@
     }
   }
 
-  const config = $derived(PRIORITY_CONFIG[task.priority]);
+  const effectivePriority = $derived(task.completed && task.originalPriority ? task.originalPriority : task.priority);
+  const config = $derived(PRIORITY_CONFIG[effectivePriority]);
   const isTaskOverdue = $derived(isActivePriority(task.priority) && isOverdue(task.dueDate));
   const dueDateLabel = $derived(task.dueDate ? getRelativeDayLabel(parseISODate(task.dueDate)) : null);
   const isCompleted = $derived(task.priority === 'G');

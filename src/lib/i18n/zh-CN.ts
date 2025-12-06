@@ -156,7 +156,7 @@ export default {
     uncomplete: '取消完成',
     archive: '归档',
     restore: '恢复',
-    continueAnyway: '仍然继续',
+    continueAnyway: '确认',
     moveToTrash: '移至回收站',
     emptyTrash: '清空回收站',
     noTasks: '暂无任务',

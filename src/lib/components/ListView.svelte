@@ -194,6 +194,8 @@
     {#each mainPriorities as priority}
       {@const priorityTasks = columnItems[priority]}
       {@const config = PRIORITY_CONFIG[priority]}
+      {@const recentlyCompletedTasks = getRecentlyCompletedForPriority(priority)}
+      {@const recentCount = recentlyCompletedTasks.length}
       <section
         class="priority-section"
         class:has-tasks={priorityTasks.length > 0}
@@ -224,7 +226,6 @@
           </div>
           <span class="priority-count">{priorityTasks.length}</span>
           <!-- Recently completed toggle -->
-          {@const recentCount = getRecentlyCompletedForPriority(priority).length}
           {#if recentCount > 0}
             <button
               class="recently-completed-toggle-btn"
@@ -245,7 +246,6 @@
           onfinalize={(e) => handleDndFinalize(priority, e)}
         >
           <!-- Recently completed tasks within retention period -->
-          {@const recentlyCompletedTasks = getRecentlyCompletedForPriority(priority)}
           {#if recentlyCompletedTasks.length > 0 && showRecentlyCompleted[priority]}
             {#each recentlyCompletedTasks as task (task.id)}
               {@const config2 = PRIORITY_CONFIG[task.originalPriority || priority]}
