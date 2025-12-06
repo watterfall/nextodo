@@ -20,6 +20,7 @@ export default {
     settings: '设置',
     badges: '成就',
     history: '任务历史',
+    review: '周期复盘',
   },
 
   // Trash

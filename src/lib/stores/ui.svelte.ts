@@ -24,6 +24,7 @@ let confirmationData = $state<ConfirmationData | null>(null);
 
 // Immersive mode
 let isImmersiveMode = $state(false);
+let isBadgesOpen = $state(false);
 
 // Toast timeout
 let toastTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -140,6 +141,10 @@ export function toggleImmersiveMode(): void {
   isImmersiveMode = !isImmersiveMode;
 }
 
+export function setBadgesOpen(open: boolean): void {
+  isBadgesOpen = open;
+}
+
 // Callback for focusing new task input
 let focusNewTaskCallback: (() => void) | null = null;
 
@@ -243,7 +248,8 @@ export function getUIStore() {
     get editingTaskId() { return editingTaskId; },
     get editingTask() { return editingTask; },
     get isImmersiveMode() { return isImmersiveMode; },
-    get confirmationData() { return confirmationData; }
+    get confirmationData() { return confirmationData; },
+    get isBadgesOpen() { return isBadgesOpen; }
   };
 }
 

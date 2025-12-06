@@ -32,7 +32,8 @@
     showToast,
     closeSearch,
     exitImmersiveMode,
-    setViewMode // Import this
+    setViewMode,
+    setBadgesOpen
   } from '$lib/stores/ui.svelte';
   import {
     initPomodoro,
@@ -66,7 +67,7 @@
   let isSettingsOpen = $state(false);
   let isReviewOpen = $state(false);
   let isHistoryOpen = $state(false);
-  let isBadgesOpen = $state(false);
+  // isBadgesOpen moved to ui store for better control
 
   onMount(async () => {
     // Initialize i18n first
@@ -199,7 +200,7 @@
     }}
     onOpenBadges={() => {
       console.log('App: Opening badges');
-      isBadgesOpen = true;
+      setBadgesOpen(true);
     }}
   />
 
@@ -271,9 +272,11 @@
         <!-- Badges Button (Subtle) -->
         <button 
           class="icon-btn badges-btn" 
-          onclick={() => { 
-            console.log('Opening badges modal'); 
-            isBadgesOpen = true; 
+          class:active={ui.isBadgesOpen}
+          onclick={(e) => { 
+            e.preventDefault();
+            e.stopPropagation();
+            setBadgesOpen(!ui.isBadgesOpen);
           }} 
           title={t('nav.badges') || '成就'}
         >
@@ -313,6 +316,13 @@
     <div class="task-form-container">
       <TaskForm />
     </div>
+
+    <!-- Badges Inline Section (Visible when badges open) -->
+    {#if ui.isBadgesOpen}
+      <div class="badges-inline-container">
+        <BadgesModal onClose={() => setBadgesOpen(false)} isInline={true} />
+      </div>
+    {/if}
 
     <!-- Main Layout Switcher - Views fill available space -->
     <div class="content-layout">
@@ -392,11 +402,6 @@
   <!-- History Modal (completed/cancelled tasks) -->
   {#if isHistoryOpen}
     <HistoryModal onClose={() => isHistoryOpen = false} />
-  {/if}
-
-  {#if isBadgesOpen}
-    <!-- Force re-render to ensure z-index works -->
-    <BadgesModal onClose={() => isBadgesOpen = false} />
   {/if}
 
   <!-- Task Edit Modal -->
@@ -563,10 +568,21 @@
     font-weight: 450;
   }
 
-  .task-form-container {
-    padding: 16px 20px;
-    flex-shrink: 0;
-  }
+    .task-form-container {
+      padding: 16px 20px;
+      flex-shrink: 0;
+    }
+
+    .badges-inline-container {
+      padding: 0 20px 16px;
+      flex-shrink: 0;
+      animation: slideDown 0.2s ease-out;
+    }
+
+    @keyframes slideDown {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
 
   .content-layout {
     flex: 1;
@@ -637,6 +653,12 @@
 
   .icon-btn .icon {
     font-size: 16px;
+  }
+
+  .icon-btn.active {
+    background: var(--bg-secondary);
+    color: var(--primary);
+    opacity: 1;
   }
 
   /* Theme toggle in header */

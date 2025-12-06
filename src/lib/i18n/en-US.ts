@@ -20,6 +20,7 @@ export default {
     settings: 'Settings',
     badges: 'Badges',
     history: 'Task History',
+    review: 'Period Review',
   },
 
   // Trash
