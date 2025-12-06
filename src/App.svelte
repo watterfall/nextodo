@@ -568,10 +568,10 @@
     font-weight: 450;
   }
 
-    .task-form-container {
-      padding: 16px 20px;
-      flex-shrink: 0;
-    }
+  .task-form-container {
+    padding: 16px 20px;
+    flex-shrink: 0;
+  }
 
     .badges-inline-container {
       padding: 0 20px 16px;

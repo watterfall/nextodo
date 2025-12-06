@@ -133,13 +133,23 @@ export async function loadFileData<T>(fileType: 'active' | 'archive' | 'pomodoro
 }
 
 /**
+/**
  * Reload specific file and return updated data
  */
-export async function reloadFile(fileType: string): Promise<ActiveData | ArchiveData | PomodoroHistoryData | null> {
+export async function reloadFile(
+  fileType: 'active' | 'archive' | 'pomodoro_history'
+): Promise<ActiveData | ArchiveData | PomodoroHistoryData | null> {
   switch (fileType) {
     case 'active':
       return await loadFileData<ActiveData>('active');
     case 'archive':
+      return await loadFileData<ArchiveData>('archive');
+    case 'pomodoro_history':
+      return await loadFileData<PomodoroHistoryData>('pomodoro_history');
+    default:
+      return null;
+  }
+}
       return await loadFileData<ArchiveData>('archive');
     case 'pomodoro_history':
       return await loadFileData<PomodoroHistoryData>('pomodoro_history');

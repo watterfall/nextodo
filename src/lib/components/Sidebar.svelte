@@ -34,63 +34,21 @@
   let allContexts = $derived([...new Set(tasks.tasks.flatMap(task => task.contexts))].sort());
   let allTags = $derived([...new Set(tasks.tasks.flatMap(task => task.customTags))].sort());
 
-  // Count active tasks per priority
-  function getPriorityCount(priority: Priority): number {
-    return tasks.tasks.filter(task => !task.completed && task.priority === priority).length;
-  }
-
-  // Get unique due dates and their counts
-  let dueDateGroups = $derived(() => {
-    const groups: { date: string; count: number }[] = [];
-    const dateMap = new Map<string, number>();
-
-    tasks.tasks.forEach(task => {
-      if (!task.completed && task.dueDate) {
-        dateMap.set(task.dueDate, (dateMap.get(task.dueDate) || 0) + 1);
-      }
-    });
-
-    // Sort by date
-    [...dateMap.entries()]
-      .sort((a, b) => a[0].localeCompare(b[0]))
-      .forEach(([date, count]) => {
-        groups.push({ date, count });
-      });
-
-    return groups;
-  });
-
-  // Get pomodoro count groups
-  let pomodoroGroups = $derived(() => {
-    const groups: { pomodoros: number; count: number }[] = [];
-    const pomoMap = new Map<number, number>();
-
-    tasks.tasks.forEach(task => {
-      if (!task.completed && task.pomodoros.estimated > 0) {
-        pomoMap.set(task.pomodoros.estimated, (pomoMap.get(task.pomodoros.estimated) || 0) + 1);
-      }
-    });
-
-    // Sort by pomodoro count
-    [...pomoMap.entries()]
-      .sort((a, b) => a[0] - b[0])
-      .forEach(([pomodoros, count]) => {
-        groups.push({ pomodoros, count });
-      });
-
-    return groups;
-  });
-
-  // Count tasks per project/context/tag
-  function getProjectCount(project: string): number {
-    return tasks.tasks.filter(task => !task.completed && task.projects.includes(project)).length;
-  }
-  function getContextCount(context: string): number {
-    return tasks.tasks.filter(task => !task.completed && task.contexts.includes(context)).length;
-  }
-  function getTagCount(tag: string): number {
-    return tasks.tasks.filter(task => !task.completed && task.customTags.includes(tag)).length;
-  }
+    // Count active tasks per priority
+    function getPriorityCount(priority: Priority): number {
+      return tasks.tasks.filter(task => !task.completed && task.priority === priority).length;
+    }
+  
+    // Count tasks per project/context/tag
+    function getProjectCount(project: string): number {
+      return tasks.tasks.filter(task => !task.completed && task.projects.includes(project)).length;
+    }
+    function getContextCount(context: string): number {
+      return tasks.tasks.filter(task => !task.completed && task.contexts.includes(context)).length;
+    }
+    function getTagCount(tag: string): number {
+      return tasks.tasks.filter(task => !task.completed && task.customTags.includes(tag)).length;
+    }
 
   let dueDatesExpanded = $state(true);
   let pomodorosExpanded = $state(true);
@@ -111,15 +69,17 @@
     }
   }
 
-  // Due date filter
-  function handleDueDateFilter(date: string) {
-    // Toggle filter
-    if (tasks.filter.dueFilter === date) {
-      setFilter({ dueFilter: null });
-    } else {
-      setFilter({ dueFilter: date as any });
+    // Due date filter - Removed per request to simplify UI
+  /*
+    function handleDueDateFilter(date: string) {
+      // Toggle filter
+      if (tasks.filter.dueFilter === date) {
+        setFilter({ dueFilter: null });
+      } else {
+        setFilter({ dueFilter: date as any });
+      }
     }
-  }
+  */
 
   // Pomodoro filter
   function handlePomodoroFilter(pomodoros: number) {
@@ -236,30 +196,8 @@
 
       <!-- Tools Section -->
       <!-- Removed per user request -->
-      {#if dueDateGroups().length > 0}
-        <div class="nav-section">
-          <button class="section-header" onclick={() => dueDatesExpanded = !dueDatesExpanded}>
-            <svg class="section-icon" class:rotated={dueDatesExpanded} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="9 18 15 12 9 6"></polyline>
-            </svg>
-            <span class="section-label">{t('sidebar.dueDate') || '截止日期'}</span>
-          </button>
-          {#if dueDatesExpanded}
-            <div class="badge-group date-badges">
-              {#each dueDateGroups() as { date, count }}
-                <button
-                  class="date-badge-btn"
-                  onclick={() => handleDueDateFilter(date)}
-                >
-                  <span class="date-text">{date}</span>
-                  <span class="badge-count">{count}</span>
-                </button>
-              {/each}
-            </div>
-          {/if}
-        </div>
-      {/if}
-
+      <!-- Due Dates Section Removed -->
+      
       <!-- Projects Section - Badge style with superscript counts -->
       {#if allProjects.length > 0}
         <div class="nav-section">
@@ -273,19 +211,19 @@
             <div class="badge-group tag-badges">
               {#each allProjects as project}
                 {@const count = getProjectCount(project)}
-                {@const displayInfo = getDisplayText(project)}
-                <button
-                  class="tag-badge-btn project"
-                  class:active={tasks.filter.project === project}
-                  class:emoji-only={displayInfo.isEmoji}
-                  onclick={() => handleProjectFilter(project)}
-                  title={project}
-                >
-                  <span class="badge-text">{displayInfo.display}</span>
-                  {#if count > 0}
+                {#if count > 0}
+                  {@const displayInfo = getDisplayText(project)}
+                  <button
+                    class="tag-badge-btn project"
+                    class:active={tasks.filter.project === project}
+                    class:emoji-only={displayInfo.isEmoji}
+                    onclick={() => handleProjectFilter(project)}
+                    title={project}
+                  >
+                    <span class="badge-text">{displayInfo.display}</span>
                     <span class="badge-sup">{count}</span>
-                  {/if}
-                </button>
+                  </button>
+                {/if}
               {/each}
             </div>
           {/if}
@@ -305,19 +243,19 @@
             <div class="badge-group tag-badges">
               {#each allContexts as context}
                 {@const count = getContextCount(context)}
-                {@const displayInfo = getDisplayText(context)}
-                <button
-                  class="tag-badge-btn context"
-                  class:active={tasks.filter.context === context}
-                  class:emoji-only={displayInfo.isEmoji}
-                  onclick={() => handleContextFilter(context)}
-                  title={context}
-                >
-                  <span class="badge-text">{displayInfo.display}</span>
-                  {#if count > 0}
+                {#if count > 0}
+                  {@const displayInfo = getDisplayText(context)}
+                  <button
+                    class="tag-badge-btn context"
+                    class:active={tasks.filter.context === context}
+                    class:emoji-only={displayInfo.isEmoji}
+                    onclick={() => handleContextFilter(context)}
+                    title={context}
+                  >
+                    <span class="badge-text">{displayInfo.display}</span>
                     <span class="badge-sup">{count}</span>
-                  {/if}
-                </button>
+                  </button>
+                {/if}
               {/each}
             </div>
           {/if}
@@ -337,19 +275,19 @@
             <div class="badge-group tag-badges">
               {#each allTags as tag}
                 {@const count = getTagCount(tag)}
-                {@const displayInfo = getDisplayText(tag)}
-                <button
-                  class="tag-badge-btn tag"
-                  class:active={tasks.filter.tag === tag}
-                  class:emoji-only={displayInfo.isEmoji}
-                  onclick={() => handleTagFilter(tag)}
-                  title={tag}
-                >
-                  <span class="badge-text">{displayInfo.display}</span>
-                  {#if count > 0}
+                {#if count > 0}
+                  {@const displayInfo = getDisplayText(tag)}
+                  <button
+                    class="tag-badge-btn tag"
+                    class:active={tasks.filter.tag === tag}
+                    class:emoji-only={displayInfo.isEmoji}
+                    onclick={() => handleTagFilter(tag)}
+                    title={tag}
+                  >
+                    <span class="badge-text">{displayInfo.display}</span>
                     <span class="badge-sup">{count}</span>
-                  {/if}
-                </button>
+                  </button>
+                {/if}
               {/each}
             </div>
           {/if}
@@ -365,15 +303,6 @@
           <line x1="16" y1="17" x2="8" y2="17"></line>
         </svg>
         <span>{t('nav.review') || '复盘'}</span>
-      </button>
-
-      <!-- History Button -->
-      <button class="action-btn" onclick={onOpenHistory}>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="10"></circle>
-          <polyline points="12 6 12 12 16 14"></polyline>
-        </svg>
-        <span>{t('nav.history') || '历史'}</span>
       </button>
 
       <!-- Clear Filter -->
