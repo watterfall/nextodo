@@ -12,6 +12,7 @@
   import ImmersivePomodoro from '$lib/components/ImmersivePomodoro.svelte';
   import HistoryModal from '$lib/components/HistoryModal.svelte';
   import TaskEditModal from '$lib/components/TaskEditModal.svelte';
+  import ConfirmationModal from '$lib/components/ConfirmationModal.svelte';
 
   import {
     initializeData,
@@ -354,6 +355,9 @@
   {#if ui.editingTask}
     <TaskEditModal task={ui.editingTask} />
   {/if}
+
+  <!-- Confirmation Modal -->
+  <ConfirmationModal />
 
   <!-- Review Modal -->
   {#if isReviewOpen}

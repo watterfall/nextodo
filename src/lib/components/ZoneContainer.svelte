@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Task, Priority } from '$lib/types';
-  import { PRIORITY_CONFIG } from '$lib/types';
+  import { PRIORITY_CONFIG, getRetentionRemaining } from '$lib/types';
   import TaskCard from './TaskCard.svelte';
   import { getUIStore } from '$lib/stores/ui.svelte';
   import { getTasksStore } from '$lib/stores/tasks.svelte';
@@ -24,6 +24,7 @@
   const tasksStore = getTasksStore();
 
   let showCompleted = $state(false);
+  let showRecentlyCompleted = $state(true);
 
   const counts = $derived(countActiveByPriority(tasksStore.tasks));
   const remaining = $derived(config.quota === Infinity ? Infinity : config.quota - counts[priority]);
@@ -37,8 +38,21 @@
   let activeTasks = $derived(tasks.filter(task => !task.completed));
   let completedTasks = $derived(tasks.filter(task => task.completed));
 
+  // Recently completed tasks within retention period for this zone
+  const recentlyCompletedTasks = $derived(tasksStore.recentlyCompletedTasksByPriority[priority] || []);
+
   // Get tooltip text for priority
   const tooltipText = $derived(t(`priority.tooltip.${priority}`));
+
+  // Format retention time remaining
+  function formatRetention(task: Task): string {
+    const remaining = getRetentionRemaining(task);
+    if (!remaining) return '';
+    if (remaining.hours > 0) {
+      return t('task.retentionHours', { hours: remaining.hours }) || `${remaining.hours}h`;
+    }
+    return t('task.retentionMinutes', { minutes: remaining.minutes }) || `${remaining.minutes}m`;
+  }
 </script>
 
 <div
@@ -90,6 +104,37 @@
       </div>
     {/if}
   </div>
+
+  {#if recentlyCompletedTasks.length > 0}
+    <div class="recently-completed-section">
+      <button
+        class="recently-completed-toggle"
+        onclick={() => showRecentlyCompleted = !showRecentlyCompleted}
+        title={t('task.recentlyCompletedHint') || 'Recently completed tasks - will fade after retention period'}
+      >
+        <svg class="toggle-icon" class:rotated={showRecentlyCompleted} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="9 18 15 12 9 6"></polyline>
+        </svg>
+        <span class="recently-completed-label">
+          <span class="checkmark">✓</span>
+          {t('task.recentlyCompleted') || 'Recently completed'} ({recentlyCompletedTasks.length})
+        </span>
+      </button>
+
+      {#if showRecentlyCompleted}
+        <div class="recently-completed-list">
+          {#each recentlyCompletedTasks as task (task.id)}
+            <div class="recently-completed-task">
+              <TaskCard {task} compact={true} />
+              <span class="retention-badge" title={t('task.retentionHint') || 'Will disappear after retention period'}>
+                {formatRetention(task)}
+              </span>
+            </div>
+          {/each}
+        </div>
+      {/if}
+    </div>
+  {/if}
 
   {#if completedTasks.length > 0}
     <button
@@ -314,6 +359,77 @@
     flex-direction: column;
     gap: 6px;
     padding-top: 8px;
+  }
+
+  /* Recently completed tasks section */
+  .recently-completed-section {
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px dashed var(--border-subtle);
+  }
+
+  .recently-completed-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    padding: 6px 0;
+    border: none;
+    background: transparent;
+    color: var(--success, #51cf66);
+    font-size: 11px;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+  }
+
+  .recently-completed-toggle:hover {
+    color: var(--text-secondary);
+  }
+
+  .recently-completed-label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .recently-completed-label .checkmark {
+    font-size: 10px;
+    opacity: 0.8;
+  }
+
+  .recently-completed-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-top: 6px;
+  }
+
+  .recently-completed-task {
+    position: relative;
+    opacity: 0.6;
+    transition: opacity var(--transition-fast);
+  }
+
+  .recently-completed-task:hover {
+    opacity: 0.85;
+  }
+
+  .retention-badge {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    font-size: 9px;
+    font-weight: 500;
+    color: var(--text-muted);
+    background: var(--bg-secondary);
+    padding: 1px 5px;
+    border-radius: var(--radius-sm);
+    opacity: 0;
+    transition: opacity var(--transition-fast);
+  }
+
+  .recently-completed-task:hover .retention-badge {
+    opacity: 1;
   }
 
   @keyframes breathe {

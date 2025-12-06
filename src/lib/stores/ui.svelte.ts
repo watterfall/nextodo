@@ -1,8 +1,18 @@
 import type { ViewMode, Priority, Task } from '$lib/types';
 
+// Confirmation dialog data
+interface ConfirmationData {
+  title: string;
+  message: string;
+  confirmText?: string;
+  cancelText?: string;
+  onConfirm: () => void;
+  onCancel?: () => void;
+}
+
 // UI State
 let sidebarCollapsed = $state(false);
-  let viewMode = $state<ViewMode>('kanban');
+let viewMode = $state<ViewMode>('kanban');
 let activeModal = $state<string | null>(null);
 let modalData = $state<unknown>(null);
 let toastMessage = $state<string | null>(null);
@@ -10,6 +20,7 @@ let toastType = $state<'success' | 'error' | 'info'>('info');
 let isSearchOpen = $state(false);
 let editingTaskId = $state<string | null>(null);
 let editingTask = $state<Task | null>(null);
+let confirmationData = $state<ConfirmationData | null>(null);
 
 // Immersive mode
 let isImmersiveMode = $state(false);
@@ -91,6 +102,29 @@ export function openEditModal(task: Task): void {
 
 export function closeEditModal(): void {
   editingTask = null;
+}
+
+// Confirmation dialog
+export function showConfirmation(data: ConfirmationData): void {
+  confirmationData = data;
+}
+
+export function closeConfirmation(): void {
+  confirmationData = null;
+}
+
+export function handleConfirmationConfirm(): void {
+  if (confirmationData?.onConfirm) {
+    confirmationData.onConfirm();
+  }
+  confirmationData = null;
+}
+
+export function handleConfirmationCancel(): void {
+  if (confirmationData?.onCancel) {
+    confirmationData.onCancel();
+  }
+  confirmationData = null;
 }
 
 // Immersive mode
@@ -208,6 +242,10 @@ export function getUIStore() {
     set isSearchOpen(v: boolean) { isSearchOpen = v; },
     get editingTaskId() { return editingTaskId; },
     get editingTask() { return editingTask; },
-    get isImmersiveMode() { return isImmersiveMode; }
+    get isImmersiveMode() { return isImmersiveMode; },
+    get confirmationData() { return confirmationData; }
   };
 }
+
+// Export type for external use
+export type { ConfirmationData };

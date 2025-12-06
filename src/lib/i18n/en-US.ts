@@ -19,6 +19,7 @@ export default {
     trashArchive: 'Trash & Archive',
     settings: 'Settings',
     badges: 'Badges',
+    history: 'Task History',
   },
 
   // Trash
@@ -170,10 +171,15 @@ export default {
     markComplete: 'Mark complete',
     markIncomplete: 'Mark incomplete',
     focusInProgress: 'Focus in progress',
-    pomodoroRemaining: '{remaining} pomodoros remaining',
     clickToStartFocus: 'Click to start focus',
     dormantUntil: 'Dormant until',
     energyLevel: 'Energy level',
+    // Recently completed tasks
+    recentlyCompleted: 'Recently completed',
+    recentlyCompletedHint: 'Recently completed tasks - will fade after retention period',
+    retentionHint: 'Will disappear after retention period',
+    retentionHours: '{hours}h remaining',
+    retentionMinutes: '{minutes}m remaining',
   },
 
   // Pomodoro
@@ -337,6 +343,7 @@ export default {
     contexts: 'Contexts',
     tags: 'Tags',
     dueDates: 'Due Dates',
+    dueDate: 'Due Date',
     recurring: 'Recurring',
     dueToday: 'Today',
     dueThisWeek: 'This Week',
@@ -347,6 +354,14 @@ export default {
     noContexts: 'No contexts',
     collapse: 'Collapse sidebar',
     showAll: 'Show all',
+  },
+
+  // Priority tooltips (for ListView)
+  priorityTooltip: {
+    quota: 'Quota',
+    difficulty: 'Difficulty',
+    time: 'Time',
+    viewDescription: 'View priority description',
   },
 
   // Zone
@@ -377,6 +392,19 @@ export default {
     done: 'Done',
     expand: 'Expand',
     collapse: 'Collapse',
+    restore: 'Restore',
+    permanentDelete: 'Delete permanently',
+  },
+
+  // History modal
+  history: {
+    title: 'Task History',
+    completed: 'Completed',
+    cancelled: 'Cancelled',
+    noCompleted: 'No completed tasks',
+    noCancelled: 'No cancelled tasks',
+    completedAt: 'Completed at',
+    cancelledAt: 'Cancelled at',
   },
 
   // Messages
@@ -397,6 +425,12 @@ export default {
     taskAdded: 'Task added to inbox',
     taskMoved: 'Task moved to {priority} zone',
     taskMovedToTrash: 'Task moved to trash',
+    taskCancelled: 'Task cancelled',
+    // Priority change confirmation
+    priorityChangeTitle: 'Confirm Priority Change',
+    confirmPriorityChange: 'Are you sure you want to change the priority of this task?',
+    frequentPriorityChange: 'You recently changed this task\'s priority. Frequent priority changes may affect productivity. Continue anyway?',
+    drasticPriorityChange: 'Changing from {from} to {to} is a significant priority shift. Continue anyway?',
   },
 
   // Date/Time
