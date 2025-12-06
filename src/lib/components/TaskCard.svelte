@@ -234,43 +234,45 @@
     </div>
   {/if}
 
-  <!-- Action buttons - hover reveal -->
-  <div class="task-actions" class:visible={isHovered || isFocused}>
-    {#if isActivePriority(task.priority) && !compact}
-      <button
-        class="action-btn play"
-        onclick={handleStartPomodoro}
-        title={i18n.t('task.startFocus')}
-        disabled={isActive}
-      >
-        {#if kanbanMode && task.pomodoros.estimated > 0}
-          <span style="font-size: 12px; margin-right: 2px;">🍅</span>
-          {@const remaining = Math.max(0, task.pomodoros.estimated - task.pomodoros.completed)}
-          {#if remaining > 0}
-             <span style="font-size: 10px; font-weight: 700;">{remaining}</span>
+  <!-- Action buttons - hover reveal (hidden in compact mode as parent provides its own actions) -->
+  {#if !compact}
+    <div class="task-actions" class:visible={isHovered || isFocused}>
+      {#if isActivePriority(task.priority)}
+        <button
+          class="action-btn play"
+          onclick={handleStartPomodoro}
+          title={i18n.t('task.startFocus')}
+          disabled={isActive}
+        >
+          {#if kanbanMode && task.pomodoros.estimated > 0}
+            <span style="font-size: 12px; margin-right: 2px;">🍅</span>
+            {@const remaining = Math.max(0, task.pomodoros.estimated - task.pomodoros.completed)}
+            {#if remaining > 0}
+               <span style="font-size: 10px; font-weight: 700;">{remaining}</span>
+            {/if}
+          {:else}
+            <svg viewBox="0 0 24 24" fill="currentColor">
+              <polygon points="5 3 19 12 5 21 5 3"></polygon>
+            </svg>
           {/if}
-        {:else}
-          <svg viewBox="0 0 24 24" fill="currentColor">
-            <polygon points="5 3 19 12 5 21 5 3"></polygon>
-          </svg>
-        {/if}
-      </button>
-    {/if}
-    <button class="action-btn edit" onclick={handleEdit} title={i18n.t('action.edit')}>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-      </svg>
-    </button>
-    {#if isActivePriority(task.priority)}
-      <button class="action-btn cancel" onclick={handleCancel} title={i18n.t('action.cancel') || '取消任务'}>
+        </button>
+      {/if}
+      <button class="action-btn edit" onclick={handleEdit} title={i18n.t('action.edit')}>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <line x1="18" y1="6" x2="6" y2="18"></line>
-          <line x1="6" y1="6" x2="18" y2="18"></line>
+          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
         </svg>
       </button>
-    {/if}
-  </div>
+      {#if isActivePriority(task.priority)}
+        <button class="action-btn cancel" onclick={handleCancel} title={i18n.t('action.cancel') || '取消任务'}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      {/if}
+    </div>
+  {/if}
 
   {#if showPriority}
     <div class="priority-badge">
