@@ -1,8 +1,8 @@
 <script lang="ts">
   import type { Task, Priority } from '$lib/types';
-  import { PRIORITY_CONFIG } from '$lib/types';
+  import { PRIORITY_CONFIG, getRetentionRemaining } from '$lib/types';
   import TaskCard from './TaskCard.svelte';
-  import { getTasksStore, reorderTask } from '$lib/stores/tasks.svelte';
+  import { getTasksStore, reorderTask, needsPriorityChangeConfirmation, changePriority } from '$lib/stores/tasks.svelte';
   import { getPomodoroStore } from '$lib/stores/pomodoro.svelte';
   import { getUIStore, openEditModal } from '$lib/stores/ui.svelte';
   import { countActiveByPriority } from '$lib/utils/quota';
@@ -51,36 +51,38 @@
     columnItems[priority] = e.detail.items;
   }
 
-  function handleDndFinalize(priority: Priority, e: CustomEvent<DndEvent<Task>>) {
+  async function handleDndFinalize(priority: Priority, e: CustomEvent<DndEvent<Task>>) {
     isDragging = false;
     columnItems[priority] = e.detail.items;
-    
-    // Check quota if item was moved (length changed or different items)
-    // We approximate "moved" by checking if this drop event adds a task that wasn't there before
-    // Or simpler: just check quota after move. The move already happened in UI but we can revert or warn.
-    // Since reorderTask updates the store, we should check *before* calling it if we want to block,
-    // but dndzone already updated local state visually.
-    
-    // Let's check if we are adding a task to this column from another column
+
+    // Check for tasks that changed priority
     const previousTasks = tasks.tasksByPriority[priority].filter(t => !t.completed);
+    const previousIds = new Set(previousTasks.map(t => t.id));
     const newTasks = e.detail.items;
-    
-    // If newTasks has more items, or different items (moved from elsewhere)
-    // We can just check the quota for the target priority
+
+    // Find tasks that were moved TO this priority
+    const movedTasks = newTasks.filter(t => !previousIds.has(t.id) && t.priority !== priority);
+
+    // Check for priority change confirmation for each moved task
+    for (const task of movedTasks) {
+      const confirmCheck = needsPriorityChangeConfirmation(task, priority);
+      if (confirmCheck.needsConfirmation && confirmCheck.message) {
+        // Show confirmation dialog
+        pendingPriorityChange = {
+          taskId: task.id,
+          newPriority: priority,
+          reason: confirmCheck.message
+        };
+        return; // Don't proceed until user confirms
+      }
+    }
+
+    // Check quota if item was moved
     if (priority !== 'F') { // F has no quota
-      // Calculate projected count: current count - (1 if we are moving out) + (1 if moving in)
-      // This is complex during drag.
-      
-      // Simpler approach: Check if the operation results in exceeding quota
-      // e.detail.items contains the tasks that WOULD be in this column
       const newCount = newTasks.length;
       const quota = PRIORITY_CONFIG[priority].quota;
-      
+
       if (newCount > quota && quota !== Infinity) {
-        // Quota exceeded
-        const confirmMsg = t('message.quotaExceeded', { priority }) + '. ' + t('action.continueAnyway');
-        // Ideally we'd show a modal, but standard confirm is safer for synchronous dnd flow
-        // or we just show a toast warning but allow it (soft limit) as requested
         showToast(t('message.quotaExceeded', { priority }), 'warning');
       }
     }
@@ -92,6 +94,44 @@
   // Use columnItems for F zone as well to support DnD
   const ideaPoolTasks = $derived(columnItems['F']);
   const ideaPoolDimmed = $derived(isFocusMode && !hasActiveTaskInColumn('F'));
+
+  // Recently completed tasks display state (per priority)
+  let showRecentlyCompleted = $state<Record<Priority, boolean>>({
+    A: true, B: true, C: true, D: true, E: true, F: true, G: false, H: false
+  });
+
+  // Format retention time remaining
+  function formatRetention(task: Task): string {
+    const remaining = getRetentionRemaining(task);
+    if (!remaining) return '';
+    if (remaining.hours > 0) {
+      return t('task.retentionHours', { hours: remaining.hours }) || `${remaining.hours}h`;
+    }
+    return t('task.retentionMinutes', { minutes: remaining.minutes }) || `${remaining.minutes}m`;
+  }
+
+  // Get recently completed tasks for a priority
+  function getRecentlyCompletedForPriority(priority: Priority): Task[] {
+    return tasks.recentlyCompletedTasksByPriority[priority] || [];
+  }
+
+  // Priority change confirmation state
+  let pendingPriorityChange = $state<{ taskId: string; newPriority: Priority; reason: string } | null>(null);
+
+  async function confirmPriorityChange() {
+    if (pendingPriorityChange) {
+      await changePriority(pendingPriorityChange.taskId, pendingPriorityChange.newPriority, true);
+      pendingPriorityChange = null;
+    }
+  }
+
+  function cancelPriorityChange() {
+    pendingPriorityChange = null;
+    // Refresh columnItems to revert the visual change
+    priorities.forEach(p => {
+      columnItems[p] = tasks.tasksByPriority[p].filter(t => !t.completed);
+    });
+  }
 
   // Keyboard navigation state
   let focusedPriority = $state<Priority | null>(null);
@@ -276,14 +316,35 @@
           {/if}
         </div>
 
-        {#if completedTasks.length > 0}
-          <div class="completed-section">
-            <span class="completed-label">{t('filter.completed')} ({completedTasks.length})</span>
-            {#each completedTasks.slice(0, 2) as task (task.id)}
-              <TaskCard {task} compact={true} kanbanMode={true} />
-            {/each}
-            {#if completedTasks.length > 2}
-              <span class="more-count">+{completedTasks.length - 2}</span>
+        <!-- Recently completed tasks within retention period -->
+        {@const recentlyCompletedTasks = getRecentlyCompletedForPriority(priority)}
+        {#if recentlyCompletedTasks.length > 0}
+          <div class="recently-completed-section">
+            <button
+              class="recently-completed-toggle"
+              onclick={() => showRecentlyCompleted[priority] = !showRecentlyCompleted[priority]}
+              title={t('task.recentlyCompletedHint') || 'Recently completed tasks - will fade after retention period'}
+            >
+              <svg class="toggle-icon" class:rotated={showRecentlyCompleted[priority]} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="9 18 15 12 9 6"></polyline>
+              </svg>
+              <span class="recently-completed-label">
+                <span class="checkmark">✓</span>
+                {t('task.recentlyCompleted') || 'Recently completed'} ({recentlyCompletedTasks.length})
+              </span>
+            </button>
+
+            {#if showRecentlyCompleted[priority]}
+              <div class="recently-completed-list" transition:slide>
+                {#each recentlyCompletedTasks as task (task.id)}
+                  <div class="recently-completed-task">
+                    <TaskCard {task} compact={true} kanbanMode={true} />
+                    <span class="retention-badge" title={t('task.retentionHint') || 'Will disappear after retention period'}>
+                      {formatRetention(task)}
+                    </span>
+                  </div>
+                {/each}
+              </div>
             {/if}
           </div>
         {/if}
@@ -331,6 +392,26 @@
       </div>
     {/if}
   </aside>
+
+  <!-- Priority change confirmation dialog -->
+  {#if pendingPriorityChange}
+    <div class="modal-overlay" onclick={cancelPriorityChange}>
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <!-- svelte-ignore a11y_click_events_have_key_events -->
+      <div class="confirmation-modal" onclick={(e) => e.stopPropagation()}>
+        <div class="modal-icon">⚠️</div>
+        <p class="modal-message">{pendingPriorityChange.reason}</p>
+        <div class="modal-actions">
+          <button class="btn-cancel" onclick={cancelPriorityChange}>
+            {t('action.cancel') || 'Cancel'}
+          </button>
+          <button class="btn-confirm" onclick={confirmPriorityChange}>
+            {t('action.continueAnyway') || 'Continue Anyway'}
+          </button>
+        </div>
+      </div>
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -478,6 +559,159 @@
     color: var(--text-muted);
     text-align: center;
     padding: 4px;
+  }
+
+  /* Recently completed tasks section */
+  .recently-completed-section {
+    padding: 10px;
+    border-top: 1px dashed var(--border-subtle);
+    flex-shrink: 0;
+  }
+
+  .recently-completed-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    padding: 4px 0;
+    border: none;
+    background: transparent;
+    color: var(--success, #51cf66);
+    font-size: 11px;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+  }
+
+  .recently-completed-toggle:hover {
+    color: var(--text-secondary);
+  }
+
+  .recently-completed-label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .recently-completed-label .checkmark {
+    font-size: 10px;
+    opacity: 0.8;
+  }
+
+  .recently-completed-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-top: 6px;
+    max-height: 150px;
+    overflow-y: auto;
+  }
+
+  .recently-completed-task {
+    position: relative;
+    opacity: 0.6;
+    transition: opacity var(--transition-fast);
+  }
+
+  .recently-completed-task:hover {
+    opacity: 0.85;
+  }
+
+  .retention-badge {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    font-size: 9px;
+    font-weight: 500;
+    color: var(--text-muted);
+    background: var(--bg-secondary);
+    padding: 1px 5px;
+    border-radius: var(--radius-sm);
+    opacity: 0;
+    transition: opacity var(--transition-fast);
+  }
+
+  .recently-completed-task:hover .retention-badge {
+    opacity: 1;
+  }
+
+  .toggle-icon {
+    width: 12px;
+    height: 12px;
+    transition: transform var(--transition-fast);
+  }
+
+  .toggle-icon.rotated {
+    transform: rotate(90deg);
+  }
+
+  /* Confirmation Modal */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    backdrop-filter: blur(2px);
+  }
+
+  .confirmation-modal {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 24px;
+    max-width: 360px;
+    text-align: center;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  }
+
+  .modal-icon {
+    font-size: 32px;
+    margin-bottom: 12px;
+  }
+
+  .modal-message {
+    font-size: 14px;
+    color: var(--text-secondary);
+    margin: 0 0 20px;
+    line-height: 1.5;
+  }
+
+  .modal-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+  }
+
+  .btn-cancel,
+  .btn-confirm {
+    padding: 8px 16px;
+    border-radius: var(--radius-md);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+  }
+
+  .btn-cancel {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+  }
+
+  .btn-cancel:hover {
+    background: var(--hover-bg);
+  }
+
+  .btn-confirm {
+    background: var(--primary);
+    border: 1px solid var(--primary);
+    color: white;
+  }
+
+  .btn-confirm:hover {
+    opacity: 0.9;
   }
 
   /* Idea Pool Panel (F zone) - fixed on right, toggleable */
