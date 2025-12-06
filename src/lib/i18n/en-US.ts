@@ -377,6 +377,7 @@ export default {
     zones: 'Zones',
     kanban: 'Kanban',
     list: 'List',
+    calendar: 'Calendar',
     hybrid: 'Hybrid',
   },
 

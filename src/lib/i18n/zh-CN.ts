@@ -377,6 +377,7 @@ export default {
   view: {
     kanban: '看板',
     list: '列表',
+    calendar: '日历',
   },
 
   // Actions

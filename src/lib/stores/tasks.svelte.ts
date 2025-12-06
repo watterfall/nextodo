@@ -427,29 +427,47 @@ export function setCurrentUnit(unit: UnitInfo): void {
   currentUnit = unit;
 }
 
-// Derived values - only active priorities (A-F) shown in main views
+// Derived values - Step 1: Filter active priorities (A-F)
+const activeTasks = $derived(appData.tasks.filter(t => isActivePriority(t.priority)));
+
+// Derived values - Step 2: Filter by threshold date
+const visibleTasks = $derived.by(() => {
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  
+  if (filter.showFutureTasks) {
+    return activeTasks.filter(t => {
+      if (!t.thresholdDate) return false;
+      const threshold = new Date(t.thresholdDate);
+      threshold.setHours(0, 0, 0, 0);
+      return threshold > now;
+    });
+  }
+  
+  return activeTasks.filter(t => {
+    if (!t.thresholdDate) return true;
+    const threshold = new Date(t.thresholdDate);
+    threshold.setHours(0, 0, 0, 0);
+    return threshold <= now;
+  });
+});
+
+// Derived values - Step 3: Apply search
+const searchedTasks = $derived.by(() => {
+  if (!searchQuery) return visibleTasks;
+  
+  const query = searchQuery.toLowerCase();
+  return visibleTasks.filter(t =>
+    t.content.toLowerCase().includes(query) ||
+    t.projects.some(p => p.toLowerCase().includes(query)) ||
+    t.contexts.some(c => c.toLowerCase().includes(query)) ||
+    t.customTags.some(tag => tag.toLowerCase().includes(query))
+  );
+});
+
+// Derived values - Step 4: Apply filters (Project, Context, Tag, Due, Pomodoro)
 const filteredTasks = $derived.by(() => {
-  // Start with only active tasks (exclude G/H)
-  let tasks = appData.tasks.filter(t => isActivePriority(t.priority));
-
-  // Filter by threshold date (unless showing future tasks)
-  if (!filter.showFutureTasks) {
-    tasks = tasks.filter(t => isThresholdPassed(t));
-  } else {
-    // Show only future tasks
-    tasks = tasks.filter(t => !isThresholdPassed(t));
-  }
-
-  // Apply search
-  if (searchQuery) {
-    const query = searchQuery.toLowerCase();
-    tasks = tasks.filter(t =>
-      t.content.toLowerCase().includes(query) ||
-      t.projects.some(p => p.toLowerCase().includes(query)) ||
-      t.contexts.some(c => c.toLowerCase().includes(query)) ||
-      t.customTags.some(tag => tag.toLowerCase().includes(query))
-    );
-  }
+  let tasks = searchedTasks;
 
   // Apply project filter
   if (filter.project) {
@@ -524,8 +542,10 @@ const cancelledTasks = $derived(
     })
 );
 
-// Only count active tasks for projects/contexts
-const activeTasks = $derived(appData.tasks.filter(t => isActivePriority(t.priority)));
+// Only count active tasks for projects/contexts (use visibleTasks to respect threshold, or activeTasks to show all available?)
+// Typically project lists should show all active projects even if tasks are dormant?
+// Let's use activeTasks to be safe so counts don't fluctuate wildly based on threshold visibility
+// const activeTasks = ... is already defined above
 
 const allProjects = $derived.by(() => {
   const projects = new Set<string>();

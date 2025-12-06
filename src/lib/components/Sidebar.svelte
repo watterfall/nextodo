@@ -17,9 +17,10 @@
     onOpenSettings?: () => void;
     onOpenReview?: () => void;
     onOpenHistory?: () => void;
+    onOpenBadges?: () => void;
   }
 
-  let { onOpenSettings, onOpenReview, onOpenHistory }: Props = $props();
+  let { onOpenSettings, onOpenReview, onOpenHistory, onOpenBadges }: Props = $props();
 
   const tasks = getTasksStore();
   const ui = getUIStore();
@@ -230,7 +231,11 @@
 
   {#if !ui.sidebarCollapsed}
     <div class="sidebar-content">
-      <!-- Due Dates Section - Date chips with counts -->
+      <!-- Main Navigation -->
+      <!-- Removed per user request to keep minimal -->
+
+      <!-- Tools Section -->
+      <!-- Removed per user request -->
       {#if dueDateGroups().length > 0}
         <div class="nav-section">
           <button class="section-header" onclick={() => dueDatesExpanded = !dueDatesExpanded}>
@@ -359,7 +364,16 @@
           <line x1="16" y1="13" x2="8" y2="13"></line>
           <line x1="16" y1="17" x2="8" y2="17"></line>
         </svg>
-        <span>{t('review.title')}</span>
+        <span>{t('nav.review') || '复盘'}</span>
+      </button>
+
+      <!-- History Button -->
+      <button class="action-btn" onclick={onOpenHistory}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"></circle>
+          <polyline points="12 6 12 12 16 14"></polyline>
+        </svg>
+        <span>{t('nav.history') || '历史'}</span>
       </button>
 
       <!-- Clear Filter -->
@@ -416,8 +430,8 @@
         {/if}
       </button>
 
-      <!-- History Button (completed/cancelled tasks) -->
-      <button class="footer-btn" onclick={(e) => { e.preventDefault(); e.stopPropagation(); console.log('Sidebar: History clicked'); onOpenHistory?.(); }} title={t('nav.history') || '任务历史'}>
+      <!-- History Button -->
+      <button class="footer-btn" onclick={(e) => { e.preventDefault(); e.stopPropagation(); onOpenHistory?.(); }} title={t('nav.history') || '任务历史'}>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="12" cy="12" r="10"></circle>
           <polyline points="12 6 12 12 16 14"></polyline>

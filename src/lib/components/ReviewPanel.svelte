@@ -55,10 +55,10 @@
 
   <!-- Redundancy Note Banner -->
   <div class="redundancy-banner">
-    <div class="banner-icon">💡</div>
+    <div class="banner-icon">🌿</div>
     <div class="banner-content">
-      <span class="banner-title">{t('review.redundancyNote')}</span>
-      <span class="banner-text">{t('review.redundancyHint')}</span>
+      <span class="banner-title">{t('review.redundancyNote') || 'Philosophy: Sustainable Pace'}</span>
+      <span class="banner-text">{t('review.redundancyHint') || 'Not every task needs to be finished. A 100% completion rate might mean you aren\'t challenging yourself enough. Aim for sustainability.'}</span>
     </div>
     <div class="healthy-range">{t('review.healthyRange')}</div>
   </div>

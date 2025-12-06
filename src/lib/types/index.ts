@@ -256,7 +256,7 @@ export interface FilterState {
 }
 
 // View mode
-export type ViewMode = 'kanban' | 'list';
+export type ViewMode = 'kanban' | 'list' | 'calendar';
 
 // Pomodoro state
 export type PomodoroState = 'idle' | 'work' | 'shortBreak' | 'longBreak';

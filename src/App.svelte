@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import Sidebar from '$lib/components/Sidebar.svelte';
+  import CalendarView from '$lib/components/CalendarView.svelte';
   import KanbanView from '$lib/components/KanbanView.svelte';
   import ListView from '$lib/components/ListView.svelte';
   import TaskForm from '$lib/components/TaskForm.svelte';
@@ -11,6 +12,7 @@
   import Confetti from '$lib/components/Confetti.svelte';
   import ImmersivePomodoro from '$lib/components/ImmersivePomodoro.svelte';
   import HistoryModal from '$lib/components/HistoryModal.svelte';
+  import BadgesModal from '$lib/components/BadgesModal.svelte';
   import TaskEditModal from '$lib/components/TaskEditModal.svelte';
   import ConfirmationModal from '$lib/components/ConfirmationModal.svelte';
 
@@ -63,6 +65,7 @@
   let isSettingsOpen = $state(false);
   let isReviewOpen = $state(false);
   let isHistoryOpen = $state(false);
+  let isBadgesOpen = $state(false);
 
   onMount(async () => {
     // Initialize i18n first
@@ -185,6 +188,10 @@
       console.log('App: Opening history');
       isHistoryOpen = true;
     }}
+    onOpenBadges={() => {
+      console.log('App: Opening badges');
+      isBadgesOpen = true;
+    }}
   />
 
   <main class="main-content">
@@ -208,7 +215,7 @@
       <div class="header-right">
         <QuotaMeter />
 
-        <!-- View Toggle -->
+        <!-- View Toggle (Kanban/List/Calendar) -->
         <div class="view-toggle">
           <button
             class="view-btn"
@@ -237,7 +244,32 @@
               <line x1="3" y1="18" x2="3.01" y2="18"></line>
             </svg>
           </button>
+          <button
+            class="view-btn"
+            class:active={ui.viewMode === 'calendar'}
+            onclick={() => setViewMode('calendar')}
+            title={t('view.calendar') || 'Calendar'}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+              <line x1="16" y1="2" x2="16" y2="6"></line>
+              <line x1="8" y1="2" x2="8" y2="6"></line>
+              <line x1="3" y1="10" x2="21" y2="10"></line>
+            </svg>
+          </button>
         </div>
+
+        <!-- Badges Button (Subtle) -->
+        <button 
+          class="icon-btn badges-btn" 
+          onclick={() => { 
+            console.log('Opening badges modal'); 
+            isBadgesOpen = true; 
+          }} 
+          title={t('nav.badges') || '成就'}
+        >
+          <span class="icon">🏅</span>
+        </button>
 
         <!-- Theme Toggle -->
         <button class="theme-toggle" onclick={toggleTheme} title={t('settings.theme')}>
@@ -279,6 +311,8 @@
         <KanbanView />
       {:else if ui.viewMode === 'list'}
         <ListView />
+      {:else if ui.viewMode === 'calendar'}
+        <CalendarView />
       {:else}
         <!-- Fallback to Kanban if view mode is unknown or legacy -->
         <KanbanView />
@@ -349,6 +383,11 @@
   <!-- History Modal (completed/cancelled tasks) -->
   {#if isHistoryOpen}
     <HistoryModal onClose={() => isHistoryOpen = false} />
+  {/if}
+
+  {#if isBadgesOpen}
+    <!-- Force re-render to ensure z-index works -->
+    <BadgesModal onClose={() => isBadgesOpen = false} />
   {/if}
 
   <!-- Task Edit Modal -->
@@ -566,6 +605,29 @@
   .view-btn svg {
     width: 16px;
     height: 16px;
+  }
+
+  .icon-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: var(--radius-md);
+    background: transparent;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    opacity: 0.7;
+  }
+
+  .icon-btn:hover {
+    background: var(--hover-bg);
+    opacity: 1;
+  }
+
+  .icon-btn .icon {
+    font-size: 16px;
   }
 
   /* Theme toggle in header */
