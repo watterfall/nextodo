@@ -6,6 +6,7 @@ import { createTaskFromInput } from '$lib/utils/parser';
 import { processRecurringTasks, createNextOccurrence } from '$lib/utils/recurrence';
 import { getCurrentUnit, isDateInUnit, isToday, isOverdue, isThisWeek } from '$lib/utils/unitCalc';
 import { t } from '$lib/i18n';
+import { getGamificationStore } from './gamification.svelte';
 
 // Main app state
 let appData = $state<AppData>(createDefaultAppData());
@@ -190,6 +191,12 @@ export async function completeTask(taskId: string): Promise<void> {
     nextRecurringTask = createNextOccurrence(taskToComplete);
   }
 
+  // Record task completion for gamification (before modifying priority)
+  if (taskToComplete) {
+    const gamification = getGamificationStore();
+    gamification.recordTaskCompletion(taskToComplete);
+  }
+
   // Move task to G (completed) priority, preserving original priority for retention display
   appData.tasks = appData.tasks.map(task => {
     if (task.id === taskId && isActivePriority(task.priority)) {
@@ -371,6 +378,10 @@ export async function incrementPomodoro(taskId: string): Promise<void> {
     }
     return task;
   });
+
+  // Record pomodoro completion for gamification
+  const gamification = getGamificationStore();
+  gamification.recordPomodoro();
 
   await persist();
 }

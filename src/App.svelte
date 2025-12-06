@@ -45,6 +45,7 @@
     toggleTheme
   } from '$lib/stores/settings.svelte';
   import { initReviews } from '$lib/stores/reviews.svelte';
+  import { initGamification, getGamificationStore } from '$lib/stores/gamification.svelte';
   import { saveAppData, setupFileWatcher } from '$lib/utils/storage';
   import { initI18n, getI18nStore } from '$lib/i18n';
   import type { Priority, ViewMode } from '$lib/types';
@@ -92,6 +93,14 @@
 
     // Initialize reviews
     initReviews(tasks.appData.reviews);
+
+    // Initialize gamification with persist callback
+    const gamification = getGamificationStore();
+    initGamification(tasks.appData.gamification, async () => {
+      const data = tasks.appData;
+      data.gamification = gamification.getData();
+      await saveAppData(data);
+    });
 
     // Initialize keyboard shortcuts
     initKeyboardShortcuts();

@@ -85,6 +85,47 @@ export interface CustomTagGroups {
 // Theme type
 export type Theme = 'dark' | 'light' | 'system';
 
+// Gamification types
+export interface GamificationStats {
+  totalTasksCompleted: number;
+  totalPomodoros: number;
+  currentStreak: number;
+  longestStreak: number;
+  totalACompleted: number;
+  earlyBirdCount: number;
+  nightOwlCount: number;
+  perfectDays: number;
+}
+
+export interface BadgeData {
+  id: string;
+  unlocked: boolean;
+  unlockedAt?: string;
+}
+
+export interface GamificationData {
+  stats: GamificationStats;
+  xp: number;
+  badges: BadgeData[];
+}
+
+export function createDefaultGamificationData(): GamificationData {
+  return {
+    stats: {
+      totalTasksCompleted: 0,
+      totalPomodoros: 0,
+      currentStreak: 0,
+      longestStreak: 0,
+      totalACompleted: 0,
+      earlyBirdCount: 0,
+      nightOwlCount: 0,
+      perfectDays: 0
+    },
+    xp: 0,
+    badges: []
+  };
+}
+
 // Language type
 export type Language = 'zh-CN' | 'en-US';
 
@@ -113,6 +154,7 @@ export interface ActiveData {
   reviews: UnitReview[];
   customTagGroups: CustomTagGroups;
   settings: Settings;
+  gamification?: GamificationData;
 }
 
 // Archive data file structure (cold data) - DEPRECATED, kept for migration
@@ -138,6 +180,7 @@ export interface AppData {
   customTagGroups: CustomTagGroups;
   pomodoroHistory: PomodoroSession[];
   settings: Settings;
+  gamification?: GamificationData;
 }
 
 // Priority configuration
@@ -313,7 +356,8 @@ export function createDefaultActiveData(): ActiveData {
       energy: ['⚡高能量', '😴低能量', '☕中等'],
       type: ['📞电话', '💻编码', '✍️写作', '🤝会议']
     },
-    settings: createDefaultSettings()
+    settings: createDefaultSettings(),
+    gamification: createDefaultGamificationData()
   };
 }
 
@@ -347,7 +391,8 @@ export function createDefaultAppData(): AppData {
       type: ['📞电话', '💻编码', '✍️写作', '🤝会议']
     },
     pomodoroHistory: [],
-    settings: createDefaultSettings()
+    settings: createDefaultSettings(),
+    gamification: createDefaultGamificationData()
   };
 }
 
