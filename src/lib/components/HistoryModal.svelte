@@ -1,5 +1,6 @@
 <script lang="ts">
   import { getTasksStore, uncompleteTask, permanentlyDeleteTask } from '$lib/stores/tasks.svelte';
+  import { getUIStore } from '$lib/stores/ui.svelte';
   import { getI18nStore } from '$lib/i18n';
   import TaskCard from './TaskCard.svelte';
 
@@ -10,18 +11,34 @@
   let { onClose }: Props = $props();
 
   const tasks = getTasksStore();
+  const ui = getUIStore();
   const i18n = getI18nStore();
 
   let activeTab: 'completed' | 'cancelled' = $state('completed');
+
+  // Filter completed tasks to show only those within 14 days
+  const visibleCompletedTasks = $derived(tasks.completedTasks.filter(task => {
+    if (!task.completedAt) return false;
+    const completedTime = new Date(task.completedAt).getTime();
+    const now = Date.now();
+    const fourteenDaysMs = 14 * 24 * 60 * 60 * 1000;
+    return (now - completedTime) <= fourteenDaysMs;
+  }));
 
   function handleRestore(taskId: string) {
     uncompleteTask(taskId);
   }
 
   function handlePermanentDelete(taskId: string) {
-    if (confirm(i18n.t('message.confirmPermanentDelete') || '确定要永久删除这个任务吗？此操作不可撤销。')) {
-      permanentlyDeleteTask(taskId);
-    }
+    ui.showConfirmation({
+      title: i18n.t('action.permanentDelete') || '永久删除',
+      message: i18n.t('message.confirmPermanentDelete') || '确定要永久删除这个任务吗？此操作不可撤销。',
+      confirmText: i18n.t('action.delete') || '删除',
+      cancelText: i18n.t('action.cancel') || '取消',
+      onConfirm: () => {
+        permanentlyDeleteTask(taskId);
+      }
+    });
   }
 
   function handleKeydown(e: KeyboardEvent) {
@@ -68,7 +85,7 @@
       >
         <span class="tab-icon">✓</span>
         <span>{i18n.t('history.completed') || '已完成'}</span>
-        <span class="tab-count">{tasks.completedTasks.length}</span>
+        <span class="tab-count">{visibleCompletedTasks.length}</span>
       </button>
       <button
         class="tab"
@@ -83,14 +100,14 @@
 
     <div class="modal-body">
       {#if activeTab === 'completed'}
-        {#if tasks.completedTasks.length === 0}
+        {#if visibleCompletedTasks.length === 0}
           <div class="empty-state">
             <span class="empty-icon">✓</span>
             <p>{i18n.t('history.noCompleted') || '暂无已完成的任务'}</p>
           </div>
         {:else}
           <div class="task-list">
-            {#each tasks.completedTasks as task (task.id)}
+            {#each visibleCompletedTasks as task (task.id)}
               <div class="task-item">
                 <div class="task-info">
                   <TaskCard {task} compact />

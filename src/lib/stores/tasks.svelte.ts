@@ -31,12 +31,44 @@ let filter = $state<FilterState>({
 // Search query
 let searchQuery = $state('');
 
+// Helper to cleanup old tasks
+function cleanupOldTasks(): void {
+  const now = Date.now();
+  const twoDaysMs = 2 * 24 * 60 * 60 * 1000;
+  
+  const originalCount = appData.tasks.length;
+  
+  appData.tasks = appData.tasks.filter(task => {
+    // If task is cancelled (H priority)
+    if (task.priority === 'H') {
+      if (!task.completedAt) return true; // Keep if no timestamp (shouldn't happen but safe)
+      
+      const cancelledTime = new Date(task.completedAt).getTime();
+      // If cancelled more than 2 days ago, delete it
+      if (now - cancelledTime > twoDaysMs) {
+        return false;
+      }
+    }
+    
+    return true;
+  });
+  
+  if (appData.tasks.length !== originalCount) {
+    console.log(`Cleaned up ${originalCount - appData.tasks.length} old cancelled tasks`);
+    // Don't await save here to avoid blocking init, but trigger it
+    saveAppData(appData).catch(err => console.error('Failed to save after cleanup:', err));
+  }
+}
+
 // Initialize data
 export async function initializeData(): Promise<void> {
   try {
     isLoading = true;
     lastError = null;
     appData = await loadAppData();
+
+    // Cleanup old tasks (Cancelled > 2 days)
+    cleanupOldTasks();
 
     // Process recurring tasks
     const newRecurringTasks = processRecurringTasks(appData.tasks.filter(t => isActivePriority(t.priority)));
