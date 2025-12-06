@@ -1,8 +1,8 @@
 <script lang="ts">
   import type { Task, Priority } from '$lib/types';
   import { PRIORITY_CONFIG } from '$lib/types';
-  import { updateTask, getTasksStore } from '$lib/stores/tasks.svelte';
-  import { closeEditModal, showToast } from '$lib/stores/ui.svelte';
+  import { updateTask, getTasksStore, needsPriorityChangeConfirmation, changePriority } from '$lib/stores/tasks.svelte';
+  import { closeEditModal, showToast, showConfirmation } from '$lib/stores/ui.svelte';
   import { getI18nStore } from '$lib/i18n';
   import { highlightSyntax } from '$lib/utils/parser';
   import { formatRecurrence } from '$lib/utils/recurrence';
@@ -16,6 +16,9 @@
   const i18n = getI18nStore();
   const t = i18n.t;
   const tasks = getTasksStore();
+
+  // Track if we already confirmed a priority change (to avoid re-prompting)
+  let priorityChangeConfirmed = $state(false);
 
   // Form state - initialized from task
   let content = $state(task.content);
@@ -74,6 +77,38 @@
 
   // Priority options
   const priorityOptions: Priority[] = ['A', 'B', 'C', 'D', 'E', 'F'];
+
+  // Handle priority selection with confirmation check
+  function handlePrioritySelect(newPriority: Priority) {
+    // If priority is the same, just update
+    if (newPriority === task.priority) {
+      selectedPriority = newPriority;
+      return;
+    }
+
+    // If already confirmed, allow change
+    if (priorityChangeConfirmed) {
+      selectedPriority = newPriority;
+      return;
+    }
+
+    // Check if confirmation is needed
+    const confirmCheck = needsPriorityChangeConfirmation(task, newPriority);
+    if (confirmCheck.needsConfirmation) {
+      showConfirmation({
+        title: t('message.priorityChangeTitle') || 'Priority Change',
+        message: confirmCheck.message || t('message.confirmPriorityChange'),
+        confirmText: t('task.continueAnyway'),
+        cancelText: t('action.cancel'),
+        onConfirm: () => {
+          priorityChangeConfirmed = true;
+          selectedPriority = newPriority;
+        }
+      });
+    } else {
+      selectedPriority = newPriority;
+    }
+  }
 
   // Recurrence options
   const recurrenceOptions = $derived([
@@ -250,7 +285,7 @@
               class="priority-btn"
               class:selected={selectedPriority === p}
               style:--btn-color={PRIORITY_CONFIG[p].color}
-              onclick={() => selectedPriority = p}
+              onclick={() => handlePrioritySelect(p)}
               title={PRIORITY_CONFIG[p].description}
             >
               <span class="priority-letter">{p}</span>

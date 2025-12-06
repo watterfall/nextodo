@@ -1,5 +1,5 @@
 import type { Task, Priority, FilterState, UnitInfo, AppData, ActiveData, PomodoroHistoryData } from '$lib/types';
-import { createEmptyTask, createDefaultAppData, isThresholdPassed, calculateEZoneAge, isActivePriority, ACTIVE_PRIORITIES } from '$lib/types';
+import { createEmptyTask, createDefaultAppData, isThresholdPassed, calculateEZoneAge, isActivePriority, ACTIVE_PRIORITIES, isWithinRetentionPeriod } from '$lib/types';
 import { loadAppData, saveAppData, reloadFile } from '$lib/utils/storage';
 import { applyHighlanderRule, canAddTask, validateQuota } from '$lib/utils/quota';
 import { createTaskFromInput } from '$lib/utils/parser';
@@ -165,6 +165,7 @@ export async function cancelTask(taskId: string): Promise<void> {
     if (task.id === taskId && isActivePriority(task.priority)) {
       return {
         ...task,
+        originalPriority: task.priority, // Save original priority for retention period calculation
         priority: 'H' as Priority,
         completedAt: new Date().toISOString()
       };
@@ -189,11 +190,12 @@ export async function completeTask(taskId: string): Promise<void> {
     nextRecurringTask = createNextOccurrence(taskToComplete);
   }
 
-  // Move task to G (completed) priority
+  // Move task to G (completed) priority, preserving original priority for retention display
   appData.tasks = appData.tasks.map(task => {
     if (task.id === taskId && isActivePriority(task.priority)) {
       return {
         ...task,
+        originalPriority: task.priority, // Save original priority for retention period calculation
         priority: 'G' as Priority,
         completed: true,
         completedAt: new Date().toISOString()
@@ -261,7 +263,64 @@ export async function permanentlyDeleteTask(taskId: string): Promise<void> {
   await persist();
 }
 
-export async function changePriority(taskId: string, newPriority: Priority): Promise<{ success: boolean; error?: string }> {
+// Priority tiers for detecting drastic changes
+// Tier 1: A, B (high importance tasks)
+// Tier 2: C (standard tasks)
+// Tier 3: D, E (quick/temp tasks)
+// Tier 4: F (idea pool)
+function getPriorityTier(priority: Priority): number {
+  switch (priority) {
+    case 'A': case 'B': return 1;
+    case 'C': return 2;
+    case 'D': case 'E': return 3;
+    case 'F': return 4;
+    default: return 4;
+  }
+}
+
+// Check if a priority change needs confirmation
+export function needsPriorityChangeConfirmation(task: Task, newPriority: Priority): {
+  needsConfirmation: boolean;
+  reason?: 'drastic_change' | 'frequent_change';
+  message?: string;
+} {
+  // Don't need confirmation if task doesn't exist or priority is the same
+  if (!task || task.priority === newPriority) {
+    return { needsConfirmation: false };
+  }
+
+  // Check for frequent changes (within 5 minutes)
+  if (task.lastPriorityChangeAt) {
+    const lastChange = new Date(task.lastPriorityChangeAt).getTime();
+    const now = Date.now();
+    const fiveMinutes = 5 * 60 * 1000;
+
+    if (now - lastChange < fiveMinutes) {
+      return {
+        needsConfirmation: true,
+        reason: 'frequent_change',
+        message: t('message.frequentPriorityChange')
+      };
+    }
+  }
+
+  // Check for drastic tier changes (more than 1 tier difference)
+  const currentTier = getPriorityTier(task.priority);
+  const newTier = getPriorityTier(newPriority);
+  const tierDiff = Math.abs(currentTier - newTier);
+
+  if (tierDiff >= 2) {
+    return {
+      needsConfirmation: true,
+      reason: 'drastic_change',
+      message: t('message.drasticPriorityChange', { from: task.priority, to: newPriority })
+    };
+  }
+
+  return { needsConfirmation: false };
+}
+
+export async function changePriority(taskId: string, newPriority: Priority, skipConfirmation = false): Promise<{ success: boolean; error?: string; needsConfirmation?: boolean; confirmationReason?: string }> {
   const task = appData.tasks.find(t => t.id === taskId);
   if (!task) {
     return { success: false, error: 'Task not found' };
@@ -273,13 +332,29 @@ export async function changePriority(taskId: string, newPriority: Priority): Pro
     return { success: false, error: 'Cannot change to hidden priority directly' };
   }
 
+  // Check if confirmation is needed
+  if (!skipConfirmation) {
+    const confirmCheck = needsPriorityChangeConfirmation(task, newPriority);
+    if (confirmCheck.needsConfirmation) {
+      return {
+        success: false,
+        needsConfirmation: true,
+        confirmationReason: confirmCheck.message,
+        error: confirmCheck.message
+      };
+    }
+  }
+
   // Check quota for new priority (only among active tasks)
   const otherActiveTasks = appData.tasks.filter(t => t.id !== taskId && isActivePriority(t.priority));
   if (!canAddTask(otherActiveTasks, newPriority)) {
     return { success: false, error: t('message.quotaExceeded', { priority: newPriority }) };
   }
 
-  await updateTask(taskId, { priority: newPriority });
+  await updateTask(taskId, {
+    priority: newPriority,
+    lastPriorityChangeAt: new Date().toISOString()
+  });
   return { success: true };
 }
 
@@ -532,6 +607,36 @@ const agingFZoneTasks = $derived.by(() => {
 // Backward compatibility alias
 const agingEZoneTasks = $derived(agingFZoneTasks);
 
+// Recently completed tasks within retention period, grouped by original priority
+// These will be shown with strikethrough in their original zone
+const recentlyCompletedTasksByPriority = $derived.by(() => {
+  const byPriority: Record<Priority, Task[]> = {
+    A: [], B: [], C: [], D: [], E: [], F: [], G: [], H: []
+  };
+
+  const recentlyCompleted = appData.tasks.filter(t =>
+    t.priority === 'G' && isWithinRetentionPeriod(t)
+  );
+
+  for (const task of recentlyCompleted) {
+    const originalPriority = task.originalPriority || 'F';
+    if (byPriority[originalPriority]) {
+      byPriority[originalPriority].push(task);
+    }
+  }
+
+  // Sort each group by completion time (most recent first)
+  for (const priority of Object.keys(byPriority) as Priority[]) {
+    byPriority[priority].sort((a, b) => {
+      const dateA = a.completedAt ? new Date(a.completedAt).getTime() : 0;
+      const dateB = b.completedAt ? new Date(b.completedAt).getTime() : 0;
+      return dateB - dateA;
+    });
+  }
+
+  return byPriority;
+});
+
 // Export store interface
 export function getTasksStore() {
   return {
@@ -559,6 +664,7 @@ export function getTasksStore() {
     get weeklyRecurringCount() { return weeklyRecurringCount; },
     get completedTodayCount() { return completedTodayCount; },
     get agingEZoneTasks() { return agingEZoneTasks; },
+    get recentlyCompletedTasksByPriority() { return recentlyCompletedTasksByPriority; },
     get customTagGroups() { return appData.customTagGroups; },
     get settings() { return appData.settings; }
   };

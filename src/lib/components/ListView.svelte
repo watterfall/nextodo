@@ -134,19 +134,19 @@
           <span class="priority-badge" style:background={config.color}>{priority}</span>
           <span class="priority-name">{t(`priority.${priority}`)}</span>
           <div class="priority-info-wrapper">
-            <button class="priority-info-btn" aria-label="查看优先级说明">?</button>
+            <button class="priority-info-btn" aria-label={t('priorityTooltip.viewDescription')}>?</button>
             <div class="priority-tooltip">
               <div class="tooltip-title">{priority} · {t(`priority.${priority}`)}</div>
               <div class="tooltip-row">
-                <span class="tooltip-label">配额</span>
+                <span class="tooltip-label">{t('priorityTooltip.quota')}</span>
                 <span class="tooltip-value">{t(`priority.quota.${priority}`)}</span>
               </div>
               <div class="tooltip-row">
-                <span class="tooltip-label">难度</span>
+                <span class="tooltip-label">{t('priorityTooltip.difficulty')}</span>
                 <span class="tooltip-value">{t(`priority.difficulty.${priority}`)}</span>
               </div>
               <div class="tooltip-row">
-                <span class="tooltip-label">时间</span>
+                <span class="tooltip-label">{t('priorityTooltip.time')}</span>
                 <span class="tooltip-value">{t(`priority.time.${priority}`)}</span>
               </div>
               <div class="tooltip-desc">{t(`priority.description.${priority}`)}</div>
@@ -189,7 +189,7 @@
                 class="task-checkbox"
                 class:checked={task.completed}
                 onclick={(e) => { e.stopPropagation(); handleCheck(task); }}
-                aria-label={task.completed ? '标记未完成' : '标记完成'}
+                aria-label={task.completed ? t('task.markIncomplete') : t('task.markComplete')}
               >
                 {#if task.completed}
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
@@ -249,8 +249,8 @@
                 <button
                   class="edit-btn"
                   onclick={(e) => { e.stopPropagation(); handleEdit(task); }}
-                  title="编辑任务"
-                  aria-label="编辑任务"
+                  title={t('task.edit')}
+                  aria-label={t('task.edit')}
                 >
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
@@ -285,7 +285,7 @@
                 <button
                   class="task-checkbox checked"
                   onclick={() => handleCheck(task)}
-                  aria-label="标记未完成"
+                  aria-label={t('task.markIncomplete')}
                 >
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
                     <polyline points="20 6 9 17 4 12"></polyline>
@@ -377,8 +377,8 @@
               <button
                 class="edit-btn"
                 onclick={(e) => { e.stopPropagation(); handleEdit(task); }}
-                title="编辑任务"
-                aria-label="编辑任务"
+                title={t('task.edit')}
+                aria-label={t('task.edit')}
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>

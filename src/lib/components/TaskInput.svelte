@@ -3,6 +3,10 @@
   import { addTask } from '$lib/stores/tasks.svelte';
   import { showToast } from '$lib/stores/ui.svelte';
   import { highlightSyntax } from '$lib/utils/parser';
+  import { getI18nStore } from '$lib/i18n';
+
+  const i18n = getI18nStore();
+  const t = i18n.t;
 
   interface Props {
     defaultPriority?: Priority;
@@ -17,8 +21,10 @@
     onSubmit,
     onCancel,
     autoFocus = false,
-    placeholder = '输入任务... (+项目 @上下文 #标签 !A-F ~日期 🍅数量)'
+    placeholder
   }: Props = $props();
+
+  const actualPlaceholder = $derived(placeholder || t('task.addPlaceholder'));
 
   let inputValue = $state('');
   let inputElement: HTMLInputElement | undefined = $state();
@@ -49,7 +55,7 @@
 
     if (result.success) {
       inputValue = '';
-      showToast('任务已添加', 'success');
+      showToast(t('message.taskAdded'), 'success');
       onSubmit?.();
     } else if (result.error) {
       showToast(result.error, 'error');
@@ -87,15 +93,15 @@
       onkeydown={handleKeydown}
       onfocus={handleFocus}
       onblur={handleBlur}
-      {placeholder}
+      placeholder={actualPlaceholder}
     />
 
     <button
       class="submit-btn"
       onclick={handleSubmit}
       disabled={!inputValue.trim()}
-      aria-label="添加任务"
-      title="添加任务"
+      aria-label={t('task.add')}
+      title={t('task.add')}
     >
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
         <line x1="12" y1="5" x2="12" y2="19"></line>

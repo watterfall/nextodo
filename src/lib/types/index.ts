@@ -42,6 +42,10 @@ export interface Task {
     extendedUntil?: string;
     endedEarly?: boolean;
   };
+  // Original priority before completion/cancellation (for retention display)
+  originalPriority?: Priority;
+  // Last priority change timestamp (for detecting frequent changes)
+  lastPriorityChangeAt?: string;
 }
 
 // Unit review interface
@@ -373,6 +377,64 @@ export function calculateFZoneAge(task: Task, unitDays: number = 7): number {
 // Backward compatibility alias
 export function calculateEZoneAge(task: Task, unitDays: number = 7): number {
   return calculateFZoneAge(task, unitDays);
+}
+
+// Retention duration in hours based on original priority level
+// Higher priority tasks stay visible longer after completion
+export const COMPLETED_RETENTION_HOURS: Record<Priority, number> = {
+  A: 12,  // Core challenge - 12 hours retention
+  B: 10,  // Key progress - 10 hours retention
+  C: 8,   // Steady progress - 8 hours retention
+  D: 6,   // Ad-hoc tasks - 6 hours retention
+  E: 4,   // Quick action - 4 hours retention
+  F: 4,   // Idea pool - 4 hours retention
+  G: 0,   // Already completed
+  H: 0,   // Already cancelled
+};
+
+// Check if a completed task is still within its retention period
+export function isWithinRetentionPeriod(task: Task): boolean {
+  if (!task.completedAt) return false;
+
+  // Use originalPriority if available, otherwise estimate based on pomodoros
+  const originalPriority = task.originalPriority || estimateOriginalPriority(task);
+  const retentionHours = COMPLETED_RETENTION_HOURS[originalPriority] || 4;
+
+  const completedAt = new Date(task.completedAt).getTime();
+  const now = Date.now();
+  const retentionMs = retentionHours * 60 * 60 * 1000;
+
+  return (now - completedAt) < retentionMs;
+}
+
+// Estimate original priority based on task characteristics (fallback for legacy tasks)
+function estimateOriginalPriority(task: Task): Priority {
+  const estimated = task.pomodoros.estimated;
+  if (estimated >= 5) return 'A';
+  if (estimated >= 3) return 'B';
+  if (estimated >= 2) return 'C';
+  if (estimated >= 1) return 'D';
+  return 'E';
+}
+
+// Get remaining retention time as a human-readable string
+export function getRetentionRemaining(task: Task): { hours: number; minutes: number } | null {
+  if (!task.completedAt) return null;
+
+  const originalPriority = task.originalPriority || estimateOriginalPriority(task);
+  const retentionHours = COMPLETED_RETENTION_HOURS[originalPriority] || 4;
+
+  const completedAt = new Date(task.completedAt).getTime();
+  const now = Date.now();
+  const retentionMs = retentionHours * 60 * 60 * 1000;
+  const remainingMs = retentionMs - (now - completedAt);
+
+  if (remainingMs <= 0) return null;
+
+  const hours = Math.floor(remainingMs / (60 * 60 * 1000));
+  const minutes = Math.floor((remainingMs % (60 * 60 * 1000)) / (60 * 1000));
+
+  return { hours, minutes };
 }
 
 // Active priorities (shown in main views)

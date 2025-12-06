@@ -19,6 +19,7 @@ export default {
     trashArchive: '回收站与归档',
     settings: '设置',
     badges: '成就',
+    history: '任务历史',
   },
 
   // Trash
@@ -170,10 +171,15 @@ export default {
     markComplete: '标记完成',
     markIncomplete: '标记未完成',
     focusInProgress: '专注进行中',
-    pomodoroRemaining: '剩余 {remaining} 个番茄',
     clickToStartFocus: '点击开始专注',
     dormantUntil: '休眠至',
     energyLevel: '能量消耗',
+    // Recently completed tasks
+    recentlyCompleted: '最近完成',
+    recentlyCompletedHint: '最近完成的任务 - 保留期后自动隐藏',
+    retentionHint: '保留期后将自动隐藏',
+    retentionHours: '{hours}小时后隐藏',
+    retentionMinutes: '{minutes}分钟后隐藏',
   },
 
   // Pomodoro
@@ -338,6 +344,7 @@ export default {
     contexts: '状态',
     tags: '标签',
     dueDates: '截止日期',
+    dueDate: '截止日期',
     recurring: '重复任务',
     dueToday: '今天',
     dueThisWeek: '本周',
@@ -348,6 +355,14 @@ export default {
     noContexts: '暂无状态',
     collapse: '收起侧边栏',
     showAll: '显示全部',
+  },
+
+  // Priority tooltips (for ListView)
+  priorityTooltip: {
+    quota: '配额',
+    difficulty: '难度',
+    time: '时间',
+    viewDescription: '查看优先级说明',
   },
 
   // Zone
@@ -376,6 +391,19 @@ export default {
     done: '完成',
     expand: '展开',
     collapse: '收起',
+    restore: '恢复',
+    permanentDelete: '永久删除',
+  },
+
+  // History modal
+  history: {
+    title: '任务历史',
+    completed: '已完成',
+    cancelled: '已取消',
+    noCompleted: '暂无已完成的任务',
+    noCancelled: '暂无已取消的任务',
+    completedAt: '完成于',
+    cancelledAt: '取消于',
   },
 
   // Messages
@@ -396,6 +424,12 @@ export default {
     taskAdded: '任务已添加到待处理区',
     taskMoved: '任务已移动到 {priority} 区',
     taskMovedToTrash: '任务已移至回收站',
+    taskCancelled: '任务已取消',
+    // Priority change confirmation
+    priorityChangeTitle: '确认优先级变更',
+    confirmPriorityChange: '确定要更改此任务的优先级吗？',
+    frequentPriorityChange: '您刚才更改过此任务的优先级。频繁调整优先级可能影响工作效率，确定要继续吗？',
+    drasticPriorityChange: '从 {from} 级到 {to} 级是较大的优先级跨越，确定要继续吗？',
   },
 
   // Date/Time
