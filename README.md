@@ -12,16 +12,16 @@
 
 ### Features
 
-- **5-Tier Priority System (A-E)** - With quotas: A=1, B=2, C=3, D=5, E=∞
+- **6-Tier Priority System (A-F)** - With quotas: A=1, B=2, C=3, D=4, E=5, F=Idea Pool (unlimited)
 - **Highlander Rule** - Only one A-priority task at a time
 - **Bi-Daily Work Units** - Sun-Mon, Tue-Wed, Thu-Fri cycles with Saturday reviews
 - **Pomodoro Timer** - Integrated focus sessions with break management
 - **Immersive Mode** - Full-screen distraction-free pomodoro sessions
 - **Recurring Tasks** - Daily, weekly, monthly patterns with threshold dates
 - **Smart Parsing** - Quick task input with intuitive syntax
-- **Multiple Views** - Zone, Kanban, Today, and Week views
+- **Multiple Views** - Kanban, List, and Calendar views
 - **Drag & Drop** - Intuitive task reordering and scheduling
-- **Gamification** - Achievement badges for productivity milestones
+- **Gamification System** - XP, levels, and achievement badges with persistent progress
 - **Theme Support** - Dark, light, and system themes
 - **Data Separation** - Hot/cold data architecture for performance
 - **Bilingual** - Chinese and English interface
@@ -79,7 +79,7 @@ Complete project report !A +work @office ~2025-01-15 🍅4
 
 | Syntax | Description | Example |
 |--------|-------------|---------|
-| `!A-E` | Priority level | `!A`, `!B`, `!C`, `!D`, `!E` |
+| `!A-F` | Priority level | `!A`, `!B`, `!C`, `!D`, `!E`, `!F` |
 | `+name` | Project tag | `+work`, `+personal` |
 | `@name` | Context tag | `@office`, `@home` |
 | `#name` | Custom tag | `#urgent`, `#review` |
@@ -113,7 +113,7 @@ Data is stored in the app data directory:
 - **Linux**: `~/.local/share/com.focusflow.app`
 
 Files:
-- `active.json` - Active tasks, settings, reviews, trash
+- `active.json` - Active tasks, settings, reviews, gamification data
 - `archive.json` - Completed/archived tasks
 - `pomodoro_history.json` - Pomodoro session records
 
@@ -131,16 +131,16 @@ MIT
 
 ### 特性
 
-- **五级优先级系统 (A-E)** - 配额限制：A=1, B=2, C=3, D=5, E=无限
+- **六级优先级系统 (A-F)** - 配额限制：A=1, B=2, C=3, D=4, E=5, F=灵感池（无限）
 - **高地人规则** - 同时只能有一个 A 级任务
 - **双日工作单元** - 周日-周一、周二-周三、周四-周五循环，周六回顾
 - **番茄钟计时器** - 集成专注时段与休息管理
 - **沉浸模式** - 全屏无干扰番茄专注
 - **循环任务** - 支持每日、每周、每月模式与阈值日期
 - **智能解析** - 直观的快速输入语法
-- **多视图** - 区域、看板、今日、周视图
+- **多视图** - 看板、列表、日历视图
 - **拖拽操作** - 直观的任务排序和日程安排
-- **成就系统** - 生产力里程碑徽章奖励
+- **成就系统** - 经验值、等级和成就徽章，进度持久保存
 - **主题支持** - 深色、浅色和跟随系统
 - **数据分离** - 冷热数据架构提升性能
 - **双语界面** - 中文和英文界面
@@ -198,7 +198,7 @@ npm run tauri:build
 
 | 语法 | 说明 | 示例 |
 |------|------|------|
-| `!A-E` | 优先级 | `!A`, `!B`, `!C`, `!D`, `!E` |
+| `!A-F` | 优先级 | `!A`, `!B`, `!C`, `!D`, `!E`, `!F` |
 | `+名称` | 项目标签 | `+工作`, `+个人` |
 | `@名称` | 场景标签 | `@办公室`, `@家` |
 | `#名称` | 自定义标签 | `#紧急`, `#待审` |
@@ -232,7 +232,7 @@ npm run tauri:build
 - **Linux**: `~/.local/share/com.focusflow.app`
 
 文件：
-- `active.json` - 活跃任务、设置、回顾、回收站
+- `active.json` - 活跃任务、设置、回顾、成就数据
 - `archive.json` - 已完成/已归档任务
 - `pomodoro_history.json` - 番茄时段记录
 

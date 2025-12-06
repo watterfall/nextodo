@@ -1,6 +1,5 @@
-import type { Task, Priority } from '$lib/types';
-import { getTasksStore } from './tasks.svelte';
-import { getPomodoroStore } from './pomodoro.svelte';
+import type { Task } from '$lib/types';
+import type { GamificationData, GamificationStats, BadgeData } from '$lib/types';
 import { showToast } from './ui.svelte';
 
 export interface Badge {
@@ -12,17 +11,6 @@ export interface Badge {
   unlocked: boolean;
   unlockedAt?: string;
   xpReward: number;
-}
-
-export interface GamificationStats {
-  totalTasksCompleted: number;
-  totalPomodoros: number;
-  currentStreak: number;
-  longestStreak: number;
-  totalACompleted: number;
-  earlyBirdCount: number; // Tasks completed before 9am
-  nightOwlCount: number; // Tasks completed after 10pm
-  perfectDays: number; // Days with > 80% completion but < 100% (Sustainable)
 }
 
 export interface Level {
@@ -105,7 +93,9 @@ class GamificationStore {
     perfectDays: 0
   });
   xp = $state(0);
-  
+
+  private persistCallback: (() => Promise<void>) | null = null;
+
   constructor() {
     this.initBadges();
   }
@@ -150,7 +140,7 @@ class GamificationStore {
   // Actions
   checkBadges() {
     let newUnlocks = false;
-    
+
     this.badges = this.badges.map(badge => {
       if (!badge.unlocked && badge.condition(this.stats)) {
         newUnlocks = true;
@@ -172,15 +162,13 @@ class GamificationStore {
 
   // Update stats based on action
   recordTaskCompletion(task: Task) {
-    this.stats.totalTasksCompleted++;
-    if (task.priority === 'A') {
-      this.stats.totalACompleted++;
-    }
-    
-    // Check time for early/late
-    const hour = new Date().getHours();
-    if (hour < 9) this.stats.earlyBirdCount++;
-    if (hour >= 22) this.stats.nightOwlCount++;
+    this.stats = {
+      ...this.stats,
+      totalTasksCompleted: this.stats.totalTasksCompleted + 1,
+      totalACompleted: task.priority === 'A' ? this.stats.totalACompleted + 1 : this.stats.totalACompleted,
+      earlyBirdCount: new Date().getHours() < 9 ? this.stats.earlyBirdCount + 1 : this.stats.earlyBirdCount,
+      nightOwlCount: new Date().getHours() >= 22 ? this.stats.nightOwlCount + 1 : this.stats.nightOwlCount
+    };
 
     this.xp += 10; // Base XP for task
     this.checkBadges();
@@ -188,32 +176,57 @@ class GamificationStore {
   }
 
   recordPomodoro() {
-    this.stats.totalPomodoros++;
+    this.stats = {
+      ...this.stats,
+      totalPomodoros: this.stats.totalPomodoros + 1
+    };
     this.xp += 5; // Base XP for pomodoro
     this.checkBadges();
     this.save();
   }
 
-  // Persistence (mocked for now, should integrate with storage.ts)
-  load(data: any) {
+  // Load from persisted data
+  load(data: GamificationData | undefined) {
     if (data) {
       this.stats = data.stats || this.stats;
       this.xp = data.xp || 0;
-      if (data.badges) {
-        // Merge saved unlock status
-        const savedBadges = data.badges as Badge[];
-        this.badges = this.badges.map(b => {
-          const saved = savedBadges.find(sb => sb.id === b.id);
-          return saved ? { ...b, unlocked: saved.unlocked, unlockedAt: saved.unlockedAt } : b;
+      if (data.badges && data.badges.length > 0) {
+        // Merge saved unlock status with badge definitions
+        this.badges = BADGE_DEFINITIONS.map(def => {
+          const saved = data.badges.find(sb => sb.id === def.id);
+          return {
+            ...def,
+            unlocked: saved?.unlocked || false,
+            unlockedAt: saved?.unlockedAt
+          };
         });
       }
     }
   }
 
-  save() {
-    // In a real app, this would write to storage
-    // For now we rely on the main store saving mechanism if we hook it up
-    // or just keep it in memory for the session if not fully integrated
+  // Export data for persistence
+  getData(): GamificationData {
+    return {
+      stats: this.stats,
+      xp: this.xp,
+      badges: this.badges.map(b => ({
+        id: b.id,
+        unlocked: b.unlocked,
+        unlockedAt: b.unlockedAt
+      }))
+    };
+  }
+
+  // Set the persist callback
+  setPersistCallback(callback: () => Promise<void>) {
+    this.persistCallback = callback;
+  }
+
+  // Save to storage via callback
+  async save() {
+    if (this.persistCallback) {
+      await this.persistCallback();
+    }
   }
 }
 
@@ -227,3 +240,9 @@ export function getGamificationStore() {
   return store;
 }
 
+// Initialize gamification store with persisted data
+export function initGamification(data: GamificationData | undefined, persistCallback: () => Promise<void>) {
+  const s = getGamificationStore();
+  s.load(data);
+  s.setPersistCallback(persistCallback);
+}
