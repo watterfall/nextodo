@@ -47,7 +47,7 @@
 
     // Add default priority if not specified
     let finalInput = inputValue;
-    if (!finalInput.match(/![ABCDEF]/i)) {
+    if (!finalInput.match(/!([ABCDEF])(?![A-Za-z])/i)) {
       finalInput = `${finalInput} !${defaultPriority}`;
     }
 
