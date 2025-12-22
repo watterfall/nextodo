@@ -45,21 +45,21 @@ export function parseTaskInput(input: string): ParsedTask {
   // Extract projects (+project)
   const projectMatches = content.matchAll(/\+(\S+)/g);
   for (const match of projectMatches) {
-    projects.push('+' + match[1]);
+    projects.push(match[1]);
   }
   content = content.replace(/\+\S+/g, '').trim();
 
   // Extract contexts (@context)
   const contextMatches = content.matchAll(/@(\S+)/g);
   for (const match of contextMatches) {
-    contexts.push('@' + match[1]);
+    contexts.push(match[1]);
   }
   content = content.replace(/@\S+/g, '').trim();
 
   // Extract custom tags (#tag or emoji tags)
   const tagMatches = content.matchAll(/#(\S+)/g);
   for (const match of tagMatches) {
-    customTags.push('#' + match[1]);
+    customTags.push(match[1]);
   }
   content = content.replace(/#\S+/g, '').trim();
 
@@ -273,15 +273,15 @@ export function formatTaskDisplay(task: Task): string {
   let display = task.content;
 
   if (task.projects.length > 0) {
-    display += ' ' + task.projects.join(' ');
+    display += ' ' + task.projects.map(p => '+' + p).join(' ');
   }
 
   if (task.contexts.length > 0) {
-    display += ' ' + task.contexts.join(' ');
+    display += ' ' + task.contexts.map(c => '@' + c).join(' ');
   }
 
   if (task.customTags.length > 0) {
-    display += ' ' + task.customTags.join(' ');
+    display += ' ' + task.customTags.map(t => '#' + t).join(' ');
   }
 
   return display;

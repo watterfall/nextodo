@@ -385,11 +385,15 @@ async function saveFileTauri(fileType: string, data: unknown): Promise<void> {
 }
 
 /**
- * Migrate tasks to add new fields
+ * Migrate tasks to add new fields and remove symbol prefixes
  */
 function migrateTasks(tasks: Task[]): Task[] {
   return tasks.map(task => ({
     ...task,
+    // Remove symbol prefixes from projects, contexts, and tags (data format change)
+    projects: task.projects.map(p => p.replace(/^\+/, '')),
+    contexts: task.contexts.map(c => c.replace(/^@/, '')),
+    customTags: task.customTags.map(t => t.replace(/^#/, '')),
     thresholdDate: task.thresholdDate ?? null,
     recurrence: task.recurrence ?? null,
     pomodoros: task.pomodoros ?? { estimated: 0, completed: 0 }
