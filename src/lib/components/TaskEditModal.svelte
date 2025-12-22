@@ -23,17 +23,17 @@
   // Form state - initialized from task
   let content = $state(task.content);
   let selectedPriority = $state<Priority>(task.priority);
-  let project = $state(task.projects.map(p => p.replace(/^\+/, '')).join(', '));
-  let context = $state(task.contexts.map(c => c.replace(/^@/, '')).join(', '));
-  let tags = $state(task.customTags.filter(t => !['⚡高能量', '😴低能量', '☕中等'].includes(t)).map(t => t.replace(/^#/, '')).join(', '));
+  let project = $state(task.projects.join(', '));
+  let context = $state(task.contexts.join(', '));
+  let tags = $state(task.customTags.filter(t => !['⚡高能量', '😴低能量', '☕中等'].includes(t)).join(', '));
   let dueDate = $state(task.dueDate || '');
   let thresholdDate = $state(task.thresholdDate || '');
   let estimatedPomodoros = $state<number>(task.pomodoros.estimated);
   let recurrence = $state(task.recurrence?.pattern || task.recurrence?.customPattern || '');
 
   // Extract unique existing projects, contexts, and tags for autocomplete
-  const existingProjects = $derived([...new Set(tasks.tasks.flatMap(t => t.projects.map(p => p.replace(/^\+/, ''))))].sort());
-  const existingTags = $derived([...new Set(tasks.tasks.flatMap(t => t.customTags.map(tag => tag.replace(/^#/, ''))))].sort());
+  const existingProjects = $derived([...new Set(tasks.tasks.flatMap(t => t.projects))].sort());
+  const existingTags = $derived([...new Set(tasks.tasks.flatMap(t => t.customTags))].sort());
 
   // Mood options
   const moodOptions = $derived([
@@ -55,21 +55,18 @@
   $effect(() => {
     // Try to find a mood in existing contexts
     const moodContext = task.contexts.find(c => {
-      const val = c.replace(/^@/, '');
       // Check if it matches any mood value (with or without emoji)
-      return moodOptions.some(m => m.value && val.includes(m.value));
+      return moodOptions.some(m => m.value && c.includes(m.value));
     });
-    
+
     if (moodContext) {
       // Extract the mood value
-      const val = moodContext.replace(/^@/, '');
-      const match = moodOptions.find(m => m.value && val.includes(m.value));
+      const match = moodOptions.find(m => m.value && moodContext.includes(m.value));
       if (match) {
         mood = match.value;
         // Remove mood from context text field to avoid duplication
         context = task.contexts
           .filter(c => c !== moodContext)
-          .map(c => c.replace(/^@/, ''))
           .join(', ');
       }
     }
@@ -157,19 +154,18 @@
 
     // Build updated task properties
     const projects = project.trim()
-      ? project.trim().split(/[,\s]+/).filter(Boolean).map(p => '+' + p)
+      ? project.trim().split(/[,\s]+/).filter(Boolean)
       : [];
     const contexts = context.trim()
-      ? context.trim().split(/[,\s]+/).filter(Boolean).map(c => '@' + c)
+      ? context.trim().split(/[,\s]+/).filter(Boolean)
       : [];
-    
+
     // Add mood context if selected
     if (mood) {
       const selectedMood = moodOptions.find(m => m.value === mood);
       if (selectedMood && selectedMood.value) {
         // Check if already present (to avoid double add if user manually typed it back)
-        const moodStr = '@' + selectedMood.emoji + selectedMood.value;
-        const simpleMoodStr = '@' + selectedMood.value;
+        const moodStr = selectedMood.emoji + selectedMood.value;
         if (!contexts.some(c => c.includes(selectedMood.value))) {
           contexts.push(moodStr);
         }
@@ -179,7 +175,7 @@
     // Preserve energy tags if they exist
     const existingEnergyTags = task.customTags.filter(t => ['⚡高能量', '😴低能量', '☕中等'].includes(t));
     const customTags = tags.trim()
-      ? [...tags.trim().split(/[,\s]+/).filter(Boolean).map(t => '#' + t), ...existingEnergyTags]
+      ? [...tags.trim().split(/[,\s]+/).filter(Boolean), ...existingEnergyTags]
       : existingEnergyTags;
 
     // Build recurrence object
