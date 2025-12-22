@@ -63,6 +63,13 @@ export function parseTaskInput(input: string): ParsedTask {
   }
   content = content.replace(/#\S+/g, '').trim();
 
+  // Extract pomodoros (🍅3 or p3) - MUST happen BEFORE emoji tags to prevent 🍅3 from being captured as a tag
+  const pomodoroMatch = content.match(/(?:🍅|p)(\d+)/);
+  if (pomodoroMatch) {
+    estimatedPomodoros = parseInt(pomodoroMatch[1], 10);
+    content = content.replace(/(?:🍅|p)\d+/g, '').trim();
+  }
+
   // Extract emoji tags (⚡高能量, 💻编码, etc.)
   const emojiTagMatches = content.matchAll(/([\u{1F300}-\u{1F9FF}][\u4e00-\u9fa5\w]+)/gu);
   for (const match of emojiTagMatches) {
@@ -89,13 +96,6 @@ export function parseTaskInput(input: string): ParsedTask {
   if (dueDateMatch) {
     dueDate = parseDateString(dueDateMatch[1]);
     content = content.replace(/~\S+/g, '').trim();
-  }
-
-  // Extract pomodoros (🍅3 or p3)
-  const pomodoroMatch = content.match(/(?:🍅|p)(\d+)/);
-  if (pomodoroMatch) {
-    estimatedPomodoros = parseInt(pomodoroMatch[1], 10);
-    content = content.replace(/(?:🍅|p)\d+/g, '').trim();
   }
 
   // Clean up extra spaces
