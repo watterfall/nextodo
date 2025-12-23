@@ -17,9 +17,6 @@
   const i18n = getI18nStore();
   const t = i18n.t;
 
-  // Shared DnD type for cross-zone dragging - must match ListView and KanbanView
-  const DND_TYPE = 'task-priority-zone';
-
   interface Props {
     isDrawer?: boolean; // New prop to style as drawer
   }
@@ -175,15 +172,14 @@
           flipDurationMs: dndConfig.flipDurationMs,
           dropTargetStyle: {},
           dropTargetClasses: ['dnd-drop-target-active'],
-          dragDisabled: isFocusMode && !hasActiveTask,
-          type: DND_TYPE
+          dragDisabled: isFocusMode && !hasActiveTask
         }}
         onconsider={handleDndConsider}
         onfinalize={handleDndFinalize}
       >
         {#each dndItems as task (task.id)}
           <div animate:flip={{ duration: dndConfig.flipDurationMs }} class="task-wrapper">
-            <TaskCard {task} compact={true} />
+            <TaskCard {task} compact kanbanMode={true} />
 
             <!-- Quick Priority Buttons (shown on hover, hidden in drawer) -->
             {#if !isDrawer}
@@ -231,7 +227,7 @@
     {#if showCompleted}
       <div class="completed-list">
         {#each completedTasks as task (task.id)}
-          <TaskCard {task} compact={true} />
+          <TaskCard {task} compact kanbanMode={true} />
         {/each}
       </div>
     {/if}
