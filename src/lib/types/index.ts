@@ -46,6 +46,8 @@ export interface Task {
   originalPriority?: Priority;
   // Last priority change timestamp (for detecting frequent changes)
   lastPriorityChangeAt?: string;
+  // Task evolution: ID of the parent task this task evolved from
+  evolvedFrom?: string;
 }
 
 // Unit review interface
@@ -144,6 +146,9 @@ export interface Settings {
   eZoneAgingDays: number;
   // NEW: Show threshold tasks in separate view
   showFutureTasks: boolean;
+  // NEW: Flexible unit boundary hours (extend/shorten unit by this many hours)
+  // Default: 12 hours - tasks can spill over half a day
+  unitBoundaryFlexHours: number;
 }
 
 // Active data file structure (hot data)
@@ -341,7 +346,8 @@ export function createDefaultSettings(): Settings {
     sidebarCollapsed: false,
     autoArchiveDays: 7,
     eZoneAgingDays: 3,
-    showFutureTasks: false
+    showFutureTasks: false,
+    unitBoundaryFlexHours: 12 // Default: half day flexibility
   };
 }
 

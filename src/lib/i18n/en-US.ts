@@ -295,6 +295,9 @@ export default {
     autoArchiveDesc: 'Days until completed tasks are auto-archived',
     eZoneAging: 'Inbox Aging Alert',
     eZoneAgingDesc: 'Days until inbox tasks show aging warning',
+    unitBoundaryFlex: 'Unit Boundary Flexibility',
+    unitBoundaryFlexDesc: 'Hours a task can extend beyond unit boundary',
+    hours: 'hours',
     minutes: 'min',
     days: 'days',
     methodology: {
@@ -397,6 +400,7 @@ export default {
     collapse: 'Collapse',
     restore: 'Restore',
     permanentDelete: 'Delete permanently',
+    evolve: 'Evolve',
   },
 
   // History modal
@@ -429,6 +433,9 @@ export default {
     taskMoved: 'Task moved to {priority} zone',
     taskMovedToTrash: 'Task moved to trash',
     taskCancelled: 'Task cancelled',
+    taskEvolved: 'Task evolved, new task created',
+    evolveTaskTitle: 'Evolve Task',
+    evolveTaskHint: 'Complete current task and create an evolved version',
     // Priority change confirmation
     priorityChangeTitle: 'Confirm Priority Change',
     confirmPriorityChange: 'Are you sure you want to change the priority of this task?',

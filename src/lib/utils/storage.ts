@@ -412,7 +412,8 @@ function migrateSettings(settings: any): AppData['settings'] {
     language: settings?.language ?? defaults.language,
     autoArchiveDays: settings?.autoArchiveDays ?? defaults.autoArchiveDays,
     eZoneAgingDays: settings?.eZoneAgingDays ?? defaults.eZoneAgingDays,
-    showFutureTasks: settings?.showFutureTasks ?? defaults.showFutureTasks
+    showFutureTasks: settings?.showFutureTasks ?? defaults.showFutureTasks,
+    unitBoundaryFlexHours: settings?.unitBoundaryFlexHours ?? defaults.unitBoundaryFlexHours
   };
 }
 
