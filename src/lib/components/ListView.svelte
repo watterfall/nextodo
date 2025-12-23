@@ -3,6 +3,7 @@
   import { getI18nStore } from '$lib/i18n';
   import { slide } from 'svelte/transition';
   import { PRIORITY_CONFIG, type Priority, type Task, isThresholdPassed, getRetentionRemaining } from '$lib/types';
+  import TaskCard from './TaskCard.svelte';
   import { openEditModal, getUIStore, showToast } from '$lib/stores/ui.svelte';
   import { startPomodoro, getPomodoroStore } from '$lib/stores/pomodoro.svelte';
   import { isOverdue, getRelativeDayLabel, parseISODate } from '$lib/utils/unitCalc';
@@ -433,67 +434,11 @@
         onfinalize={(e) => handleDndFinalize('F', e)}
       >
         {#each ideaPoolTasks as task (task.id)}
-          {@const dueLabel = getTaskDueLabel(task)}
-          {@const taskOverdue = isTaskOverdue(task)}
-          <!-- svelte-ignore a11y_click_events_have_key_events -->
-          <!-- svelte-ignore a11y_no_static_element_interactions -->
           <div
-            class="pool-task-row"
-            style:--priority-color={PRIORITY_CONFIG.F.color}
-            ondblclick={() => handleEdit(task)}
+            class="pool-task-item"
             animate:flip={{ duration: dndConfig.flipDurationMs }}
           >
-            <button
-              class="task-checkbox"
-              class:checked={task.completed}
-              onclick={(e) => { e.stopPropagation(); handleCheck(task); }}
-            >
-              {#if task.completed}
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
-                  <polyline points="20 6 9 17 4 12"></polyline>
-                </svg>
-              {/if}
-            </button>
-            <span class="task-content">{task.content}</span>
-            <div class="task-meta">
-              {#if task.pomodoros.estimated > 0}
-                {@const remaining = Math.max(0, task.pomodoros.estimated - task.pomodoros.completed)}
-                {#if remaining > 0}
-                  <span class="pomodoro-badge">🍅 {remaining}</span>
-                {/if}
-              {/if}
-              {#each task.projects as project}
-                {@const displayInfo = getDisplayText(project)}
-                <span class="emoji-tag project" class:emoji-only={displayInfo.isEmoji} title={project}>{displayInfo.display}</span>
-              {/each}
-              {#each task.contexts as context}
-                {@const displayInfo = getDisplayText(context)}
-                <span class="emoji-tag context" class:emoji-only={displayInfo.isEmoji} title={context}>{displayInfo.display}</span>
-              {/each}
-              {#each task.customTags as tag}
-                {#if !['⚡高能量', '😴低能量', '☕中等'].includes(tag)}
-                  {@const displayInfo = getDisplayText(tag)}
-                  <span class="emoji-tag custom" class:emoji-only={displayInfo.isEmoji} title={tag}>{displayInfo.display}</span>
-                {/if}
-              {/each}
-              {#if dueLabel}
-                <span class="due-badge" class:overdue={taskOverdue}>
-                  {dueLabel}
-                </span>
-              {/if}
-              <!-- Edit button -->
-              <button
-                class="edit-btn"
-                onclick={(e) => { e.stopPropagation(); handleEdit(task); }}
-                title={t('task.edit')}
-                aria-label={t('task.edit')}
-              >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                </svg>
-              </button>
-            </div>
+            <TaskCard {task} compact kanbanMode={true} />
           </div>
         {/each}
       </div>
@@ -1210,44 +1155,14 @@
     min-height: 60px;
   }
 
-  /* Pool Task Row - Similar to main task rows */
-  .pool-task-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 8px 12px;
-    background: var(--bg-secondary);
-    border-radius: var(--radius-md);
-    transition: all var(--transition-fast);
-    cursor: pointer;
+  /* Pool Task Item - Matches KanbanView's idea pool */
+  .pool-task-item {
+    opacity: 0.85;
+    transition: opacity 0.15s;
   }
 
-  .pool-task-row:hover {
-    background: var(--hover-bg);
-  }
-
-  .pool-task-row:hover .edit-btn {
+  .pool-task-item:hover {
     opacity: 1;
-  }
-
-  .pool-task-row .task-checkbox {
-    width: 18px;
-    height: 18px;
-    margin-left: 0;
-  }
-
-  .pool-task-row .task-content {
-    font-size: 13px;
-  }
-
-  .pool-task-row .task-meta {
-    gap: 6px;
-  }
-
-  .pool-task-row .due-badge,
-  .pool-task-row .pomodoro-badge {
-    padding: 2px 6px;
-    font-size: 10px;
   }
 
   /* Responsive */
