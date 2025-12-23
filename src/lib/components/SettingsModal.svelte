@@ -20,6 +20,7 @@
   let pomodoroLongBreak = $state(settings.pomodoroLongBreak);
   let autoArchiveDays = $state(settings.autoArchiveDays);
   let eZoneAgingDays = $state(settings.eZoneAgingDays);
+  let unitBoundaryFlexHours = $state(settings.unitBoundaryFlexHours ?? 12);
   let showMethodology = $state(false);
 
   // Sync state with settings when modal opens
@@ -30,6 +31,7 @@
       pomodoroLongBreak = settings.pomodoroLongBreak;
       autoArchiveDays = settings.autoArchiveDays;
       eZoneAgingDays = settings.eZoneAgingDays;
+      unitBoundaryFlexHours = settings.unitBoundaryFlexHours ?? 12;
     }
   });
 
@@ -45,6 +47,7 @@
       pomodoroLongBreak,
       autoArchiveDays,
       eZoneAgingDays,
+      unitBoundaryFlexHours,
     });
     onClose();
   }
@@ -245,6 +248,23 @@
                 max="30"
               />
               <span class="input-suffix">{t('settings.days')}</span>
+            </div>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-info">
+              <span class="setting-label">{t('settings.unitBoundaryFlex')}</span>
+              <span class="setting-desc">{t('settings.unitBoundaryFlexDesc')}</span>
+            </div>
+            <div class="input-group">
+              <input
+                type="number"
+                class="setting-input"
+                bind:value={unitBoundaryFlexHours}
+                min="0"
+                max="24"
+              />
+              <span class="input-suffix">{t('settings.hours')}</span>
             </div>
           </div>
         </section>

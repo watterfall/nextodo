@@ -296,6 +296,9 @@ export default {
     autoArchiveDesc: '已完成任务在多少天后自动归档',
     eZoneAging: '待处理区老化提醒',
     eZoneAgingDesc: '待处理任务超过多少天提示处理',
+    unitBoundaryFlex: '周期边界弹性',
+    unitBoundaryFlexDesc: '任务可延迟或提前的小时数',
+    hours: '小时',
     minutes: '分钟',
     days: '天',
     methodology: {
@@ -396,6 +399,7 @@ export default {
     collapse: '收起',
     restore: '恢复',
     permanentDelete: '永久删除',
+    evolve: '演化',
   },
 
   // History modal
@@ -428,6 +432,9 @@ export default {
     taskMoved: '任务已移动到 {priority} 区',
     taskMovedToTrash: '任务已移至回收站',
     taskCancelled: '任务已取消',
+    taskEvolved: '任务已演化，新任务已创建',
+    evolveTaskTitle: '演化任务',
+    evolveTaskHint: '完成当前任务并创建演化版本',
     // Priority change confirmation
     priorityChangeTitle: '确认优先级变更',
     confirmPriorityChange: '确定要更改此任务的优先级吗？',

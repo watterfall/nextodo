@@ -257,6 +257,64 @@ export async function completeTask(taskId: string): Promise<void> {
   await persist();
 }
 
+// Evolve a task: complete the original and create a new evolved task
+// The new task inherits priority, projects, contexts, tags, and pomodoro estimates
+export async function evolveTask(taskId: string, newContent?: string): Promise<{ success: boolean; newTaskId?: string; error?: string }> {
+  const originalTask = appData.tasks.find(t => t.id === taskId && isActivePriority(t.priority));
+  if (!originalTask) {
+    return { success: false, error: 'Task not found or already completed' };
+  }
+
+  // Create the evolved task
+  const now = new Date().toISOString();
+  const evolvedTask: Task = {
+    id: crypto.randomUUID(),
+    content: newContent || originalTask.content,
+    priority: originalTask.priority,
+    completed: false,
+    completedAt: null,
+    createdAt: now,
+    unitStart: now.split('T')[0],
+    projects: [...originalTask.projects],
+    contexts: [...originalTask.contexts],
+    customTags: [...originalTask.customTags],
+    dueDate: originalTask.dueDate, // Keep the same due date
+    thresholdDate: null, // New evolved task is immediately visible
+    recurrence: null, // Don't inherit recurrence - it's a new task
+    pomodoros: {
+      estimated: originalTask.pomodoros.estimated,
+      completed: 0 // Reset completed pomodoros
+    },
+    notes: originalTask.notes,
+    evolvedFrom: taskId // Track lineage
+  };
+
+  // Record gamification for completing the original task
+  const gamification = getGamificationStore();
+  gamification.recordTaskCompletion(originalTask);
+
+  // Complete the original task
+  appData.tasks = appData.tasks.map(task => {
+    if (task.id === taskId) {
+      return {
+        ...task,
+        originalPriority: task.priority,
+        priority: 'G' as Priority,
+        completed: true,
+        completedAt: now
+      };
+    }
+    return task;
+  });
+
+  // Add the evolved task
+  appData.tasks = [...appData.tasks, evolvedTask];
+
+  await persist();
+
+  return { success: true, newTaskId: evolvedTask.id };
+}
+
 // Restore a task from G (completed) or H (cancelled) back to active state
 export async function uncompleteTask(taskId: string): Promise<void> {
   appData.tasks = appData.tasks.map(task => {

@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Task, Priority } from '$lib/types';
   import { PRIORITY_CONFIG, isThresholdPassed, isActivePriority } from '$lib/types';
-  import { completeTask, uncompleteTask, cancelTask, changePriority } from '$lib/stores/tasks.svelte';
+  import { completeTask, uncompleteTask, cancelTask, changePriority, evolveTask } from '$lib/stores/tasks.svelte';
   import { openEditModal, getUIStore, showToast } from '$lib/stores/ui.svelte';
   import { startPomodoro, getPomodoroStore } from '$lib/stores/pomodoro.svelte';
   import { formatRecurrence } from '$lib/utils/recurrence';
@@ -72,6 +72,15 @@
   function handleCancel() {
     cancelTask(task.id);
     showToast(i18n.t('message.taskCancelled') || '任务已取消', 'info');
+  }
+
+  async function handleEvolve() {
+    const result = await evolveTask(task.id);
+    if (result.success) {
+      showToast(i18n.t('message.taskEvolved') || '任务已演化，新任务已创建', 'success');
+    } else if (result.error) {
+      showToast(result.error, 'error');
+    }
   }
 
   function handlePriorityChange(newPriority: Priority) {
@@ -264,6 +273,13 @@
         </svg>
       </button>
       {#if isActivePriority(task.priority)}
+        <button class="action-btn evolve" onclick={handleEvolve} title={i18n.t('message.evolveTaskHint') || '完成并演化'}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 5v14"></path>
+            <path d="M5 12h14"></path>
+            <circle cx="12" cy="12" r="3"></circle>
+          </svg>
+        </button>
         <button class="action-btn cancel" onclick={handleCancel} title={i18n.t('action.cancel') || '取消任务'}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -809,6 +825,11 @@
   .action-btn.cancel:hover {
     color: var(--text-muted);
     background: var(--hover-bg);
+  }
+
+  .action-btn.evolve:hover {
+    color: var(--priority-a-color, #da77f2);
+    background: var(--priority-a-bg, rgba(218, 119, 242, 0.12));
   }
 
   .action-btn:disabled {

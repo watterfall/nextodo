@@ -136,6 +136,69 @@ export function isDateInUnit(date: Date, unit: UnitInfo): boolean {
 }
 
 /**
+ * Check if a date is within a unit with flexible boundaries
+ * @param date - The date to check
+ * @param unit - The unit to check against
+ * @param flexHours - Hours of flexibility (extends unit end, allows early start)
+ */
+export function isDateInUnitFlexible(date: Date, unit: UnitInfo, flexHours: number = 12): boolean {
+  const d = new Date(date);
+
+  if (unit.isReviewDay) {
+    // For review day, allow flex hours before and after
+    const flexMs = flexHours * 60 * 60 * 1000;
+    const flexStart = new Date(unit.startDate.getTime() - flexMs);
+    const flexEnd = new Date(unit.startDate.getTime() + 24 * 60 * 60 * 1000 + flexMs);
+    return d >= flexStart && d < flexEnd;
+  }
+
+  // Calculate flexible boundaries
+  const flexMs = flexHours * 60 * 60 * 1000;
+
+  // Extend end date by flex hours
+  const flexibleEnd = new Date(unit.endDate);
+  flexibleEnd.setHours(23, 59, 59, 999);
+  flexibleEnd.setTime(flexibleEnd.getTime() + flexMs);
+
+  // Allow start earlier by flex hours
+  const flexibleStart = new Date(unit.startDate);
+  flexibleStart.setTime(flexibleStart.getTime() - flexMs);
+
+  return d >= flexibleStart && d <= flexibleEnd;
+}
+
+/**
+ * Get a softened due date label with flexibility indicator
+ * When a task is near the boundary (within flex hours), show a softer message
+ */
+export function getFlexibleDueDateStatus(dueDate: string | null, flexHours: number = 12): {
+  status: 'ok' | 'approaching' | 'flexible' | 'overdue';
+  hoursRemaining: number;
+} {
+  if (!dueDate) return { status: 'ok', hoursRemaining: Infinity };
+
+  const due = parseISODate(dueDate);
+  due.setHours(23, 59, 59, 999); // End of due date
+
+  const now = new Date();
+  const diffMs = due.getTime() - now.getTime();
+  const hoursRemaining = diffMs / (60 * 60 * 1000);
+
+  if (hoursRemaining < -flexHours) {
+    // Truly overdue (past flexible boundary)
+    return { status: 'overdue', hoursRemaining };
+  } else if (hoursRemaining < 0) {
+    // Within flexible extension period
+    return { status: 'flexible', hoursRemaining };
+  } else if (hoursRemaining < flexHours) {
+    // Approaching deadline
+    return { status: 'approaching', hoursRemaining };
+  } else {
+    return { status: 'ok', hoursRemaining };
+  }
+}
+
+/**
  * Format date as MM/DD
  */
 export function formatDateShort(date: Date): string {
