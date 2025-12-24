@@ -42,7 +42,7 @@
     }
   });
 
-  function handleSubmit() {
+  async function handleSubmit() {
     if (!inputValue.trim()) return;
 
     // Add default priority if not specified
@@ -51,7 +51,7 @@
       finalInput = `${finalInput} !${defaultPriority}`;
     }
 
-    const result = addTask(finalInput);
+    const result = await addTask(finalInput);
 
     if (result.success) {
       inputValue = '';
