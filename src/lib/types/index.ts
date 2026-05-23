@@ -152,6 +152,8 @@ export interface Settings {
   // NEW: Flexible unit boundary hours (extend/shorten unit by this many hours)
   // Default: 12 hours - tasks can spill over half a day
   unitBoundaryFlexHours: number;
+  // NEW: UI density mode — 'comfortable' (default) | 'compact' (denser layout)
+  density: 'comfortable' | 'compact';
 }
 
 // Active data file structure (hot data)
@@ -307,7 +309,7 @@ export interface FilterState {
 }
 
 // View mode
-export type ViewMode = 'kanban' | 'list' | 'calendar';
+export type ViewMode = 'today' | 'kanban' | 'list' | 'calendar';
 
 // Pomodoro state
 export type PomodoroState = 'idle' | 'work' | 'shortBreak' | 'longBreak';
@@ -350,7 +352,8 @@ export function createDefaultSettings(): Settings {
     autoArchiveDays: 7,
     eZoneAgingDays: 3,
     showFutureTasks: false,
-    unitBoundaryFlexHours: 12 // Default: half day flexibility
+    unitBoundaryFlexHours: 12, // Default: half day flexibility
+    density: 'comfortable'
   };
 }
 

@@ -1,1243 +1,494 @@
 <script lang="ts">
-  import { getTasksStore, completeTask, uncompleteTask, reorderTask, needsPriorityChangeConfirmation, changePriority } from '$lib/stores/tasks.svelte';
+  import { getTasksStore } from '$lib/stores/tasks.svelte';
   import { getI18nStore } from '$lib/i18n';
   import { slide } from 'svelte/transition';
-  import { PRIORITY_CONFIG, type Priority, type Task, isThresholdPassed, getRetentionRemaining } from '$lib/types';
+  import { PRIORITY_CONFIG, type Priority, type Task, isActivePriority } from '$lib/types';
   import TaskCard from './TaskCard.svelte';
-  import { openEditModal, getUIStore, showToast } from '$lib/stores/ui.svelte';
-  import { startPomodoro, getPomodoroStore } from '$lib/stores/pomodoro.svelte';
-  import { isOverdue, getRelativeDayLabel, parseISODate } from '$lib/utils/unitCalc';
-  import { validatePomodoroEstimate } from '$lib/utils/quota';
-  import { dndzone } from 'svelte-dnd-action';
-  import { flip } from 'svelte/animate';
-  import { dndConfig } from '$lib/utils/motion';
+  import { isToday, isOverdue, parseISODate, getRelativeDayLabel } from '$lib/utils/unitCalc';
+
+  type GroupBy = 'priority' | 'project' | 'context' | 'due' | 'tag' | 'none';
+  type SortDir = 'asc' | 'desc';
 
   const tasks = getTasksStore();
-  const ui = getUIStore();
-  const pomodoro = getPomodoroStore();
   const i18n = getI18nStore();
   const t = i18n.t;
 
-  // Helper to extract emoji from string (for minimal display)
-  const emojiRegex = /[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu;
+  // ===== Local view state =====
+  let groupBy = $state<GroupBy>('priority');
+  let sortDir = $state<SortDir>('asc');
+  let collapsed = $state<Record<string, boolean>>({});
 
-  function extractEmoji(text: string): string | null {
-    const match = text.match(emojiRegex);
-    return match ? match.join('') : null;
+  // ===== Source list (active tasks only by default) =====
+  const sourceTasks = $derived(tasks.tasks);
+
+  // ===== Group key derivation =====
+  function getDueBucket(task: Task): string {
+    if (!task.dueDate) return '__no_due__';
+    if (isOverdue(task.dueDate)) return '__overdue__';
+    if (isToday(task.dueDate)) return '__today__';
+    const due = parseISODate(task.dueDate);
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    const diffDays = Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    if (diffDays <= 7) return '__week__';
+    return '__later__';
   }
 
-  function getDisplayText(text: string): { display: string; isEmoji: boolean } {
-    const emoji = extractEmoji(text);
-    if (emoji && emoji.length > 0) {
-      return { display: emoji, isEmoji: true };
+  function getDueBucketLabel(key: string): string {
+    const map: Record<string, string> = {
+      '__overdue__': t('list.due.overdue') || '逾期',
+      '__today__': t('list.due.today') || '今天',
+      '__week__': t('list.due.thisWeek') || '本周内',
+      '__later__': t('list.due.later') || '稍后',
+      '__no_due__': t('list.due.none') || '无截止日'
+    };
+    return map[key] || key;
+  }
+
+  function getStatusBucket(task: Task): string {
+    if (task.priority === 'G') return '__completed__';
+    if (task.priority === 'H') return '__cancelled__';
+    return '__active__';
+  }
+
+  /**
+   * Build groups based on current groupBy mode.
+   * Returns ordered array of { key, label, tasks } so iteration order is stable.
+   */
+  const groups = $derived.by(() => {
+    const result: Array<{ key: string; label: string; tasks: Task[]; meta?: string }> = [];
+    const buckets: Record<string, Task[]> = {};
+
+    // Active filter applied: hide completed unless status mode shows them
+    const visibleTasks = groupBy === 'priority'
+      ? sourceTasks.filter(t => isActivePriority(t.priority))
+      : sourceTasks.filter(t => isActivePriority(t.priority));
+
+    for (const task of visibleTasks) {
+      let keys: string[] = [];
+      switch (groupBy) {
+        case 'priority':
+          keys = [task.priority];
+          break;
+        case 'project':
+          keys = task.projects.length > 0 ? task.projects : ['__no_project__'];
+          break;
+        case 'context':
+          keys = task.contexts.length > 0 ? task.contexts : ['__no_context__'];
+          break;
+        case 'tag': {
+          const realTags = task.customTags.filter(
+            t => !['⚡高能量', '😴低能量', '☕中等'].includes(t)
+          );
+          keys = realTags.length > 0 ? realTags : ['__no_tag__'];
+          break;
+        }
+        case 'due':
+          keys = [getDueBucket(task)];
+          break;
+        case 'none':
+          keys = ['__all__'];
+          break;
+      }
+      for (const k of keys) {
+        if (!buckets[k]) buckets[k] = [];
+        buckets[k].push(task);
+      }
     }
-    return { display: text, isEmoji: false };
-  }
 
-  // Main priorities (A-E with quotas), F is handled separately as Idea Pool
-  const mainPriorities: Priority[] = ['A', 'B', 'C', 'D', 'E'];
-  const priorities: Priority[] = ['A', 'B', 'C', 'D', 'E', 'F'];
+    // Convert to ordered list with labels
+    if (groupBy === 'priority') {
+      const order: Priority[] = ['A', 'B', 'C', 'D', 'E', 'F'];
+      for (const p of order) {
+        const t = buckets[p] || [];
+        result.push({
+          key: p,
+          label: `${p} · ${i18n.t(`priority.${p}`)}`,
+          tasks: t,
+          meta: PRIORITY_CONFIG[p].color
+        });
+      }
+    } else if (groupBy === 'due') {
+      const order = ['__overdue__', '__today__', '__week__', '__later__', '__no_due__'];
+      for (const k of order) {
+        if (buckets[k]) result.push({ key: k, label: getDueBucketLabel(k), tasks: buckets[k] });
+      }
+    } else if (groupBy === 'none') {
+      if (buckets['__all__']) {
+        result.push({ key: '__all__', label: t('list.allTasks') || '全部任务', tasks: buckets['__all__'] });
+      }
+    } else {
+      // project / context / tag — alphabetical
+      const keys = Object.keys(buckets).sort((a, b) => {
+        // "no_*" buckets last
+        if (a.startsWith('__no_')) return 1;
+        if (b.startsWith('__no_')) return -1;
+        return a.localeCompare(b);
+      });
+      for (const k of keys) {
+        let label = k;
+        if (k === '__no_project__') label = t('list.noProject') || '无项目';
+        else if (k === '__no_context__') label = t('list.noContext') || '无情境';
+        else if (k === '__no_tag__') label = t('list.noTag') || '无标签';
+        else if (groupBy === 'project') label = `+${k}`;
+        else if (groupBy === 'context') label = `@${k}`;
+        else if (groupBy === 'tag') label = `#${k}`;
+        result.push({ key: k, label, tasks: buckets[k] });
+      }
+    }
 
-  // Local state for DnD items
-  let columnItems = $state<Record<Priority, Task[]>>({
-    A: [], B: [], C: [], D: [], E: [], F: []
-  });
-
-  let isDragging = $state(false);
-
-  // Sync from store when not dragging
-  $effect(() => {
-    if (!isDragging) {
-      priorities.forEach(p => {
-        columnItems[p] = tasks.tasksByPriority[p].filter(t => !t.completed);
+    // Sort tasks within each group
+    for (const g of result) {
+      g.tasks.sort((a, b) => {
+        // Always priority asc within a group (unless groupBy is priority, then by created date)
+        if (groupBy === 'priority') {
+          // already grouped by priority; sort by createdAt
+          const aT = new Date(a.createdAt || 0).getTime();
+          const bT = new Date(b.createdAt || 0).getTime();
+          return sortDir === 'asc' ? bT - aT : aT - bT; // asc = newest first by default
+        }
+        // For other groups, sort by priority first
+        const cmp = a.priority.localeCompare(b.priority);
+        return sortDir === 'asc' ? cmp : -cmp;
       });
     }
+
+    return result;
   });
 
-  function handleDndConsider(priority: Priority, e: CustomEvent<DndEvent<Task>>) {
-    isDragging = true;
-    columnItems[priority] = e.detail.items;
+  const totalTasks = $derived(groups.reduce((sum, g) => sum + g.tasks.length, 0));
+
+  function toggleCollapsed(key: string) {
+    collapsed[key] = !collapsed[key];
   }
 
-  // Priority change confirmation state
-  let pendingPriorityChange = $state<{ taskId: string; newPriority: Priority; reason: string } | null>(null);
-
-  async function handleDndFinalize(priority: Priority, e: CustomEvent<DndEvent<Task>>) {
-    isDragging = false;
-    columnItems[priority] = e.detail.items;
-
-    // Check for tasks that changed priority
-    const previousTasks = tasks.tasksByPriority[priority].filter(t => !t.completed);
-    const previousIds = new Set(previousTasks.map(t => t.id));
-    const newTasks = e.detail.items;
-
-    // Find tasks that were moved TO this priority
-    const movedTasks = newTasks.filter(t => !previousIds.has(t.id) && t.priority !== priority);
-
-    // Check for priority change confirmation for each moved task
-    for (const task of movedTasks) {
-      const confirmCheck = needsPriorityChangeConfirmation(task, priority);
-      if (confirmCheck.needsConfirmation && confirmCheck.message) {
-        // Show confirmation dialog
-        pendingPriorityChange = {
-          taskId: task.id,
-          newPriority: priority,
-          reason: confirmCheck.message
-        };
-        return; // Don't proceed until user confirms
-      }
-    }
-
-    // Check quota warning
-    if (priority !== 'F') {
-      const newCount = newTasks.length;
-      const quota = PRIORITY_CONFIG[priority].quota;
-      if (newCount > quota && quota !== Infinity) {
-        showToast(t('message.quotaExceeded', { priority }), 'warning');
-      }
-    }
-
-    reorderTask(priority, e.detail.items, movedTasks[0]?.id);
-  }
-
-  async function confirmPriorityChange() {
-    if (pendingPriorityChange) {
-      await changePriority(pendingPriorityChange.taskId, pendingPriorityChange.newPriority, true);
-      pendingPriorityChange = null;
-    }
-  }
-
-  function cancelPriorityChange() {
-    pendingPriorityChange = null;
-    // Refresh columnItems to revert the visual change
-    priorities.forEach(p => {
-      columnItems[p] = tasks.tasksByPriority[p].filter(t => !t.completed);
-    });
-  }
-
-  // Recently completed tasks display state (per priority)
-  let showRecentlyCompleted = $state<Record<Priority, boolean>>({
-    A: true, B: true, C: true, D: true, E: true, F: true, G: false, H: false
-  });
-
-  // Format retention time remaining
-  function formatRetention(task: Task): string {
-    const remaining = getRetentionRemaining(task);
-    if (!remaining) return '';
-    if (remaining.hours > 0) {
-      return t('task.retentionHours', { hours: remaining.hours }) || `${remaining.hours}h`;
-    }
-    return t('task.retentionMinutes', { minutes: remaining.minutes }) || `${remaining.minutes}m`;
-  }
-
-  // Get recently completed tasks for a priority
-  function getRecentlyCompletedForPriority(priority: Priority): Task[] {
-    return tasks.recentlyCompletedTasksByPriority[priority] || [];
-  }
-
-  function getTasksForPriority(priority: Priority) {
-    return columnItems[priority];
-  }
-
-  // Task actions
-  function handleCheck(task: Task) {
-    if (task.completed) {
-      uncompleteTask(task.id);
-    } else {
-      completeTask(task.id);
-    }
-  }
-
-  function handleStartPomodoro(task: Task) {
-    startPomodoro(task);
-  }
-
-  function handleEdit(task: Task) {
-    openEditModal(task);
-  }
-
-  // Helper functions for task display
-  function getTaskDueLabel(task: Task): string | null {
-    if (!task.dueDate) return null;
-    return getRelativeDayLabel(parseISODate(task.dueDate));
-  }
-
-  function isTaskOverdue(task: Task): boolean {
-    return isOverdue(task.dueDate);
-  }
-
-  function isDormant(task: Task): boolean {
-    return !isThresholdPassed(task);
-  }
-
-  function isPomodoroOutOfRange(task: Task): { outOfRange: boolean; warning: string | null } {
-    if (task.pomodoros.estimated === 0) {
-      return { outOfRange: false, warning: null };
-    }
-    const validation = validatePomodoroEstimate(task.priority, task.pomodoros.estimated);
-    return {
-      outOfRange: !validation.isValid,
-      warning: validation.warning
-    };
-  }
-
-  const completedTasks = $derived(tasks.tasks.filter(task => task.completed));
-  let showCompleted = $state(false);
-  let showIdeaPool = $state(true);
-
-  // Idea Pool (F zone) state
-  const ideaPoolTasks = $derived(columnItems['F']);
+  const groupByOptions: Array<{ value: GroupBy; label: string; icon: string }> = [
+    { value: 'priority', label: t('list.groupBy.priority') || '优先级', icon: '⚡' },
+    { value: 'project', label: t('list.groupBy.project') || '项目', icon: '+' },
+    { value: 'context', label: t('list.groupBy.context') || '情境', icon: '@' },
+    { value: 'tag', label: t('list.groupBy.tag') || '标签', icon: '#' },
+    { value: 'due', label: t('list.groupBy.due') || '截止日', icon: '📅' },
+    { value: 'none', label: t('list.groupBy.none') || '无分组', icon: '≡' }
+  ];
 </script>
 
-<div class="list-view-container">
-  <!-- Main tasks area - clean list style grouped by priority -->
-  <div class="list-main" class:expanded={!showIdeaPool}>
-    {#each mainPriorities as priority}
-      {@const priorityTasks = columnItems[priority]}
-      {@const config = PRIORITY_CONFIG[priority]}
-      {@const recentlyCompletedTasks = getRecentlyCompletedForPriority(priority)}
-      {@const recentCount = recentlyCompletedTasks.length}
-      <section
-        class="priority-section"
-        class:has-tasks={priorityTasks.length > 0}
-        style:--section-color={config.color}
-      >
-        <!-- Priority Header - Sleek badge style with full name and tooltip -->
-        <div class="section-header">
-          <span class="priority-badge" style:background={config.color}>{priority}</span>
-          <span class="priority-name">{t(`priority.${priority}`)}</span>
-          <div class="priority-info-wrapper">
-            <button class="priority-info-btn" aria-label={t('priorityTooltip.viewDescription')}>?</button>
-            <div class="priority-tooltip">
-              <div class="tooltip-title">{priority} · {t(`priority.${priority}`)}</div>
-              <div class="tooltip-row">
-                <span class="tooltip-label">{t('priorityTooltip.quota')}</span>
-                <span class="tooltip-value">{t(`priority.quota.${priority}`)}</span>
-              </div>
-              <div class="tooltip-row">
-                <span class="tooltip-label">{t('priorityTooltip.difficulty')}</span>
-                <span class="tooltip-value">{t(`priority.difficulty.${priority}`)}</span>
-              </div>
-              <div class="tooltip-row">
-                <span class="tooltip-label">{t('priorityTooltip.time')}</span>
-                <span class="tooltip-value">{t(`priority.time.${priority}`)}</span>
-              </div>
-              <div class="tooltip-desc">{t(`priority.description.${priority}`)}</div>
-            </div>
-          </div>
-          <span class="priority-count">{priorityTasks.length}</span>
-          <!-- Recently completed toggle -->
-          {#if recentCount > 0}
-            <button
-              class="recently-completed-toggle-btn"
-              onclick={() => showRecentlyCompleted[priority] = !showRecentlyCompleted[priority]}
-              title={t('task.recentlyCompletedHint') || 'Toggle recently completed tasks'}
-            >
-              <span class="checkmark">✓</span>
-              <span class="recent-count">{recentCount}</span>
-            </button>
-          {/if}
-        </div>
-
-        <!-- Task List - Clean horizontal list items -->
-        <div 
-          class="task-list"
-          use:dndzone={{ items: priorityTasks, flipDurationMs: dndConfig.flipDurationMs, dropTargetStyle: { outline: `2px solid ${config.color}`, outlineOffset: '-2px', borderRadius: '8px' } }}
-          onconsider={(e) => handleDndConsider(priority, e)}
-          onfinalize={(e) => handleDndFinalize(priority, e)}
-        >
-          <!-- Recently completed tasks within retention period -->
-          {#if recentlyCompletedTasks.length > 0 && showRecentlyCompleted[priority]}
-            {#each recentlyCompletedTasks as task (task.id)}
-              {@const config2 = PRIORITY_CONFIG[task.originalPriority || priority]}
-              <div
-                class="task-row-item completed recently-completed"
-                style:--priority-color={config2.color}
-              >
-                <div class="priority-indicator"></div>
-                <button
-                  class="task-checkbox checked"
-                  onclick={() => handleCheck(task)}
-                  aria-label={t('task.markIncomplete')}
-                >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
-                    <polyline points="20 6 9 17 4 12"></polyline>
-                  </svg>
-                </button>
-                <span class="task-content completed">{task.content}</span>
-                <span class="retention-badge" title={t('task.retentionHint') || 'Will disappear after retention period'}>
-                  {formatRetention(task)}
-                </span>
-              </div>
-            {/each}
-          {/if}
-          {#each priorityTasks as task (task.id)}
-            {@const dueLabel = getTaskDueLabel(task)}
-            {@const taskOverdue = isTaskOverdue(task)}
-            {@const taskDormant = isDormant(task)}
-            {@const isActive = pomodoro.activeTaskId === task.id}
-            {@const pomodoroCheck = isPomodoroOutOfRange(task)}
-            <!-- svelte-ignore a11y_click_events_have_key_events -->
-            <!-- svelte-ignore a11y_no_static_element_interactions -->
-            <div
-              class="task-row-item"
-              class:completed={task.completed}
-              class:overdue={taskOverdue && !task.completed}
-              class:dormant={taskDormant}
-              class:active={isActive}
-              class:pomodoro-warning={pomodoroCheck.outOfRange}
-              style:--priority-color={config.color}
-              ondblclick={() => handleEdit(task)}
-              animate:flip={{ duration: dndConfig.flipDurationMs }}
-            >
-              <!-- Left priority border indicator -->
-              <div class="priority-indicator"></div>
-
-              <!-- Checkbox -->
-              <button
-                class="task-checkbox"
-                class:checked={task.completed}
-                onclick={(e) => { e.stopPropagation(); handleCheck(task); }}
-                aria-label={task.completed ? t('task.markIncomplete') : t('task.markComplete')}
-              >
-                {#if task.completed}
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
-                    <polyline points="20 6 9 17 4 12"></polyline>
-                  </svg>
-                {/if}
-              </button>
-
-              <!-- Task content -->
-              <span class="task-content" class:completed={task.completed}>
-                {task.content}
-              </span>
-
-              <!-- Task metadata -->
-              <div class="task-meta">
-                {#if task.pomodoros.estimated > 0}
-                  {@const remaining = Math.max(0, task.pomodoros.estimated - task.pomodoros.completed)}
-                  {#if remaining > 0}
-                    <button
-                      class="pomodoro-badge"
-                      class:active={isActive}
-                      class:warning={pomodoroCheck.outOfRange}
-                      onclick={(e) => { e.stopPropagation(); handleStartPomodoro(task); }}
-                      title={pomodoroCheck.warning || t('task.pomodoroRemaining', { remaining })}
-                      aria-label={`${t('task.pomodoroRemaining', { remaining })}${pomodoroCheck.outOfRange ? '，' + pomodoroCheck.warning : ''}`}
-                    >
-                      🍅 {remaining}
-                      {#if pomodoroCheck.outOfRange}
-                        <span class="warning-icon">⚠</span>
-                      {/if}
-                    </button>
-                  {/if}
-                {/if}
-
-                {#each task.projects as project}
-                  {@const displayInfo = getDisplayText(project)}
-                  <span class="emoji-tag project" class:emoji-only={displayInfo.isEmoji} title={project}>{displayInfo.display}</span>
-                {/each}
-                {#each task.contexts as context}
-                  {@const displayInfo = getDisplayText(context)}
-                  <span class="emoji-tag context" class:emoji-only={displayInfo.isEmoji} title={context}>{displayInfo.display}</span>
-                {/each}
-                {#each task.customTags as tag}
-                  {#if !['⚡高能量', '😴低能量', '☕中等'].includes(tag)}
-                    {@const displayInfo = getDisplayText(tag)}
-                    <span class="emoji-tag custom" class:emoji-only={displayInfo.isEmoji} title={tag}>{displayInfo.display}</span>
-                  {/if}
-                {/each}
-
-                {#if dueLabel}
-                  <span class="due-badge" class:overdue={taskOverdue}>
-                    <span class="due-date">{dueLabel}</span>
-                  </span>
-                {/if}
-
-                <!-- Edit button -->
-                <button
-                  class="edit-btn"
-                  onclick={(e) => { e.stopPropagation(); handleEdit(task); }}
-                  title={t('task.edit')}
-                  aria-label={t('task.edit')}
-                >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                  </svg>
-                </button>
-              </div>
-            </div>
-          {/each}
-        </div>
-      </section>
-    {/each}
-
-    <!-- Completed Section -->
-    {#if completedTasks.length > 0}
-      <section class="priority-section completed-section">
-        <button class="section-header clickable" onclick={() => showCompleted = !showCompleted}>
-          <span class="toggle-arrow" class:rotated={showCompleted}>▶</span>
-          <span class="section-label">{t('filter.completed')}</span>
-          <span class="section-count">{completedTasks.length}</span>
-        </button>
-
-        {#if showCompleted}
-          <div class="task-list" transition:slide>
-            {#each completedTasks as task (task.id)}
-              {@const config = PRIORITY_CONFIG[task.priority]}
-              <div
-                class="task-row-item completed"
-                style:--priority-color={config.color}
-              >
-                <div class="priority-indicator"></div>
-                <button
-                  class="task-checkbox checked"
-                  onclick={() => handleCheck(task)}
-                  aria-label={t('task.markIncomplete')}
-                >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
-                    <polyline points="20 6 9 17 4 12"></polyline>
-                  </svg>
-                </button>
-                <span class="task-content completed">{task.content}</span>
-                <span class="priority-tag" style:background={config.color}>{task.priority}</span>
-              </div>
-            {/each}
-          </div>
-        {/if}
-      </section>
-    {/if}
-  </div>
-
-  <!-- Idea Pool (F-zone) - fixed on right side, toggleable -->
-  <aside class="idea-pool-panel" class:collapsed={!showIdeaPool}>
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <div class="pool-header" onclick={() => showIdeaPool = !showIdeaPool}>
-      <span class="pool-badge" style:background={PRIORITY_CONFIG.F.color}>💡</span>
-      {#if showIdeaPool}
-        <h3 class="pool-title">{t('inbox.title')}</h3>
-        <span class="pool-count">{ideaPoolTasks.length}</span>
-      {/if}
-      <svg class="toggle-chevron" class:rotated={!showIdeaPool} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <polyline points="9 18 15 12 9 6"></polyline>
-      </svg>
-    </div>
-
-    {#if showIdeaPool}
-      <div 
-        class="pool-tasks" 
-        transition:slide
-        use:dndzone={{ items: ideaPoolTasks, flipDurationMs: dndConfig.flipDurationMs, dropTargetStyle: { outline: `2px solid ${PRIORITY_CONFIG.F.color}`, outlineOffset: '-2px', borderRadius: '8px' } }}
-        onconsider={(e) => handleDndConsider('F', e)}
-        onfinalize={(e) => handleDndFinalize('F', e)}
-      >
-        {#each ideaPoolTasks as task (task.id)}
-          <div
-            class="pool-task-item"
-            animate:flip={{ duration: dndConfig.flipDurationMs }}
+<div class="list-view">
+  <!-- Toolbar: Group-by selector + sort direction -->
+  <div class="list-toolbar">
+    <div class="toolbar-left">
+      <span class="toolbar-label">{t('list.groupByLabel') || '分组方式'}</span>
+      <div class="group-by-pills">
+        {#each groupByOptions as opt}
+          <button
+            class="group-by-pill"
+            class:active={groupBy === opt.value}
+            onclick={() => (groupBy = opt.value)}
+            title={opt.label}
           >
-            <TaskCard {task} compact kanbanMode={true} />
-          </div>
+            <span class="pill-icon">{opt.icon}</span>
+            <span class="pill-label">{opt.label}</span>
+          </button>
         {/each}
       </div>
-    {/if}
-  </aside>
-
-  <!-- Priority change confirmation dialog -->
-  {#if pendingPriorityChange}
-    <div
-      class="modal-overlay"
-      onclick={cancelPriorityChange}
-      onkeydown={(e) => e.key === 'Escape' && cancelPriorityChange()}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="priority-change-title"
-      tabindex="-1"
-    >
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <!-- svelte-ignore a11y_click_events_have_key_events -->
-      <div class="confirmation-modal" onclick={(e) => e.stopPropagation()}>
-        <div class="modal-icon" id="priority-change-title">⚠️</div>
-        <p class="modal-message">{pendingPriorityChange.reason}</p>
-        <div class="modal-actions">
-          <button class="btn-cancel" onclick={cancelPriorityChange}>
-            {t('action.cancel') || 'Cancel'}
-          </button>
-          <button class="btn-confirm" onclick={confirmPriorityChange}>
-            {t('action.continueAnyway') || 'Continue Anyway'}
-          </button>
-        </div>
-      </div>
     </div>
-  {/if}
+
+    <div class="toolbar-right">
+      <button
+        class="sort-toggle"
+        onclick={() => (sortDir = sortDir === 'asc' ? 'desc' : 'asc')}
+        title={sortDir === 'asc' ? t('list.sortAsc') || '正序' : t('list.sortDesc') || '倒序'}
+      >
+        {#if sortDir === 'asc'}
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M3 6h13M3 12h9M3 18h5M17 4v16M14 17l3 3 3-3" />
+          </svg>
+        {:else}
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M3 6h5M3 12h9M3 18h13M17 4v16M14 7l3-3 3 3" />
+          </svg>
+        {/if}
+      </button>
+      <span class="total-count font-num">{totalTasks}</span>
+    </div>
+  </div>
+
+  <!-- Groups -->
+  <div class="groups-scroll">
+    {#if groups.length === 0 || totalTasks === 0}
+      <div class="empty">
+        <div class="empty-icon">🍃</div>
+        <p>{t('list.empty') || '当前分组下没有任务'}</p>
+      </div>
+    {:else}
+      {#each groups as group (group.key)}
+        {#if group.tasks.length > 0}
+          <section class="group">
+            <header
+              class="group-header"
+              role="button"
+              tabindex="0"
+              onclick={() => toggleCollapsed(group.key)}
+              onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && toggleCollapsed(group.key)}
+            >
+              <svg
+                class="chevron"
+                class:collapsed={collapsed[group.key]}
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.5"
+                stroke-linecap="round"
+              >
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+              {#if group.meta}
+                <span class="group-color-dot" style:background={group.meta}></span>
+              {/if}
+              <span class="group-label">{group.label}</span>
+              <span class="group-count font-num">{group.tasks.length}</span>
+            </header>
+
+            {#if !collapsed[group.key]}
+              <div class="group-body" transition:slide={{ duration: 180 }}>
+                {#each group.tasks as task (task.id)}
+                  <TaskCard {task} showPriority={groupBy !== 'priority'} />
+                {/each}
+              </div>
+            {/if}
+          </section>
+        {/if}
+      {/each}
+    {/if}
+  </div>
 </div>
 
 <style>
-  .list-view-container {
+  .list-view {
     display: flex;
-    width: 100%;
+    flex-direction: column;
     height: 100%;
-    overflow: hidden;
-    gap: 16px;
-  }
-
-  /* Main area - fills remaining space, sections stack vertically */
-  .list-main {
-    flex: 1;
+    width: 100%;
     min-width: 0;
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-    gap: 24px;
-    padding: 4px;
-    transition: all 0.3s ease;
   }
 
-  /* Priority Section - Clean grouped list style like sleek */
-  .priority-section {
-    display: flex;
-    flex-direction: column;
-    transition: all var(--transition-normal);
-  }
-
-  /* Section Header - Just the priority badge */
-  .section-header {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 4px 0;
-    margin-bottom: 8px;
-  }
-
-  .section-header.clickable {
-    cursor: pointer;
-    padding: 8px 12px;
-    margin: 0 -12px;
-    border-radius: var(--radius-md);
-    border: none;
-    background: transparent;
-    width: calc(100% + 24px);
-  }
-
-  .section-header.clickable:hover {
-    background: var(--hover-bg);
-  }
-
-  .priority-badge {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 28px;
-    height: 28px;
-    border-radius: 8px;
-    color: white;
-    font-size: 14px;
-    font-weight: 700;
-    flex-shrink: 0;
-  }
-
-  .priority-name {
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--text-primary);
-  }
-
-  .priority-count {
-    margin-left: auto;
-    padding: 2px 8px;
-    font-size: 12px;
-    font-weight: 500;
-    background: var(--bg-secondary);
-    color: var(--text-muted);
-    border-radius: var(--radius-full);
-  }
-
-  /* Recently completed toggle button */
-  .recently-completed-toggle-btn {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    padding: 2px 8px;
-    margin-left: 8px;
-    border: none;
-    background: rgba(81, 207, 102, 0.15);
-    color: var(--success, #51cf66);
-    font-size: 11px;
-    font-weight: 500;
-    border-radius: var(--radius-full);
-    cursor: pointer;
-    transition: all var(--transition-fast);
-  }
-
-  .recently-completed-toggle-btn:hover {
-    background: rgba(81, 207, 102, 0.25);
-  }
-
-  .recently-completed-toggle-btn .checkmark {
-    font-size: 10px;
-  }
-
-  .recently-completed-toggle-btn .recent-count {
-    font-weight: 600;
-  }
-
-  /* Recently completed task styling */
-  .task-row-item.recently-completed {
-    opacity: 0.55;
-    position: relative;
-  }
-
-  .task-row-item.recently-completed:hover {
-    opacity: 0.75;
-  }
-
-  .retention-badge {
-    font-size: 10px;
-    font-weight: 500;
-    color: var(--text-muted);
-    background: var(--bg-secondary);
-    padding: 2px 6px;
-    border-radius: var(--radius-sm);
-    margin-left: auto;
-  }
-
-  /* Confirmation Modal */
-  .modal-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.5);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-    backdrop-filter: blur(2px);
-  }
-
-  .confirmation-modal {
-    background: var(--card-bg);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-lg);
-    padding: 24px;
-    max-width: 360px;
-    text-align: center;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-  }
-
-  .modal-icon {
-    font-size: 32px;
-    margin-bottom: 12px;
-  }
-
-  .modal-message {
-    font-size: 14px;
-    color: var(--text-secondary);
-    margin: 0 0 20px;
-    line-height: 1.5;
-  }
-
-  .modal-actions {
-    display: flex;
-    gap: 12px;
-    justify-content: center;
-  }
-
-  .btn-cancel,
-  .btn-confirm {
-    padding: 8px 16px;
-    border-radius: var(--radius-md);
-    font-size: 13px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all var(--transition-fast);
-  }
-
-  .btn-cancel {
-    background: var(--bg-secondary);
-    border: 1px solid var(--border-color);
-    color: var(--text-secondary);
-  }
-
-  .btn-cancel:hover {
-    background: var(--hover-bg);
-  }
-
-  .btn-confirm {
-    background: var(--primary);
-    border: 1px solid var(--primary);
-    color: white;
-  }
-
-  .btn-confirm:hover {
-    opacity: 0.9;
-  }
-
-  /* Priority Info Tooltip */
-  .priority-info-wrapper {
-    position: relative;
-    display: flex;
-    align-items: center;
-  }
-
-  .priority-info-btn {
-    width: 18px;
-    height: 18px;
-    border: 1px solid var(--border-color);
-    border-radius: 50%;
-    background: transparent;
-    color: var(--text-muted);
-    font-size: 11px;
-    font-weight: 600;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.15s ease;
-  }
-
-  .priority-info-btn:hover {
-    background: var(--hover-bg);
-    color: var(--text-primary);
-    border-color: var(--text-muted);
-  }
-
-  .priority-tooltip {
-    position: absolute;
-    top: calc(100% + 8px);
-    left: 50%;
-    transform: translateX(-50%);
-    width: 200px;
-    padding: 12px;
-    background: var(--card-bg);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-md);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
-    z-index: 1000;
-    opacity: 0;
-    visibility: hidden;
-    transition: opacity 0.15s ease, visibility 0.15s ease;
-    pointer-events: none;
-  }
-
-  .priority-info-wrapper:hover .priority-tooltip,
-  .priority-info-btn:focus + .priority-tooltip {
-    opacity: 1;
-    visibility: visible;
-    pointer-events: auto;
-  }
-
-  .priority-tooltip::before {
-    content: '';
-    position: absolute;
-    top: -6px;
-    left: 50%;
-    transform: translateX(-50%);
-    border: 6px solid transparent;
-    border-bottom-color: var(--border-color);
-  }
-
-  .priority-tooltip::after {
-    content: '';
-    position: absolute;
-    top: -5px;
-    left: 50%;
-    transform: translateX(-50%);
-    border: 5px solid transparent;
-    border-bottom-color: var(--card-bg);
-  }
-
-  .tooltip-title {
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--text-primary);
-    margin-bottom: 8px;
-    padding-bottom: 6px;
-    border-bottom: 1px solid var(--border-subtle);
-  }
-
-  .tooltip-row {
+  /* ===== Toolbar ===== */
+  .list-toolbar {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 4px;
-  }
-
-  .tooltip-label {
-    font-size: 11px;
-    color: var(--text-muted);
-  }
-
-  .tooltip-value {
-    font-size: 11px;
-    font-weight: 500;
-    color: var(--text-secondary);
-  }
-
-  .tooltip-desc {
-    font-size: 11px;
-    color: var(--text-muted);
-    margin-top: 8px;
-    padding-top: 6px;
-    border-top: 1px solid var(--border-subtle);
-    line-height: 1.4;
-  }
-
-  .toggle-arrow {
-    font-size: 10px;
-    color: var(--text-muted);
-    transition: transform 0.2s;
-  }
-
-  .toggle-arrow.rotated {
-    transform: rotate(90deg);
-  }
-
-  .section-label {
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--text-secondary);
-  }
-
-  .section-count {
-    font-size: 12px;
-    color: var(--text-muted);
-    margin-left: auto;
-  }
-
-  /* Task List - Clean vertical list */
-  .task-list {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    min-height: 50px;
-    padding: 4px;
-    border-radius: var(--radius-md);
-    transition: background 0.15s ease;
-  }
-
-  .task-list:empty::before {
-    content: '';
-    min-height: 20px;
-  }
-
-  /* Task Row Item - Sleek horizontal row style */
-  .task-row-item {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 10px 14px;
+    padding: var(--space-md) var(--space-lg);
     background: var(--card-bg);
-    border-radius: var(--radius-md);
-    transition: all var(--transition-fast);
-    cursor: pointer;
-    position: relative;
+    border: 1px solid var(--border-hairline);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--elevation-1);
+    margin-bottom: var(--space-md);
+    gap: var(--space-md);
+    flex-wrap: wrap;
   }
 
-  .task-row-item:hover {
-    background: var(--card-hover-bg);
-  }
-
-  .task-row-item:hover .edit-btn {
-    opacity: 1;
-  }
-
-  .task-row-item.active {
-    background: var(--primary-bg);
-    box-shadow: 0 0 0 1px var(--primary);
-  }
-
-  .task-row-item.overdue {
-    background: var(--error-bg, rgba(239, 68, 68, 0.08));
-  }
-
-  .task-row-item.dormant {
-    opacity: 0.5;
-  }
-
-  .task-row-item.completed {
-    opacity: 0.6;
-  }
-
-  .task-row-item.pomodoro-warning {
-    border-left: 3px solid var(--warning, #ffc107);
-  }
-
-  .task-row-item.pomodoro-warning .priority-indicator {
-    background: var(--warning, #ffc107);
-  }
-
-  /* Priority Indicator - Left colored border */
-  .priority-indicator {
-    position: absolute;
-    left: 0;
-    top: 4px;
-    bottom: 4px;
-    width: 3px;
-    background: var(--priority-color);
-    border-radius: 2px;
-  }
-
-  /* Checkbox - Circular style like sleek */
-  .task-checkbox {
-    flex-shrink: 0;
-    width: 20px;
-    height: 20px;
-    border: 2px solid var(--priority-color, var(--border-color));
-    border-radius: 50%;
-    background: transparent;
-    cursor: pointer;
+  .toolbar-left {
     display: flex;
     align-items: center;
-    justify-content: center;
-    transition: all var(--transition-fast);
-    padding: 0;
-    margin-left: 8px;
+    gap: var(--space-md);
+    flex-wrap: wrap;
   }
 
-  .task-checkbox:hover {
-    background: var(--priority-color);
-    opacity: 0.3;
-  }
-
-  .task-checkbox.checked {
-    background: var(--priority-color, var(--success));
-    border-color: var(--priority-color, var(--success));
-  }
-
-  .task-checkbox svg {
-    width: 12px;
-    height: 12px;
-    color: white;
-    stroke-width: 3;
-  }
-
-  /* Task Content */
-  .task-content {
-    flex: 1;
-    font-size: 14px;
-    font-weight: 450;
-    color: var(--text-primary);
-    line-height: 1.4;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .task-content.completed {
-    text-decoration: line-through;
+  .toolbar-label {
+    font-size: var(--text-xs);
     color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 600;
   }
 
-  /* Task Metadata */
-  .task-meta {
+  .group-by-pills {
     display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-shrink: 0;
+    gap: 4px;
+    background: var(--bg-secondary);
+    padding: 3px;
+    border-radius: var(--radius-md);
   }
 
-  /* Due Date Badge - Like sleek's yellow/red badges */
-  .due-badge {
+  .group-by-pill {
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    padding: 3px 8px;
-    font-size: 11px;
-    font-weight: 500;
-    background: var(--bg-tertiary, rgba(255, 193, 7, 0.15));
-    color: var(--warning, #ffc107);
+    padding: 5px 10px;
     border-radius: var(--radius-sm);
-  }
-
-  .due-badge.overdue {
-    background: var(--error-bg, rgba(239, 68, 68, 0.15));
-    color: var(--error, #ef4444);
-  }
-
-  .due-date {
-    font-weight: 600;
-  }
-
-  /* Emoji tag styles */
-  .emoji-tag {
-    display: inline-flex;
-    align-items: center;
-    padding: 2px 6px;
-    font-size: 11px;
-    font-weight: 500;
-    border-radius: var(--radius-sm);
-    cursor: default;
-  }
-
-  .emoji-tag.project {
-    background: rgba(177, 151, 252, 0.12);
-    color: #b197fc;
-  }
-
-  .emoji-tag.context {
-    background: rgba(116, 192, 252, 0.12);
-    color: #74c0fc;
-  }
-
-  .emoji-tag.custom {
-    background: rgba(99, 230, 190, 0.12);
-    color: #63e6be;
-  }
-
-  .emoji-tag.emoji-only {
-    padding: 2px 3px;
-    font-size: 13px;
     background: transparent;
-  }
-
-  /* Pomodoro Badge */
-  .pomodoro-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 3px;
-    padding: 3px 8px;
-    font-size: 11px;
-    font-weight: 600;
-    background: var(--error-bg, rgba(239, 68, 68, 0.12));
-    color: var(--error, #ef4444);
-    border: none;
-    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    font-size: var(--text-sm);
+    font-weight: 500;
     cursor: pointer;
+    border: none;
     transition: all var(--transition-fast);
   }
 
-  .pomodoro-badge:hover {
-    background: var(--error, #ef4444);
-    color: white;
+  .group-by-pill:hover {
+    color: var(--text-primary);
+    background: var(--hover-bg);
   }
 
-  .pomodoro-badge.active {
-    background: var(--error, #ef4444);
-    color: white;
-    animation: pulse 2s infinite;
+  .group-by-pill.active {
+    background: var(--card-bg);
+    color: var(--text-primary);
+    box-shadow: var(--elevation-1);
   }
 
-  .pomodoro-badge.warning {
-    background: var(--warning, #ffc107);
-    color: #1a1a1a;
-  }
-
-  .pomodoro-badge.warning:hover {
-    background: #e6ae00;
-    color: #1a1a1a;
-  }
-
-  .warning-icon {
-    font-size: 10px;
-    margin-left: 2px;
-  }
-
-  /* Edit button */
-  .edit-btn {
-    width: 24px;
-    height: 24px;
-    border: none;
-    border-radius: var(--radius-sm);
-    background: transparent;
+  .pill-icon {
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    width: 14px;
+    text-align: center;
     color: var(--text-muted);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all var(--transition-fast);
-    padding: 0;
-    opacity: 0;
   }
 
-  .edit-btn:hover {
-    background: var(--primary-bg);
+  .group-by-pill.active .pill-icon {
     color: var(--primary);
   }
 
-  .edit-btn svg {
+  .toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+  }
+
+  .sort-toggle {
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    color: var(--text-muted);
+    border: 1px solid var(--border-hairline);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+  }
+
+  .sort-toggle:hover {
+    color: var(--text-primary);
+    background: var(--hover-bg);
+  }
+
+  .sort-toggle svg {
     width: 14px;
     height: 14px;
   }
 
-  @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.7; }
-  }
-
-  /* Priority Tag for completed tasks */
-  .priority-tag {
-    padding: 2px 6px;
-    font-size: 10px;
+  .total-count {
+    font-size: var(--text-sm);
+    color: var(--text-muted);
     font-weight: 600;
-    color: white;
-    border-radius: var(--radius-sm);
+    min-width: 28px;
+    text-align: right;
   }
 
-  /* Completed Section */
-  .completed-section {
-    opacity: 0.8;
+  /* ===== Groups ===== */
+  .groups-scroll {
+    flex: 1;
+    overflow-y: auto;
+    padding-bottom: var(--space-2xl);
+    padding-right: 2px;
   }
 
-  /* Idea Pool Panel - Right sidebar */
-  .idea-pool-panel {
-    width: 280px;
-    flex-shrink: 0;
-    background: var(--card-bg);
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-lg);
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-    transition: all 0.3s ease;
-    height: 100%;
+  .group {
+    margin-bottom: var(--space-lg);
   }
 
-  .idea-pool-panel.collapsed {
-    width: 52px;
-  }
-
-  .pool-header {
+  .group-header {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 14px 16px;
-    border-bottom: 1px solid var(--border-subtle);
+    gap: var(--space-sm);
+    padding: 6px 10px;
     cursor: pointer;
-    transition: background 0.15s;
-    flex-shrink: 0;
+    border-radius: var(--radius-md);
+    user-select: none;
+    transition: background var(--transition-fast);
   }
 
-  .pool-header:hover {
+  .group-header:hover {
     background: var(--hover-bg);
   }
 
-  .pool-badge {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 28px;
-    height: 28px;
-    border-radius: 8px;
-    font-size: 14px;
+  .chevron {
+    width: 12px;
+    height: 12px;
+    color: var(--text-muted);
+    flex-shrink: 0;
+    transition: transform 0.15s var(--ease-out-expo);
+  }
+
+  .chevron.collapsed {
+    transform: rotate(-90deg);
+  }
+
+  .group-color-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
     flex-shrink: 0;
   }
 
-  .pool-title {
-    margin: 0;
-    font-size: 14px;
+  .group-label {
+    font-size: var(--text-base);
     font-weight: 600;
     color: var(--text-primary);
-    flex: 1;
+    letter-spacing: -0.01em;
   }
 
-  .pool-count {
-    padding: 3px 10px;
-    font-size: 12px;
-    font-weight: 600;
-    background: var(--primary-bg);
-    color: var(--primary);
+  .group-count {
+    margin-left: 4px;
+    padding: 1px 7px;
+    background: var(--tag-bg);
     border-radius: var(--radius-full);
-  }
-
-  .toggle-chevron {
-    width: 16px;
-    height: 16px;
+    font-size: var(--text-xs);
     color: var(--text-muted);
-    transition: transform 0.2s;
-    flex-shrink: 0;
+    font-weight: 600;
   }
 
-  .toggle-chevron.rotated {
-    transform: rotate(180deg);
-  }
-
-  .pool-tasks {
-    flex: 1;
-    overflow-y: auto;
-    padding: 12px;
+  .group-body {
     display: flex;
     flex-direction: column;
-    gap: 4px;
-    min-height: 60px;
+    gap: 6px;
+    padding: 6px 0 0 18px;
   }
 
-  /* Pool Task Item - Matches KanbanView's idea pool */
-  .pool-task-item {
-    opacity: 0.85;
-    transition: opacity 0.15s;
+  /* ===== Empty ===== */
+  .empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-3xl) var(--space-xl);
+    color: var(--text-muted);
+    text-align: center;
   }
 
-  .pool-task-item:hover {
-    opacity: 1;
+  .empty-icon {
+    font-size: 40px;
+    margin-bottom: var(--space-md);
+    opacity: 0.6;
   }
 
-  /* Responsive */
-  @media (max-width: 1200px) {
-    .idea-pool-panel {
-      width: 240px;
-    }
+  .empty p {
+    font-size: var(--text-md);
   }
 
-  @media (max-width: 900px) {
-    .list-view-container {
-      flex-direction: column;
-    }
-
-    .list-main {
-      flex: 1;
-      min-height: 0;
-      gap: 16px;
-      overflow-y: auto;
-    }
-
-    .idea-pool-panel {
-      width: 100%;
-      flex-shrink: 0;
-      max-height: 180px;
-      position: relative;
-      order: 1; /* Put at the end on mobile */
-    }
-
-    .idea-pool-panel.collapsed {
-      width: 100%;
-      max-height: 44px;
-    }
-
-    .list-main {
-      order: 0; /* Main content first */
-    }
-
-    .pool-tasks {
-      max-height: 120px;
-    }
-
-    .priority-tooltip {
-      left: 0;
-      transform: translateX(0);
-    }
-
-    .priority-tooltip::before,
-    .priority-tooltip::after {
-      left: 20px;
-      transform: none;
-    }
+  /* Compact mode tweaks */
+  :global(.density-compact) .list-toolbar {
+    padding: 6px 10px;
+    margin-bottom: 6px;
   }
 
-  @media (max-width: 600px) {
-    .section-header {
-      gap: 8px;
-    }
+  :global(.density-compact) .group {
+    margin-bottom: var(--space-md);
+  }
 
-    .priority-name {
-      font-size: 13px;
-    }
-
-    .priority-info-btn {
-      width: 16px;
-      height: 16px;
-      font-size: 10px;
-    }
+  :global(.density-compact) .group-body {
+    gap: 3px;
+    padding-top: 3px;
+    padding-left: 14px;
   }
 </style>

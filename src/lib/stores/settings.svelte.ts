@@ -42,8 +42,9 @@ export function initSettings(
     });
   }
 
-  // Apply initial theme
+  // Apply initial theme + density
   applyTheme(settings.theme);
+  applyDensity(settings.density ?? 'comfortable');
 }
 
 // Apply theme to document
@@ -62,6 +63,12 @@ function applyTheme(theme: Theme): void {
   setTimeout(() => {
     document.documentElement.classList.remove('theme-transition');
   }, 200);
+}
+
+// Apply density class to document root (drives spacing/font token overrides in CSS)
+function applyDensity(density: 'comfortable' | 'compact'): void {
+  if (typeof document === 'undefined') return;
+  document.documentElement.classList.toggle('density-compact', density === 'compact');
 }
 
 // Get effective theme (resolves 'system' to actual theme)
@@ -83,7 +90,18 @@ export function updateSettings(updates: Partial<Settings>): void {
     setLanguage(updates.language);
   }
 
+  // Apply density if changed
+  if (updates.density !== undefined) {
+    applyDensity(updates.density);
+  }
+
   persistCallback?.();
+}
+
+// Toggle density between comfortable and compact
+export function toggleDensity(): void {
+  const current = settings.density ?? 'comfortable';
+  updateSettings({ density: current === 'comfortable' ? 'compact' : 'comfortable' });
 }
 
 // Set theme

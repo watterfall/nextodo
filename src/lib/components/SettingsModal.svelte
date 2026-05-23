@@ -144,6 +144,29 @@
 
           <div class="setting-row">
             <div class="setting-info">
+              <span class="setting-label">{t('settings.density') || '界面密度'}</span>
+              <span class="setting-desc">{t('settings.densityDesc') || '紧凑模式让你一屏看到更多任务'}</span>
+            </div>
+            <div class="theme-buttons">
+              <button
+                class="theme-btn"
+                class:active={(settings.density ?? 'comfortable') === 'comfortable'}
+                onclick={() => updateSettings({ density: 'comfortable' })}
+              >
+                {t('settings.densityComfortable') || '舒适'}
+              </button>
+              <button
+                class="theme-btn"
+                class:active={settings.density === 'compact'}
+                onclick={() => updateSettings({ density: 'compact' })}
+              >
+                {t('settings.densityCompact') || '紧凑'}
+              </button>
+            </div>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-info">
               <span class="setting-label">{t('settings.language')}</span>
               <span class="setting-desc">{t('settings.languageDesc')}</span>
             </div>

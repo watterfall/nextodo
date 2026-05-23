@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Task, Priority } from '$lib/types';
   import { PRIORITY_CONFIG, isThresholdPassed, isActivePriority } from '$lib/types';
-  import { completeTask, uncompleteTask, cancelTask, changePriority, evolveTask } from '$lib/stores/tasks.svelte';
+  import { completeTask, uncompleteTask, cancelTask, changePriority, evolveTask, toggleFilterAttribute, isFilterActive } from '$lib/stores/tasks.svelte';
   import { openEditModal, getUIStore, showToast } from '$lib/stores/ui.svelte';
   import { startPomodoro, getPomodoroStore } from '$lib/stores/pomodoro.svelte';
   import { formatRecurrence } from '$lib/utils/recurrence';
@@ -26,6 +26,7 @@
   let isFocusMode = $derived(pomodoro.state === 'work' && pomodoro.activeTaskId !== null);
   let isFocusDimmed = $derived(isFocusMode && !isActive);
   let isHovered = $state(false);
+  let justCompleted = $state(false);
 
   // Derived energy level
   const energyTag = $derived(task.customTags.find(t => ['⚡高能量', '😴低能量', '☕中等'].includes(t)));
@@ -56,8 +57,20 @@
       // Task is completed, restore it
       uncompleteTask(task.id);
     } else if (isActivePriority(task.priority)) {
-      // Task is active, complete it
+      // Capture priority BEFORE completion (completeTask mutates it to 'G')
+      const wasAPriority = task.priority === 'A';
+      // Trigger press micro-interaction
+      justCompleted = true;
+      setTimeout(() => { justCompleted = false; }, 400);
       completeTask(task.id);
+      // Sacred A-completion moment — the most important thing of the day is done
+      if (wasAPriority) {
+        showToast(
+          i18n.t('task.aCompleteCelebration') || '🌿 今日的最重要的事完成了 · 该休息片刻了',
+          'success',
+          4500
+        );
+      }
     }
   }
 
@@ -133,6 +146,7 @@
   class:focus-spotlight={isActive && isFocusMode}
   class:hovered={isHovered}
   class:keyboard-focused={isFocused}
+  class:just-completed={justCompleted}
   style:--priority-color={config.color}
   style:--priority-bg={config.bgColor}
   style:--priority-border={config.borderColor}
@@ -151,7 +165,7 @@
     >
       {#if isCompleted}
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
-          <polyline points="20 6 9 17 4 12"></polyline>
+          <polyline class="checkmark-path" points="20 6 9 17 4 12"></polyline>
         </svg>
       {:else if isCancelled}
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -195,20 +209,38 @@
         <div class="task-meta">
           {#each task.projects as project}
             {@const displayInfo = getDisplayText(project)}
-            <span class="meta-tag project" class:emoji-only={displayInfo.isEmoji} title={project}>{displayInfo.display}</span>
+            <button
+              class="meta-tag project"
+              class:emoji-only={displayInfo.isEmoji}
+              class:active={isFilterActive('project', project)}
+              title={`${i18n.t('filter.filterBy') || 'Filter by'}: +${project}`}
+              onclick={(e) => { e.stopPropagation(); toggleFilterAttribute('project', project); }}
+            >{displayInfo.display}</button>
           {/each}
           {#each task.contexts as context}
             {@const displayInfo = getDisplayText(context)}
-            <span class="meta-tag context" class:emoji-only={displayInfo.isEmoji} title={context}>{displayInfo.display}</span>
+            <button
+              class="meta-tag context"
+              class:emoji-only={displayInfo.isEmoji}
+              class:active={isFilterActive('context', context)}
+              title={`${i18n.t('filter.filterBy') || 'Filter by'}: @${context}`}
+              onclick={(e) => { e.stopPropagation(); toggleFilterAttribute('context', context); }}
+            >{displayInfo.display}</button>
           {/each}
           {#each task.customTags as tag}
             {#if !['⚡高能量', '😴低能量', '☕中等'].includes(tag)}
               {@const displayInfo = getDisplayText(tag)}
-              <span class="meta-tag custom" class:emoji-only={displayInfo.isEmoji} title={tag}>{displayInfo.display}</span>
+              <button
+                class="meta-tag custom"
+                class:emoji-only={displayInfo.isEmoji}
+                class:active={isFilterActive('tag', tag)}
+                title={`${i18n.t('filter.filterBy') || 'Filter by'}: #${tag}`}
+                onclick={(e) => { e.stopPropagation(); toggleFilterAttribute('tag', tag); }}
+              >{displayInfo.display}</button>
             {/if}
           {/each}
 
-          <!-- Energy Level Visualization -->
+          <!-- Energy Level Visualization (non-interactive) -->
           {#if energyLevel}
             <span class="meta-tag energy {energyLevel}" title={`${i18n.t('task.energyLevel')}: ${energyTag}`}>
               {#if energyLevel === 'high'}⚡{:else if energyLevel === 'medium'}☕{:else}😴{/if}
@@ -301,16 +333,35 @@
   .task-card {
     display: flex;
     flex-direction: column;
-    padding: 10px 12px;
+    padding: 11px 14px 11px 16px;
     background: var(--card-bg);
-    border: 1px solid var(--border-subtle);
-    border-left: 2px solid var(--priority-color);
-    border-radius: var(--radius-sm);
-    transition: all var(--transition-normal);
+    border: 1px solid var(--border-hairline);
+    border-radius: var(--radius-md);
+    box-shadow: var(--elevation-1);
+    transition: background var(--transition-fast),
+                border-color var(--transition-fast),
+                box-shadow var(--transition-fast),
+                transform var(--transition-fast),
+                max-height var(--transition-normal);
     cursor: default;
     position: relative;
     max-height: 100px;
     overflow: hidden;
+  }
+
+  /* Priority accent — subtle dot at top-left corner instead of side-tab border.
+     Replaces the aggressive border-left strip; reads as a label, not a tell. */
+  .task-card::before {
+    content: '';
+    position: absolute;
+    top: 12px;
+    left: 6px;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--priority-color);
+    opacity: 0.85;
+    pointer-events: none;
   }
 
   .task-card:hover,
@@ -321,20 +372,22 @@
 
   .task-card:hover {
     background: var(--card-hover-bg);
-    border-color: var(--border-color);
+    border-color: var(--border-subtle);
+    box-shadow: var(--elevation-2);
+    transform: translateY(-1px);
   }
 
-  /* Keyboard focus state - distinct from hover but similar */
+  /* Keyboard focus state — primary ring (not background change) */
   .task-card.keyboard-focused {
     background: var(--card-hover-bg);
-    border-color: var(--primary);
-    box-shadow: 0 0 0 2px var(--primary-bg);
+    border-color: var(--border-subtle);
+    box-shadow: var(--elevation-2), var(--ring-focus);
     z-index: 5;
   }
 
   .task-card:focus-within {
     outline: none;
-    box-shadow: 0 0 0 2px var(--primary-bg);
+    box-shadow: var(--elevation-2), var(--ring-focus);
   }
 
   .task-card.active {
@@ -354,7 +407,6 @@
 
   .task-card.completed {
     opacity: 0.55;
-    border-left-color: var(--priority-color);
   }
 
   .task-card.completed .task-text {
@@ -362,10 +414,13 @@
     color: var(--text-muted);
   }
 
+  /* Cancelled — text + dot get muted, no side-bar */
   .task-card.cancelled {
     opacity: 0.45;
-    border-left-color: var(--text-muted);
-    border-left-style: dashed;
+  }
+
+  .task-card.cancelled::before {
+    background: var(--text-muted);
   }
 
   .task-card.cancelled .task-text {
@@ -383,45 +438,50 @@
     transition: all 0.4s ease;
   }
 
-  .task-card.overdue {
-    border-left-color: var(--error);
-  }
-
-  .task-card.overdue::after {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 0;
-    bottom: 0;
-    width: 3px;
+  /* Overdue — dot turns red, due-date label also red (no animated side-strip) */
+  .task-card.overdue::before {
     background: var(--error);
-    animation: overdueGlow 2s ease-in-out infinite;
+    box-shadow: 0 0 6px var(--error);
   }
 
-  /* Dormant (threshold date not reached) */
+  /* Dormant (threshold not reached) — "patiently waiting", not broken.
+     Cool blue-grey tint + reduced contrast suggests rest, not failure. */
   .task-card.dormant {
-    opacity: 0.45;
-    background: var(--bg-secondary);
-    border-left-color: var(--text-muted);
+    opacity: 0.72;
+    background: linear-gradient(
+      to right,
+      rgba(116, 192, 252, 0.04),
+      var(--card-bg) 40%
+    );
+  }
+
+  .task-card.dormant::before {
+    background: #74c0fc;
+    opacity: 0.55;
+    box-shadow: 0 0 4px rgba(116, 192, 252, 0.3);
   }
 
   .task-card.dormant:hover {
-    opacity: 0.65;
+    opacity: 0.92;
   }
 
   .task-card.dormant .task-text {
-    color: var(--text-muted);
+    color: var(--text-secondary);
+    font-style: italic;
   }
 
   .task-card.dormant .checkbox {
-    border-color: var(--text-muted);
-    opacity: 0.7;
+    border-color: rgba(116, 192, 252, 0.5);
+    opacity: 0.8;
   }
 
-  /* Scheduled too far in advance for priority level */
+  /* Scheduled too far — slight ring around dot to flag the issue */
   .task-card.scheduled-too-far {
     opacity: 0.5;
-    border-left-style: dashed;
+  }
+
+  .task-card.scheduled-too-far::before {
+    box-shadow: 0 0 0 1.5px var(--warning, #ffc107);
   }
 
   .task-card.scheduled-too-far:hover {
@@ -528,7 +588,7 @@
 
   .checkbox.checked {
     background: var(--priority-color);
-    animation: checkComplete 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+    animation: check-burst 0.36s var(--ease-out-expo);
   }
 
   .checkbox.cancelled {
@@ -542,17 +602,23 @@
     color: white;
   }
 
-  @keyframes checkComplete {
-    0% { transform: scale(0.8); }
-    50% { transform: scale(1.15); }
-    100% { transform: scale(1); }
-  }
-
   .checkbox svg {
     width: 10px;
     height: 10px;
     color: white;
     stroke-width: 3;
+  }
+
+  /* SVG checkmark stroke draws in (uses keyframe from app.css) */
+  .checkmark-path {
+    stroke-dasharray: 24;
+    stroke-dashoffset: 24;
+    animation: check-stroke-draw 0.22s var(--ease-out-expo) 0.08s forwards;
+  }
+
+  /* Card press response — brief tactile feedback when completing */
+  .task-card.just-completed {
+    animation: card-press 0.22s var(--ease-out-expo);
   }
 
   .task-content {
@@ -590,6 +656,25 @@
     background: var(--tag-bg);
     color: var(--text-secondary);
     transition: all var(--transition-fast);
+    border: 1px solid transparent;
+    line-height: 1.5;
+    /* button-specific resets */
+    font-family: inherit;
+    cursor: pointer;
+  }
+
+  /* Interactive chip (button) hover: subtle lift, color amp */
+  button.meta-tag:hover {
+    transform: translateY(-1px);
+    filter: brightness(1.15);
+  }
+
+  /* Active state: chip is the current filter — inverted colors */
+  button.meta-tag.active {
+    color: var(--bg-primary);
+    border-color: currentColor;
+    font-weight: 600;
+    box-shadow: var(--elevation-1);
   }
 
   .meta-tag.project {
@@ -597,14 +682,26 @@
     color: #b197fc;
   }
 
+  button.meta-tag.project.active {
+    background: #b197fc;
+  }
+
   .meta-tag.context {
     background: rgba(116, 192, 252, 0.12);
     color: #74c0fc;
   }
 
+  button.meta-tag.context.active {
+    background: #74c0fc;
+  }
+
   .meta-tag.custom {
     background: rgba(99, 230, 190, 0.12);
     color: #63e6be;
+  }
+
+  button.meta-tag.custom.active {
+    background: #63e6be;
   }
   
   .meta-tag.energy.high {
@@ -670,6 +767,9 @@
   .pomodoro-btn-left .pomodoro-count {
     font-size: 11px;
     font-weight: 600;
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
   }
 
   .pomodoro-btn {
@@ -729,6 +829,8 @@
   .pomodoro-count {
     font-size: 11px;
     font-weight: 600;
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
   }
 
   .task-footer {
@@ -737,6 +839,9 @@
     margin-top: 8px;
     padding-left: 0;
     font-size: 11px;
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
   }
 
   .threshold-date {
@@ -867,8 +972,4 @@
     }
   }
 
-  @keyframes overdueGlow {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
-  }
 </style>

@@ -4,6 +4,7 @@
   import CalendarView from '$lib/components/CalendarView.svelte';
   import KanbanView from '$lib/components/KanbanView.svelte';
   import ListView from '$lib/components/ListView.svelte';
+  import TodayView from '$lib/components/TodayView.svelte';
   import TaskForm from '$lib/components/TaskForm.svelte';
   import QuotaMeter from '$lib/components/QuotaMeter.svelte';
   import UnitNav from '$lib/components/UnitNav.svelte';
@@ -225,18 +226,24 @@
       <div class="header-right">
         <QuotaMeter />
 
-        <!-- View Toggle (Kanban/List/Calendar) -->
+        <!-- View Toggle (Today/Kanban/List/Calendar) -->
         <div class="view-toggle">
           <button
             class="view-btn"
-            class:active={ui.viewMode === 'kanban'}
-            onclick={() => setViewMode('kanban')}
-            title={t('view.kanban')}
+            class:active={ui.viewMode === 'today'}
+            onclick={() => setViewMode('today')}
+            title={t('view.today') || 'Today'}
           >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="3" y="3" width="5" height="18" rx="1"></rect>
-              <rect x="10" y="3" width="5" height="18" rx="1"></rect>
-              <rect x="17" y="3" width="5" height="18" rx="1"></rect>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="4"></circle>
+              <path d="M12 2v2"></path>
+              <path d="M12 20v2"></path>
+              <path d="m4.93 4.93 1.41 1.41"></path>
+              <path d="m17.66 17.66 1.41 1.41"></path>
+              <path d="M2 12h2"></path>
+              <path d="M20 12h2"></path>
+              <path d="m6.34 17.66-1.41 1.41"></path>
+              <path d="m19.07 4.93-1.41 1.41"></path>
             </svg>
           </button>
           <button
@@ -252,6 +259,18 @@
               <line x1="3" y1="6" x2="3.01" y2="6"></line>
               <line x1="3" y1="12" x2="3.01" y2="12"></line>
               <line x1="3" y1="18" x2="3.01" y2="18"></line>
+            </svg>
+          </button>
+          <button
+            class="view-btn"
+            class:active={ui.viewMode === 'kanban'}
+            onclick={() => setViewMode('kanban')}
+            title={t('view.kanban')}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="5" height="18" rx="1"></rect>
+              <rect x="10" y="3" width="5" height="18" rx="1"></rect>
+              <rect x="17" y="3" width="5" height="18" rx="1"></rect>
             </svg>
           </button>
           <button
@@ -326,16 +345,22 @@
 
     <!-- Main Layout Switcher - Views fill available space -->
     <div class="content-layout">
-      {#if ui.viewMode === 'kanban'}
-        <KanbanView />
-      {:else if ui.viewMode === 'list'}
-        <ListView />
-      {:else if ui.viewMode === 'calendar'}
-        <CalendarView />
-      {:else}
-        <!-- Fallback to Kanban if view mode is unknown or legacy -->
-        <KanbanView />
-      {/if}
+      {#key ui.viewMode}
+        <div class="view-wrapper anim-view-enter">
+          {#if ui.viewMode === 'today'}
+            <TodayView />
+          {:else if ui.viewMode === 'kanban'}
+            <KanbanView />
+          {:else if ui.viewMode === 'list'}
+            <ListView />
+          {:else if ui.viewMode === 'calendar'}
+            <CalendarView />
+          {:else}
+            <!-- Fallback to Kanban if view mode is unknown or legacy -->
+            <KanbanView />
+          {/if}
+        </div>
+      {/key}
     </div>
   </main>
 
@@ -479,7 +504,7 @@
 
   .loading-icon {
     font-size: 40px;
-    animation: bounce 1.2s ease-in-out infinite;
+    animation: breathe 2.4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
   }
 
   .loading-text {
@@ -489,13 +514,10 @@
     letter-spacing: 0.02em;
   }
 
-  @keyframes bounce {
-    0%, 100% {
-      transform: translateY(0);
-    }
-    50% {
-      transform: translateY(-8px);
-    }
+  /* Smooth breathing for loading icon — no bounce overshoot */
+  @keyframes breathe {
+    0%, 100% { opacity: 0.55; transform: scale(0.96); }
+    50% { opacity: 1; transform: scale(1); }
   }
 
   .main-content {
@@ -588,6 +610,12 @@
     flex: 1;
     overflow: hidden;
     padding: 0 20px 20px;
+  }
+
+  .view-wrapper {
+    height: 100%;
+    width: 100%;
+    will-change: opacity, transform;
   }
 
 

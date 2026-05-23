@@ -175,6 +175,7 @@ export default {
     clickToStartFocus: '点击开始专注',
     dormantUntil: '休眠至',
     energyLevel: '能量消耗',
+    aCompleteCelebration: '🌿 今日的最重要的事完成了 · 该休息片刻了',
     // Recently completed tasks
     recentlyCompleted: '最近完成',
     recentlyCompletedHint: '最近完成的任务 - 保留期后自动隐藏',
@@ -213,6 +214,8 @@ export default {
       interruptionTitle: '记录中断原因',
       interruptionPlaceholder: '例如：老板电话、同事询问...',
       record: '记录',
+      wellDone: '做得很好',
+      breakHint: '喝口水，看看远处',
     },
   },
 
@@ -264,6 +267,7 @@ export default {
     searchResults: '搜索结果',
     noResults: '未找到匹配的任务',
     clearFilter: '清除筛选',
+    filterBy: '点击筛选',
   },
 
   // Settings
@@ -275,6 +279,10 @@ export default {
     themeLight: '浅色',
     themeDark: '深色',
     themeSystem: '系统',
+    density: '界面密度',
+    densityDesc: '紧凑模式让你一屏看到更多任务（仿 sleek 风格）',
+    densityComfortable: '舒适',
+    densityCompact: '紧凑',
     language: '语言',
     languageDesc: '选择界面显示语言',
     pomodoro: {
@@ -379,10 +387,39 @@ export default {
 
   // View modes
   view: {
+    today: '今日',
     kanban: '看板',
     list: '列表',
     calendar: '日历',
   },
+
+  // List view (sleek-inspired groupable list)
+  list: {
+    groupByLabel: '分组',
+    sortAsc: '正序',
+    sortDesc: '倒序',
+    allTasks: '全部任务',
+    empty: '当前分组下没有任务',
+    noProject: '无项目',
+    noContext: '无情境',
+    noTag: '无标签',
+    groupBy: {
+      priority: '优先级',
+      project: '项目',
+      context: '情境',
+      tag: '标签',
+      due: '截止日',
+      none: '不分组',
+    },
+    due: {
+      overdue: '⚠ 已逾期',
+      today: '今天',
+      thisWeek: '本周内',
+      later: '稍后',
+      none: '无截止日',
+    },
+  },
+
 
   // Actions
   action: {
@@ -503,6 +540,38 @@ export default {
       standard: '📋 日常推进',
       other: '📥 其他',
       completed: '✅ 已完成',
+    },
+    // Dashboard additions
+    hero: {
+      coreLabel: '今日核心',
+      pickCore: '挑一件今天最重要的事',
+      pickCoreHint: '在看板中给一个任务标记 !A，它会出现在这里',
+      altarLabel: '今日唯一多誓 · A',
+      altarSecondary: '今日要事',
+      altarRest: '今日已结',
+      altarEmpty: '为今日选一件核心',
+    },
+    rhythm: {
+      unitN: '单元 {n}',
+      day1: '第 1 天 / 共 2 天',
+      day2: '第 2 天 / 收尾',
+      reviewDay: '周复盘日',
+      reviewHint: '回望本周，预备下一轮',
+    },
+    stats: {
+      completed: '完成',
+      focusTime: '专注',
+      tasks: '今日任务',
+      hours: '小时',
+      minutes: '分钟',
+    },
+    inspiration: {
+      title: '从灵感池试试',
+      empty: '灵感池是空的',
+    },
+    celebrate: {
+      title: '今天完美收尾',
+      subtitle: '所有计划都已完成，去享受当下吧。',
     },
   },
 };

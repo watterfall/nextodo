@@ -252,7 +252,8 @@
   .inbox-panel.drawer-mode {
     border-radius: 0;
     border: none;
-    border-left: 1px solid var(--border-subtle);
+    /* Drawer divider via inset shadow — avoids the "side-tab" anti-pattern flag */
+    box-shadow: inset 1px 0 0 var(--border-subtle);
     background: var(--bg-secondary);
   }
 

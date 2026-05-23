@@ -529,6 +529,30 @@ export function setFilter(newFilter: Partial<FilterState>): void {
   filter = { ...filter, ...newFilter };
 }
 
+/**
+ * Toggle a single filter attribute. If the current value matches `value`,
+ * the filter is cleared. Otherwise it's set to `value`. Used by clickable
+ * chips on TaskCard (sleek-style attribute interactivity).
+ */
+export function toggleFilterAttribute(
+  attribute: 'project' | 'context' | 'tag' | 'priority',
+  value: string
+): void {
+  const current = filter[attribute];
+  filter = { ...filter, [attribute]: current === value ? null : value };
+}
+
+/**
+ * Check if a given attribute/value is currently the active filter.
+ * Used by TaskCard to render the 'active' visual state on chips.
+ */
+export function isFilterActive(
+  attribute: 'project' | 'context' | 'tag' | 'priority',
+  value: string
+): boolean {
+  return filter[attribute] === value;
+}
+
 export function clearFilters(): void {
   filter = {
     project: null,

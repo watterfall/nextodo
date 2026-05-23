@@ -175,6 +175,7 @@ export default {
     clickToStartFocus: 'Click to start focus',
     dormantUntil: 'Dormant until',
     energyLevel: 'Energy level',
+    aCompleteCelebration: '🌿 The most important thing of today is done — take a moment to rest',
     // Recently completed tasks
     recentlyCompleted: 'Recently completed',
     recentlyCompletedHint: 'Recently completed tasks - will fade after retention period',
@@ -213,6 +214,8 @@ export default {
       interruptionTitle: 'Record interruption reason',
       interruptionPlaceholder: 'e.g., phone call, colleague question...',
       record: 'Record',
+      wellDone: 'Well done',
+      breakHint: 'Sip water, rest your eyes',
     },
   },
 
@@ -264,6 +267,7 @@ export default {
     searchResults: 'Search Results',
     noResults: 'No matching tasks found',
     clearFilter: 'Clear Filter',
+    filterBy: 'Filter by',
   },
 
   // Settings
@@ -275,6 +279,10 @@ export default {
     themeLight: 'Light',
     themeDark: 'Dark',
     themeSystem: 'System',
+    density: 'Density',
+    densityDesc: 'Compact mode fits more tasks on screen (sleek-inspired)',
+    densityComfortable: 'Comfortable',
+    densityCompact: 'Compact',
     language: 'Language',
     languageDesc: 'Choose the interface language',
     pomodoro: {
@@ -380,11 +388,40 @@ export default {
   // View modes
   view: {
     zones: 'Zones',
+    today: 'Today',
     kanban: 'Kanban',
     list: 'List',
     calendar: 'Calendar',
     hybrid: 'Hybrid',
   },
+
+  // List view (sleek-inspired groupable list)
+  list: {
+    groupByLabel: 'Group',
+    sortAsc: 'Ascending',
+    sortDesc: 'Descending',
+    allTasks: 'All tasks',
+    empty: 'No tasks in this grouping',
+    noProject: 'No project',
+    noContext: 'No context',
+    noTag: 'No tag',
+    groupBy: {
+      priority: 'Priority',
+      project: 'Project',
+      context: 'Context',
+      tag: 'Tag',
+      due: 'Due date',
+      none: 'None',
+    },
+    due: {
+      overdue: '⚠ Overdue',
+      today: 'Today',
+      thisWeek: 'This week',
+      later: 'Later',
+      none: 'No due date',
+    },
+  },
+
 
   // Actions
   action: {
@@ -505,6 +542,38 @@ export default {
       standard: '📋 Daily Progress',
       other: '📥 Other',
       completed: '✅ Completed',
+    },
+    // Dashboard additions
+    hero: {
+      coreLabel: "Today's Core",
+      pickCore: 'Pick one thing that matters most',
+      pickCoreHint: 'Mark a task with !A in any view — it appears here.',
+      altarLabel: "Today's One Vow · A",
+      altarSecondary: 'Top Priority',
+      altarRest: 'Day Complete',
+      altarEmpty: 'Choose one thing for today',
+    },
+    rhythm: {
+      unitN: 'Unit {n}',
+      day1: 'Day 1 of 2',
+      day2: 'Day 2 — wrap up',
+      reviewDay: 'Weekly Review',
+      reviewHint: 'Look back, prepare the next cycle',
+    },
+    stats: {
+      completed: 'Done',
+      focusTime: 'Focus',
+      tasks: 'Tasks today',
+      hours: 'h',
+      minutes: 'min',
+    },
+    inspiration: {
+      title: 'From the idea pool',
+      empty: 'Idea pool is empty',
+    },
+    celebrate: {
+      title: 'A perfect close',
+      subtitle: 'Everything planned is done. Enjoy the moment.',
     },
   },
 };

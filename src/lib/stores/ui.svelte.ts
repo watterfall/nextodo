@@ -12,7 +12,7 @@ interface ConfirmationData {
 
 // UI State
 let sidebarCollapsed = $state(false);
-let viewMode = $state<ViewMode>('kanban');
+let viewMode = $state<ViewMode>('list');
 let activeModal = $state<string | null>(null);
 let modalData = $state<unknown>(null);
 let toastMessage = $state<string | null>(null);

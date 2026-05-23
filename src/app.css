@@ -8,14 +8,19 @@
 }
 
 html {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
-  font-size: 15px;
-  line-height: 1.6;
+  /* System-first stack — distinctive native rendering per OS (SF Pro on macOS,
+     Segoe UI on Windows) instead of the ubiquitous Inter look. */
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue',
+    'Segoe UI', 'Noto Sans CJK SC', 'PingFang SC', 'Hiragino Sans GB',
+    'Microsoft YaHei', sans-serif;
+  font-size: 14px;
+  line-height: 1.55;
   font-weight: 400;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.011em;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  /* OpenType: contextual alternates + stylistic set 1 (works for SF Pro) */
+  font-feature-settings: 'cv01', 'ss01';
 }
 
 /* Theme transition for smooth switching */
@@ -44,11 +49,13 @@ html.theme-transition *::after {
   --text-secondary: #a8a8b3;
   --text-muted: #6b6b76;
 
-  /* Border Colors */
-  --border-color: #2a2a32;
-  --border-subtle: #222228;
+  /* Border Colors - Hairline system (Linear / Notion aesthetic) */
+  --border-color: rgba(255, 255, 255, 0.08);
+  --border-subtle: rgba(255, 255, 255, 0.05);
+  --border-hairline: rgba(255, 255, 255, 0.04);
+  --border-strong: rgba(255, 255, 255, 0.12);
 
-  /* Brand Colors - Refined purple */
+  /* Brand Colors - Refined purple (use restraint — focus rings, current state, primary CTA only) */
   --primary: #9775fa;
   --primary-hover: #845ef7;
   --primary-bg: rgba(151, 117, 250, 0.12);
@@ -94,31 +101,102 @@ html.theme-transition *::after {
   --priority-e-border: rgba(92, 99, 106, 0.2);
   --priority-e-rgb: 92, 99, 106;
 
-  /* Shadows */
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.2);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.25);
-  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.3);
+  /* Shadows - Legacy 3-tier (kept for backward compat) */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.15);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.18);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.28);
   --shadow-glow: 0 0 20px rgba(151, 117, 250, 0.15);
 
-  /* Transitions - Smoother cubic bezier */
+  /* Elevation System - Linear-style depth via shadow + inner hairline */
+  --elevation-1: 0 1px 2px rgba(0, 0, 0, 0.12), inset 0 0 0 0.5px rgba(255, 255, 255, 0.04);
+  --elevation-2: 0 4px 12px rgba(0, 0, 0, 0.2), inset 0 0 0 0.5px rgba(255, 255, 255, 0.06);
+  --elevation-3: 0 12px 32px rgba(0, 0, 0, 0.32), inset 0 0 0 0.5px rgba(255, 255, 255, 0.08);
+
+  /* Focus ring (replaces heavy outline) */
+  --ring-focus: 0 0 0 2px var(--primary-bg);
+  --ring-strong: 0 0 0 2px var(--primary);
+
+  /* Transitions - exponential easings only (no bounce / elastic).
+     Real-world objects decelerate smoothly; bounce reads as "AI tell". */
   --transition-fast: 0.15s cubic-bezier(0.4, 0, 0.2, 1);
   --transition-normal: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   --transition-slow: 0.35s cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-bounce: 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  /* --transition-bounce kept for back-compat but mapped to a smooth decel */
+  --transition-bounce: 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
 
   /* Border Radius - Sleeker, more subtle */
   --radius-sm: 4px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
-  --radius-xl: 16px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-2xl: 16px;
   --radius-full: 9999px;
 
-  /* Spacing */
+  /* Spacing - 4pt grid extended */
   --space-xs: 4px;
   --space-sm: 8px;
   --space-md: 12px;
   --space-lg: 16px;
   --space-xl: 24px;
+  --space-2xl: 32px;
+  --space-3xl: 48px;
+
+  /* Modular type scale */
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-base: 13px;
+  --text-md: 14px;
+  --text-lg: 16px;
+  --text-xl: 20px;
+  --text-2xl: 28px;
+  --text-3xl: 40px;
+
+  /* Mono font — for numerals (timer, pomodoro counts, dates, quotas) */
+  --font-mono: 'SF Mono', 'JetBrains Mono', 'Menlo', 'Monaco', 'Consolas', monospace;
+}
+
+/* ===== Density: compact mode =====
+   Scales spacing & font tokens down ~20% for power-user information density.
+   Inspired by sleek's compact mode. Class is set on <html> by settings store. */
+html.density-compact {
+  font-size: 13px;
+  line-height: 1.45;
+  /* Spacing scale tightened */
+  --space-xs: 3px;
+  --space-sm: 6px;
+  --space-md: 10px;
+  --space-lg: 12px;
+  --space-xl: 18px;
+  --space-2xl: 24px;
+  --space-3xl: 36px;
+  /* Type scale tightened */
+  --text-xs: 10px;
+  --text-sm: 11px;
+  --text-base: 12px;
+  --text-md: 13px;
+  --text-lg: 14px;
+  --text-xl: 17px;
+  --text-2xl: 22px;
+  --text-3xl: 32px;
+}
+
+/* Compact-specific overrides for components that don't use tokens */
+html.density-compact .task-card {
+  padding: 7px 10px;
+  max-height: 80px;
+}
+
+html.density-compact .task-meta {
+  margin-top: 4px;
+  gap: 4px;
+}
+
+html.density-compact .task-text {
+  font-size: 13px;
+  line-height: 1.4;
 }
 
 /* Light Mode - Softer, less bright with gray undertones */
@@ -136,8 +214,10 @@ html.theme-transition *::after {
   --text-secondary: #404550;
   --text-muted: #6c757d;
 
-  --border-color: #ced4da;
-  --border-subtle: #dde1e5;
+  --border-color: rgba(0, 0, 0, 0.1);
+  --border-subtle: rgba(0, 0, 0, 0.06);
+  --border-hairline: rgba(0, 0, 0, 0.05);
+  --border-strong: rgba(0, 0, 0, 0.14);
 
   --primary: #7950f2;
   --primary-hover: #6741d9;
@@ -177,6 +257,11 @@ html.theme-transition *::after {
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
   --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
   --shadow-glow: 0 0 20px rgba(121, 80, 242, 0.1);
+
+  /* Light theme elevation — softer shadows on lighter bg */
+  --elevation-1: 0 1px 2px rgba(0, 0, 0, 0.05), inset 0 0 0 0.5px rgba(0, 0, 0, 0.04);
+  --elevation-2: 0 4px 12px rgba(0, 0, 0, 0.08), inset 0 0 0 0.5px rgba(0, 0, 0, 0.06);
+  --elevation-3: 0 12px 32px rgba(0, 0, 0, 0.12), inset 0 0 0 0.5px rgba(0, 0, 0, 0.08);
 }
 
 body {
@@ -294,7 +379,7 @@ a:hover {
 }
 
 .scale-in {
-  animation: scaleIn 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+  animation: scaleIn 0.25s var(--ease-out-expo);
 }
 
 .slide-in-right {
@@ -343,6 +428,154 @@ a:hover {
   }
 }
 
+/* ===========================================
+   MICRO-INTERACTION ANIMATION LIBRARY
+   Reusable keyframes + utility classes for
+   consistent micro-interactions across the app.
+   =========================================== */
+
+/* Checkbox stroke draw — SVG checkmark animates in */
+@keyframes check-stroke-draw {
+  from {
+    stroke-dashoffset: 24;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Checkbox burst — smooth decel from compressed to rest (no overshoot) */
+@keyframes check-burst {
+  0% {
+    transform: scale(0.55);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Card press response — brief tactile feedback on click/complete */
+@keyframes card-press {
+  0% { transform: scale(1); }
+  35% { transform: scale(0.985); }
+  100% { transform: scale(1); }
+}
+
+/* Strikethrough slides in from left when task completed */
+@keyframes strike-in {
+  from {
+    background-size: 0% 1px;
+  }
+  to {
+    background-size: 100% 1px;
+  }
+}
+
+/* Card evaporate — fade + drift up after task completes (for use w/ Svelte transitions) */
+@keyframes card-evaporate {
+  to {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.98);
+    filter: blur(0.5px);
+  }
+}
+
+/* Soft breathing pulse — for active/focused states. Subtler than the existing subtlePulse */
+@keyframes pulse-soft {
+  0%, 100% {
+    box-shadow: var(--elevation-1), 0 0 0 1px rgba(var(--priority-a-rgb, 151, 117, 250), 0.15);
+  }
+  50% {
+    box-shadow: var(--elevation-2), 0 0 0 1px rgba(var(--priority-a-rgb, 151, 117, 250), 0.25);
+  }
+}
+
+/* Enter animation — smooth decel into place (no overshoot) */
+@keyframes enter-decel {
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Shake — error feedback */
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-3px); }
+  40%, 80% { transform: translateX(3px); }
+}
+
+/* View crossfade — for switching between view modes */
+@keyframes view-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Utility classes — apply directly to elements */
+.anim-press {
+  animation: card-press 0.18s var(--ease-out-expo);
+}
+
+.anim-enter {
+  animation: enter-decel 0.4s var(--ease-out-expo);
+  will-change: transform, opacity;
+}
+
+/* Back-compat alias — old name retained for components mid-refactor */
+.anim-enter-decel {
+  animation: enter-decel 0.4s var(--ease-out-expo);
+  will-change: transform, opacity;
+}
+
+.anim-shake {
+  animation: shake 0.35s cubic-bezier(0.36, 0.07, 0.19, 0.97);
+}
+
+.anim-view-enter {
+  animation: view-fade-in 0.18s var(--ease-out-expo);
+}
+
+.anim-pulse-soft {
+  animation: pulse-soft 2.4s ease-in-out infinite;
+}
+
+/* Helper: smooth-completing strikethrough background-image trick */
+.text-strike-anim {
+  background-image: linear-gradient(currentColor, currentColor);
+  background-repeat: no-repeat;
+  background-position: 0 60%;
+  background-size: 100% 1px;
+  animation: strike-in 0.25s var(--ease-out-expo) forwards;
+}
+
+/* Respect user's motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  .anim-press,
+  .anim-enter-decel,
+  .anim-shake,
+  .anim-view-enter,
+  .anim-pulse-soft,
+  .text-strike-anim {
+    animation: none !important;
+  }
+  *, *::before, *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+
 /* Toast Container - Sleek minimal design */
 .toast-container {
   position: fixed;
@@ -364,16 +597,17 @@ a:hover {
   backdrop-filter: blur(12px);
 }
 
+/* Toast variants — icon-tinted background, no side-tab strip */
 .toast.success {
-  border-left: 3px solid var(--success);
+  background: linear-gradient(90deg, var(--success-bg), var(--card-bg) 30%);
 }
 
 .toast.error {
-  border-left: 3px solid var(--error);
+  background: linear-gradient(90deg, var(--error-bg), var(--card-bg) 30%);
 }
 
 .toast.info {
-  border-left: 3px solid var(--info);
+  background: linear-gradient(90deg, var(--info-bg), var(--card-bg) 30%);
 }
 
 .toast-message {
@@ -421,7 +655,7 @@ a:hover {
   width: 92%;
   max-height: 85vh;
   overflow: hidden;
-  animation: scaleIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  animation: scaleIn 0.3s var(--ease-out-expo);
 }
 
 .modal-header {
@@ -555,7 +789,7 @@ a:hover {
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-lg), 0 0 0 1px rgba(255, 255, 255, 0.05) inset;
   overflow: hidden;
-  animation: scaleIn 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+  animation: scaleIn 0.25s var(--ease-out-expo);
 }
 
 .search-input-wrapper {
@@ -706,7 +940,14 @@ kbd {
 
 /* Monospace font for timer */
 .font-mono {
-  font-family: 'SF Mono', 'Monaco', 'Menlo', 'Consolas', monospace;
+  font-family: var(--font-mono);
+}
+
+/* Tabular numerals — for counts, quotas, dates (proportional widths, no jitter) */
+.font-num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
 }
 
 /* ===========================================
@@ -757,45 +998,49 @@ kbd {
    DRAG AND DROP SYSTEM (svelte-dnd-action)
    =========================================== */
 
-/* Base draggable item styling */
+/* Base draggable item styling — soft dashed placeholder */
 [data-is-dnd-shadow-item="true"] {
-  opacity: 0.4 !important;
+  opacity: 0.35 !important;
   background: var(--primary-bg) !important;
-  border: 2px dashed var(--primary) !important;
+  border: 1.5px dashed var(--primary) !important;
   border-radius: var(--radius-md) !important;
 }
 
-/* Dragging item - the item being dragged */
+/* Dragging item — uses elevation-3 for floating feel, subtle tilt + scale */
 .dnd-dragging,
 [aria-grabbed="true"] {
-  opacity: 0.9 !important;
-  transform: scale(1.02) rotate(0.5deg) !important;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25), 0 0 0 2px var(--primary) !important;
+  opacity: 0.95 !important;
+  transform: scale(1.025) rotate(0.4deg) !important;
+  box-shadow: var(--elevation-3), 0 0 0 1px var(--primary) !important;
   z-index: 9999 !important;
   cursor: grabbing !important;
   pointer-events: auto !important;
   will-change: transform;
   backface-visibility: hidden;
+  transition: transform 0.2s var(--ease-out-expo) !important;
 }
 
-/* Drop shadow - placeholder where item will land */
+/* Drop shadow placeholder — softer, less obtrusive */
 .dnd-drop-shadow {
-  opacity: 0.35;
-  border: 2px dashed var(--primary) !important;
+  opacity: 0.3;
+  border: 1.5px dashed var(--primary) !important;
   background: var(--primary-bg) !important;
   border-radius: var(--radius-md);
 }
 
-/* Drop target zone - container that can receive drops */
+/* Drop target zone — smooth transition */
 .dnd-drop-target {
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: transform var(--transition-normal),
+              box-shadow var(--transition-normal),
+              background var(--transition-normal);
   will-change: transform, box-shadow;
 }
 
+/* Active drop target — uses ring instead of heavy border + bg shift */
 .dnd-drop-target-active {
-  transform: scale(1.005);
-  border-color: var(--zone-color, var(--primary)) !important;
-  box-shadow: 0 0 0 2px var(--zone-color, var(--primary)), 0 4px 16px rgba(0, 0, 0, 0.1) !important;
+  transform: scale(1.004);
+  box-shadow: inset 0 0 0 1.5px var(--zone-color, var(--primary)),
+              0 6px 20px rgba(0, 0, 0, 0.08) !important;
   background: var(--zone-bg, var(--primary-bg)) !important;
 }
 
