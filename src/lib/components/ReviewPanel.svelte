@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { UnitReview, Priority } from '$lib/types';
+  import type { ActivePriority, UnitReview } from '$lib/types';
   import { PRIORITY_CONFIG } from '$lib/types';
   import { getReviewsStore, createReview, getCompletionRate, getPriorityRates } from '$lib/stores/reviews.svelte';
   import { getTasksStore } from '$lib/stores/tasks.svelte';
@@ -37,7 +37,7 @@
     return 'healthy';
   }
 
-  const priorities: Priority[] = ['A', 'B', 'C', 'D', 'E'];
+  const priorities: ActivePriority[] = ['A', 'B', 'C', 'D', 'E'];
 </script>
 
 <div class="review-panel">

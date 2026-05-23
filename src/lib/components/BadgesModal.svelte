@@ -30,7 +30,7 @@
         <span class="icon">🏅</span>
         <h2>{t('nav.badges') || 'Achievements'}</h2>
       </div>
-      <button class="close-btn" onclick={onClose}>
+      <button class="close-btn" onclick={onClose} aria-label={t('action.close')}>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <line x1="18" y1="6" x2="6" y2="18"></line>
           <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -69,14 +69,22 @@
     </div>
   </div>
 {:else}
-  <div class="modal-overlay" onclick={handleBackdropClick} transition:fade={{ duration: 200 }}>
+  <div
+    class="modal-overlay"
+    onclick={handleBackdropClick}
+    transition:fade={{ duration: 200 }}
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="badges-title"
+    tabindex="-1"
+  >
     <div class="modal-content" transition:scale={{ duration: 200, start: 0.95 }}>
       <div class="modal-header">
         <div class="header-title">
           <span class="icon">🏅</span>
-          <h2>{t('nav.badges') || 'Achievements'}</h2>
+          <h2 id="badges-title">{t('nav.badges') || 'Achievements'}</h2>
         </div>
-        <button class="close-btn" onclick={onClose}>
+        <button class="close-btn" onclick={onClose} aria-label={t('action.close')}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="18" y1="6" x2="6" y2="18"></line>
             <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -426,4 +434,3 @@
     opacity: 0.5;
   }
 </style>
-

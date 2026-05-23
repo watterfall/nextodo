@@ -91,6 +91,15 @@ export async function initializeData(): Promise<void> {
 // Reload specific data file (called when file changes externally)
 export async function reloadData(fileType: string): Promise<void> {
   try {
+    if (fileType === 'legacy') {
+      appData = await loadAppData();
+      return;
+    }
+
+    if (fileType !== 'active' && fileType !== 'archive' && fileType !== 'pomodoro_history') {
+      return;
+    }
+
     const data = await reloadFile(fileType);
     if (!data) return;
 
@@ -104,7 +113,8 @@ export async function reloadData(fileType: string): Promise<void> {
           tasks: activeData.tasks || [],
           reviews: activeData.reviews || [],
           customTagGroups: activeData.customTagGroups || appData.customTagGroups,
-          settings: activeData.settings || appData.settings
+          settings: activeData.settings || appData.settings,
+          gamification: activeData.gamification || appData.gamification
         };
         break;
       }
@@ -116,11 +126,6 @@ export async function reloadData(fileType: string): Promise<void> {
         };
         break;
       }
-      case 'legacy': {
-        // Full reload for legacy file
-        appData = await loadAppData();
-        break;
-      }
     }
   } catch (error) {
     console.error('Failed to reload data:', error);
@@ -128,7 +133,7 @@ export async function reloadData(fileType: string): Promise<void> {
 }
 
 // Persist changes
-async function persist(filesToSave: ('active' | 'archive' | 'pomodoro_history')[] = ['active']): Promise<void> {
+async function persist(filesToSave: ('active' | 'pomodoro_history')[] = ['active']): Promise<void> {
   try {
     await saveAppData(appData, filesToSave);
   } catch (error) {
@@ -142,7 +147,7 @@ export async function addTask(input: string, force = false): Promise<{ success: 
   const task = createTaskFromInput(input);
 
   // Validate quota
-  const quotaError = validateQuota(appData.tasks, task.priority);
+  const quotaError = task.priority === 'A' ? null : validateQuota(appData.tasks, task.priority);
   if (quotaError && !force) {
     return { success: false, error: quotaError };
   }
@@ -159,7 +164,7 @@ export async function addTask(input: string, force = false): Promise<{ success: 
 }
 
 export async function addTaskDirect(task: Task, force = false): Promise<{ success: boolean; error?: string }> {
-  const quotaError = validateQuota(appData.tasks, task.priority);
+  const quotaError = task.priority === 'A' ? null : validateQuota(appData.tasks, task.priority);
   if (quotaError && !force) {
     return { success: false, error: quotaError };
   }
@@ -175,19 +180,23 @@ export async function addTaskDirect(task: Task, force = false): Promise<{ succes
 }
 
 export async function updateTask(taskId: string, updates: Partial<Task>): Promise<void> {
-  appData.tasks = appData.tasks.map(task => {
+  const existingTask = appData.tasks.find(task => task.id === taskId);
+  let nextTasks = appData.tasks.map(task => {
     if (task.id === taskId) {
-      const updated = { ...task, ...updates };
-
-      // Handle priority change with Highlander rule
-      if (updates.priority === 'A' && task.priority !== 'A') {
-        appData.tasks = applyHighlanderRule(appData.tasks, updated);
-      }
-
-      return updated;
+      return { ...task, ...updates };
     }
     return task;
   });
+
+  // Handle priority change with Highlander rule after the task has been updated.
+  if (existingTask && updates.priority === 'A' && existingTask.priority !== 'A') {
+    const promotedTask = nextTasks.find(task => task.id === taskId);
+    if (promotedTask) {
+      nextTasks = applyHighlanderRule(nextTasks, promotedTask);
+    }
+  }
+
+  appData.tasks = nextTasks;
 
   await persist();
 }
@@ -245,10 +254,12 @@ export async function completeTask(taskId: string): Promise<void> {
 
   // Add next recurring task
   if (nextRecurringTask) {
-    const quotaError = validateQuota(appData.tasks.filter(t => isActivePriority(t.priority)), nextRecurringTask.priority);
+    const quotaError = nextRecurringTask.priority === 'A'
+      ? null
+      : validateQuota(appData.tasks.filter(t => isActivePriority(t.priority)), nextRecurringTask.priority);
     if (!quotaError) {
       if (nextRecurringTask.priority === 'A') {
-        appData.tasks = applyHighlanderRule(appData.tasks.filter(t => isActivePriority(t.priority)), nextRecurringTask);
+        appData.tasks = applyHighlanderRule(appData.tasks, nextRecurringTask);
       }
       appData.tasks = [...appData.tasks, nextRecurringTask];
     }
@@ -444,7 +455,7 @@ export async function changePriority(taskId: string, newPriority: Priority, skip
 
   // Check quota for new priority (only among active tasks)
   const otherActiveTasks = appData.tasks.filter(t => t.id !== taskId && isActivePriority(t.priority));
-  if (!canAddTask(otherActiveTasks, newPriority)) {
+  if (newPriority !== 'A' && !canAddTask(otherActiveTasks, newPriority)) {
     return { success: false, error: t('message.quotaExceeded', { priority: newPriority }) };
   }
 
@@ -477,7 +488,7 @@ export async function incrementPomodoro(taskId: string): Promise<void> {
 }
 
 // Reorder tasks within a priority zone (for drag-and-drop) or move between zones
-export async function reorderTask(priority: Priority, newOrderedTasks: Task[]): Promise<void> {
+export async function reorderTask(priority: Priority, newOrderedTasks: Task[], promotedTaskId?: string): Promise<void> {
   // Only allow reordering to active priorities
   if (!isActivePriority(priority)) {
     return;
@@ -489,14 +500,26 @@ export async function reorderTask(priority: Priority, newOrderedTasks: Task[]): 
   const otherTasks = appData.tasks.filter(t => !newIds.has(t.id));
 
   // Update priority for tasks in the new list
-  const updatedNewTasks = newOrderedTasks.map(t => {
+  let updatedNewTasks = newOrderedTasks.map(t => {
     if (t.priority !== priority) {
        return { ...t, priority };
     }
     return t;
   });
 
-  appData.tasks = [...otherTasks, ...updatedNewTasks];
+  let nextTasks = [...otherTasks, ...updatedNewTasks];
+
+  if (priority === 'A') {
+    const keeperId = promotedTaskId || newOrderedTasks[0]?.id;
+    nextTasks = nextTasks.map(task => {
+      if (task.id !== keeperId && task.priority === 'A' && !task.completed) {
+        return { ...task, priority: 'B' as Priority };
+      }
+      return task;
+    });
+  }
+
+  appData.tasks = nextTasks;
 
   await persist();
 }
@@ -597,6 +620,10 @@ const filteredTasks = $derived.by(() => {
   // Apply pomodoro filter
   if (filter.pomodoroFilter !== null) {
     tasks = tasks.filter(t => t.pomodoros.estimated === filter.pomodoroFilter);
+  }
+
+  if (filter.priority) {
+    tasks = tasks.filter(t => t.priority === filter.priority);
   }
 
   return tasks;

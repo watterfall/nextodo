@@ -2,6 +2,9 @@
 // A-E are work priorities with quotas, F is the Idea Pool (unlimited)
 // G is for completed tasks, H is for cancelled tasks (both hidden by default)
 export type Priority = 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H';
+export type ActivePriority = Exclude<Priority, 'G' | 'H'>;
+export type HiddenPriority = Extract<Priority, 'G' | 'H'>;
+export type ActivePriorityCounts = Record<ActivePriority, number>;
 
 // Recurrence patterns - extended to support more patterns
 export type RecurrencePattern =
@@ -57,8 +60,8 @@ export interface UnitReview {
   unitEnd: string;
   createdAt: string;
   stats: {
-    planned: Record<Priority, number>;
-    completed: Record<Priority, number>;
+    planned: ActivePriorityCounts;
+    completed: ActivePriorityCounts;
     pomodorosTotal: number;
   };
   reflection: string;
@@ -489,17 +492,17 @@ export function getRetentionRemaining(task: Task): { hours: number; minutes: num
 }
 
 // Active priorities (shown in main views)
-export const ACTIVE_PRIORITIES: Priority[] = ['A', 'B', 'C', 'D', 'E', 'F'];
+export const ACTIVE_PRIORITIES: ActivePriority[] = ['A', 'B', 'C', 'D', 'E', 'F'];
 
 // Hidden priorities (completed/cancelled)
-export const HIDDEN_PRIORITIES: Priority[] = ['G', 'H'];
+export const HIDDEN_PRIORITIES: HiddenPriority[] = ['G', 'H'];
 
 // Check if a task is in an active (visible) priority
-export function isActivePriority(priority: Priority): boolean {
-  return ACTIVE_PRIORITIES.includes(priority);
+export function isActivePriority(priority: Priority): priority is ActivePriority {
+  return (ACTIVE_PRIORITIES as readonly Priority[]).includes(priority);
 }
 
 // Check if a task is completed (G) or cancelled (H)
-export function isHiddenPriority(priority: Priority): boolean {
-  return HIDDEN_PRIORITIES.includes(priority);
+export function isHiddenPriority(priority: Priority): priority is HiddenPriority {
+  return (HIDDEN_PRIORITIES as readonly Priority[]).includes(priority);
 }

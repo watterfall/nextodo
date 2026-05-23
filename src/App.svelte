@@ -425,7 +425,7 @@
     >
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <div class="review-modal" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.stopPropagation()}>
-        <button class="modal-close" onclick={() => isReviewOpen = false}>
+        <button class="modal-close" onclick={() => isReviewOpen = false} aria-label={t('action.close')}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="18" y1="6" x2="6" y2="18"></line>
             <line x1="6" y1="6" x2="18" y2="18"></line>

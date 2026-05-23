@@ -68,6 +68,7 @@
     role="dialog"
     aria-modal="true"
     aria-labelledby="settings-title"
+    tabindex="-1"
   >
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div class="modal-content" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.stopPropagation()}>

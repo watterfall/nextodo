@@ -1,6 +1,7 @@
 <script lang="ts">
   import { getPomodoroStore, pausePomodoro, resumePomodoro, stopPomodoro, skipSession, recordInterruption } from '$lib/stores/pomodoro.svelte';
   import { getI18nStore } from '$lib/i18n';
+  import { tick } from 'svelte';
   import { scale, fade } from 'svelte/transition';
 
   interface Props {
@@ -14,6 +15,7 @@
   const t = i18n.t;
   let showInterruptionInput = $state(false);
   let interruptionReason = $state('');
+  let interruptionInput = $state<HTMLInputElement | null>(null);
 
   // Calculate progress ring
   const RADIUS = 140;
@@ -86,6 +88,12 @@
     showInterruptionInput = false;
     resumePomodoro();
   }
+
+  $effect(() => {
+    if (showInterruptionInput) {
+      tick().then(() => interruptionInput?.focus());
+    }
+  });
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
@@ -208,11 +216,11 @@
       <div class="modal-card" transition:scale={{ start: 0.95, duration: 200 }}>
         <h3>{t('pomodoro.immersive.interruptionTitle')}</h3>
         <input
+          bind:this={interruptionInput}
           type="text"
           bind:value={interruptionReason}
           placeholder={t('pomodoro.immersive.interruptionPlaceholder')}
           onkeydown={(e) => e.key === 'Enter' && submitInterruption()}
-          autofocus
         />
         <div class="modal-actions">
           <button class="btn-cancel" onclick={cancelInterruption}>{t('action.cancel')}</button>

@@ -1,5 +1,5 @@
-import type { UnitReview, Priority, Task } from '$lib/types';
-import { getUnitForDate, formatDateISO } from '$lib/utils/unitCalc';
+import type { ActivePriorityCounts, UnitReview, Task } from '$lib/types';
+import { ACTIVE_PRIORITIES, isActivePriority } from '$lib/types';
 
 // Reviews state
 let reviews = $state<UnitReview[]>([]);
@@ -25,14 +25,19 @@ export function createReview(
     return taskDate >= start && taskDate <= end;
   });
 
-  const planned: Record<Priority, number> = { A: 0, B: 0, C: 0, D: 0, E: 0, F: 0 };
-  const completed: Record<Priority, number> = { A: 0, B: 0, C: 0, D: 0, E: 0, F: 0 };
+  const planned: ActivePriorityCounts = { A: 0, B: 0, C: 0, D: 0, E: 0, F: 0 };
+  const completed: ActivePriorityCounts = { A: 0, B: 0, C: 0, D: 0, E: 0, F: 0 };
   let pomodorosTotal = 0;
 
   for (const task of unitTasks) {
-    planned[task.priority]++;
+    const priority = task.originalPriority || task.priority;
+    if (!isActivePriority(priority)) {
+      continue;
+    }
+
+    planned[priority]++;
     if (task.completed) {
-      completed[task.priority]++;
+      completed[priority]++;
     }
     pomodorosTotal += task.pomodoros.completed;
   }
@@ -86,10 +91,10 @@ export function getCompletionRate(review: UnitReview): number {
 }
 
 // Get priority completion rates
-export function getPriorityRates(review: UnitReview): Record<Priority, number> {
-  const rates: Record<Priority, number> = { A: 0, B: 0, C: 0, D: 0, E: 0, F: 0 };
+export function getPriorityRates(review: UnitReview): ActivePriorityCounts {
+  const rates: ActivePriorityCounts = { A: 0, B: 0, C: 0, D: 0, E: 0, F: 0 };
 
-  for (const priority of ['A', 'B', 'C', 'D', 'E', 'F'] as Priority[]) {
+  for (const priority of ACTIVE_PRIORITIES) {
     const planned = review.stats.planned[priority];
     const completed = review.stats.completed[priority];
 

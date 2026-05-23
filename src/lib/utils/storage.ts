@@ -1,10 +1,14 @@
-import type { AppData, ActiveData, PomodoroHistoryData, Task } from '$lib/types';
+import type { AppData, ActiveData, ArchiveData, PomodoroHistoryData, Task } from '$lib/types';
 import {
   createDefaultAppData,
   createDefaultActiveData,
+  createDefaultGamificationData,
   createDefaultPomodoroHistoryData,
   createDefaultSettings
 } from '$lib/types';
+
+type DataFileType = 'active' | 'archive' | 'pomodoro_history';
+type PersistedFileType = 'active' | 'pomodoro_history';
 
 // Storage keys for web/dev mode
 const STORAGE_KEYS = {
@@ -72,7 +76,7 @@ export async function loadAppData(): Promise<AppData> {
 /**
  * Save app data to storage (writes to separated files)
  */
-export async function saveAppData(data: AppData, filesToSave: ('active' | 'pomodoro_history')[] = ['active', 'pomodoro_history']): Promise<void> {
+export async function saveAppData(data: AppData, filesToSave: PersistedFileType[] = ['active', 'pomodoro_history']): Promise<void> {
   data.lastModified = new Date().toISOString();
 
   if (isTauri()) {
@@ -111,7 +115,7 @@ export async function savePomodoroHistoryData(data: PomodoroHistoryData): Promis
 /**
  * Load specific file type
  */
-export async function loadFileData<T>(fileType: 'active' | 'archive' | 'pomodoro_history'): Promise<T | null> {
+export async function loadFileData<T>(fileType: DataFileType): Promise<T | null> {
   if (isTauri()) {
     const { invoke } = await import('@tauri-apps/api/core');
     const content = await invoke<string | null>('read_data_file', { fileType });
@@ -137,13 +141,13 @@ export async function loadFileData<T>(fileType: 'active' | 'archive' | 'pomodoro
  * Reload specific file and return updated data
  */
 export async function reloadFile(
-  fileType: 'active' | 'archive' | 'pomodoro_history'
-): Promise<ActiveData | ActiveData | PomodoroHistoryData | null> {
+  fileType: DataFileType
+): Promise<ActiveData | ArchiveData | PomodoroHistoryData | null> {
   switch (fileType) {
     case 'active':
       return await loadFileData<ActiveData>('active');
     case 'archive':
-      return await loadFileData<ActiveData>('archive');
+      return await loadFileData<ArchiveData>('archive');
     case 'pomodoro_history':
       return await loadFileData<PomodoroHistoryData>('pomodoro_history');
     default:
@@ -215,7 +219,8 @@ function loadFromLocalStorage(): AppData {
         type: ['📞电话', '💻编码', '✍️写作', '🤝会议']
       },
       pomodoroHistory: pomodoro.sessions || [],
-      settings: migrateSettings(active.settings)
+      settings: migrateSettings(active.settings),
+      gamification: active.gamification || createDefaultGamificationData()
     };
   } catch (error) {
     console.error('Failed to load from localStorage:', error);
@@ -235,7 +240,8 @@ function saveToLocalStorage(data: AppData): void {
       tasks: data.tasks,
       reviews: data.reviews,
       customTagGroups: data.customTagGroups,
-      settings: data.settings
+      settings: data.settings,
+      gamification: data.gamification
     };
 
     const pomodoroHistory: PomodoroHistoryData = {
@@ -304,7 +310,8 @@ async function loadFromTauri(): Promise<AppData> {
         type: ['📞电话', '💻编码', '✍️写作', '🤝会议']
       },
       pomodoroHistory: pomodoro.sessions || [],
-      settings: migrateSettings(active.settings)
+      settings: migrateSettings(active.settings),
+      gamification: active.gamification || createDefaultGamificationData()
     };
   } catch (error) {
     console.error('Failed to load from Tauri:', error);
@@ -315,7 +322,7 @@ async function loadFromTauri(): Promise<AppData> {
 /**
  * Save to Tauri file system using atomic writes
  */
-async function saveToTauri(data: AppData, filesToSave: string[] = ['active', 'pomodoro_history']): Promise<void> {
+async function saveToTauri(data: AppData, filesToSave: PersistedFileType[] = ['active', 'pomodoro_history']): Promise<void> {
   // Mark save operation as starting
   beginSave();
 
@@ -329,7 +336,8 @@ async function saveToTauri(data: AppData, filesToSave: string[] = ['active', 'po
       tasks: data.tasks,
       reviews: data.reviews,
       customTagGroups: data.customTagGroups,
-      settings: data.settings
+      settings: data.settings,
+      gamification: data.gamification
     };
 
     const pomodoroHistory: PomodoroHistoryData = {
@@ -368,7 +376,7 @@ async function saveToTauri(data: AppData, filesToSave: string[] = ['active', 'po
 /**
  * Save a specific file to Tauri using atomic write
  */
-async function saveFileTauri(fileType: string, data: unknown): Promise<void> {
+async function saveFileTauri(fileType: DataFileType, data: unknown): Promise<void> {
   // Mark save operation as starting
   beginSave();
 
@@ -470,7 +478,8 @@ function migrateData(data: any): AppData {
     reviews: data.reviews,
     customTagGroups: data.customTagGroups,
     pomodoroHistory: data.pomodoroHistory,
-    settings: data.settings
+    settings: data.settings,
+    gamification: data.gamification || createDefaultGamificationData()
   };
 }
 

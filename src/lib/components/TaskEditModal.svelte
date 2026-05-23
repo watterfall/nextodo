@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import type { Task, Priority } from '$lib/types';
   import { PRIORITY_CONFIG } from '$lib/types';
   import { updateTask, getTasksStore, needsPriorityChangeConfirmation, changePriority } from '$lib/stores/tasks.svelte';
@@ -30,6 +31,11 @@
   let thresholdDate = $state(task.thresholdDate || '');
   let estimatedPomodoros = $state<number>(task.pomodoros.estimated);
   let recurrence = $state(task.recurrence?.pattern || task.recurrence?.customPattern || '');
+  let contentInput: HTMLInputElement | null = null;
+
+  onMount(() => {
+    contentInput?.focus();
+  });
 
   // Extract unique existing projects, contexts, and tags for autocomplete
   const existingProjects = $derived([...new Set(tasks.tasks.flatMap(t => t.projects))].sort());
@@ -233,10 +239,18 @@
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="modal-overlay" onclick={handleBackdropClick}>
+<div
+  class="modal-overlay"
+  onclick={handleBackdropClick}
+  onkeydown={(e) => e.key === 'Escape' && handleCancel()}
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="task-edit-title"
+  tabindex="-1"
+>
   <div class="modal-content">
     <div class="modal-header">
-      <h2>{t('task.edit')}</h2>
+      <h2 id="task-edit-title">{t('task.edit')}</h2>
       <button class="close-btn" onclick={handleCancel} aria-label={t('action.close')}>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -248,13 +262,14 @@
     <div class="modal-body">
       <!-- Content Input -->
       <div class="field-group content-field">
-        <label class="field-label">{t('task.add')}</label>
+        <label class="field-label" for="edit-task-content">{t('task.add')}</label>
         <input
+          id="edit-task-content"
+          bind:this={contentInput}
           type="text"
           class="field-input content-input"
           bind:value={content}
           placeholder={t('taskForm.placeholder')}
-          autofocus
         />
       </div>
 
@@ -270,11 +285,11 @@
 
       <!-- Priority Selector -->
       <div class="field-group priority-group">
-        <label class="field-label">
+        <div class="field-label" id="edit-task-priority-label">
           <span class="label-icon">🎯</span>
           {t('syntax.priority')}
-        </label>
-        <div class="priority-buttons">
+        </div>
+        <div class="priority-buttons" role="group" aria-labelledby="edit-task-priority-label">
           {#each priorityOptions as p}
             <button
               type="button"
@@ -294,11 +309,12 @@
       <div class="form-grid">
         <!-- Project & Context -->
         <div class="field-group">
-          <label class="field-label">
+          <label class="field-label" for="edit-project-input">
             <span class="label-icon" style:color="#b197fc">+</span>
             {t('taskForm.project')}
           </label>
           <input
+            id="edit-project-input"
             type="text"
             class="field-input"
             bind:value={project}
@@ -313,11 +329,11 @@
         </div>
 
         <div class="field-group">
-          <label class="field-label">
+          <label class="field-label" for="edit-mood-input">
             <span class="label-icon" style:color="#74c0fc">@</span>
             {t('taskForm.mood')}
           </label>
-          <select class="field-input mood-select" bind:value={mood}>
+          <select id="edit-mood-input" class="field-input mood-select" bind:value={mood}>
             {#each moodOptions as option}
               <option value={option.value}>{option.label}</option>
             {/each}
@@ -325,11 +341,12 @@
         </div>
 
         <div class="field-group">
-          <label class="field-label">
+          <label class="field-label" for="edit-tags-input">
             <span class="label-icon" style:color="#63e6be">#</span>
             {t('taskForm.tags')}
           </label>
           <input
+            id="edit-tags-input"
             type="text"
             class="field-input"
             bind:value={tags}
@@ -347,11 +364,12 @@
       <div class="form-grid">
         <!-- Dates -->
         <div class="field-group">
-          <label class="field-label">
+          <label class="field-label" for="edit-due-date-input">
             <span class="label-icon">📅</span>
             {t('taskForm.dueDate')}
           </label>
           <input
+            id="edit-due-date-input"
             type="date"
             class="field-input"
             bind:value={dueDate}
@@ -359,11 +377,12 @@
         </div>
 
         <div class="field-group">
-          <label class="field-label">
+          <label class="field-label" for="edit-threshold-date-input">
             <span class="label-icon">⏳</span>
             {t('taskForm.thresholdDate')}
           </label>
           <input
+            id="edit-threshold-date-input"
             type="date"
             class="field-input"
             bind:value={thresholdDate}
@@ -373,11 +392,12 @@
 
         <!-- Pomodoro & Recurrence -->
         <div class="field-group pomodoro-field">
-          <label class="field-label">
+          <label class="field-label" for="edit-pomodoros-input">
             <span class="label-icon">🍅</span>
             {t('syntax.pomodoro')}
           </label>
           <input
+            id="edit-pomodoros-input"
             type="number"
             class="field-input"
             bind:value={estimatedPomodoros}
@@ -388,11 +408,11 @@
         </div>
 
         <div class="field-group">
-          <label class="field-label">
+          <label class="field-label" for="edit-recurrence-input">
             <span class="label-icon">🔄</span>
             {t('taskForm.recurrence')}
           </label>
-          <select class="field-input" bind:value={recurrence}>
+          <select id="edit-recurrence-input" class="field-input" bind:value={recurrence}>
             {#each recurrenceOptions as option}
               <option value={option.value}>{option.label}</option>
             {/each}

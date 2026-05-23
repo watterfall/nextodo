@@ -6,7 +6,6 @@ mod watcher;
 
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
-use tauri::Manager;
 
 /// Thread-safe state for controlling the file watcher
 pub struct WatcherState {

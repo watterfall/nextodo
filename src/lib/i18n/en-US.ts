@@ -201,6 +201,7 @@ export default {
     selectTask: 'Select a task to start',
     immersiveMode: 'Immersive Mode',
     exitImmersive: 'Exit Immersive',
+    idle: 'Ready',
     immersive: {
       exitTitle: 'Exit immersive mode (Esc)',
       timerControls: 'Timer controls',

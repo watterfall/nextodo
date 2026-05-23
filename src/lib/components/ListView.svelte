@@ -97,7 +97,7 @@
       }
     }
 
-    reorderTask(priority, e.detail.items);
+    reorderTask(priority, e.detail.items, movedTasks[0]?.id);
   }
 
   async function confirmPriorityChange() {
@@ -447,11 +447,19 @@
 
   <!-- Priority change confirmation dialog -->
   {#if pendingPriorityChange}
-    <div class="modal-overlay" onclick={cancelPriorityChange}>
+    <div
+      class="modal-overlay"
+      onclick={cancelPriorityChange}
+      onkeydown={(e) => e.key === 'Escape' && cancelPriorityChange()}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="priority-change-title"
+      tabindex="-1"
+    >
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <!-- svelte-ignore a11y_click_events_have_key_events -->
       <div class="confirmation-modal" onclick={(e) => e.stopPropagation()}>
-        <div class="modal-icon">⚠️</div>
+        <div class="modal-icon" id="priority-change-title">⚠️</div>
         <p class="modal-message">{pendingPriorityChange.reason}</p>
         <div class="modal-actions">
           <button class="btn-cancel" onclick={cancelPriorityChange}>

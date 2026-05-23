@@ -357,6 +357,7 @@
   <div class="form-main">
     <div class="input-wrapper">
       <input
+        aria-label={t('taskForm.placeholder')}
         type="text"
         class="content-input"
         value={content}
@@ -441,11 +442,12 @@
       <div class="form-row">
         <!-- Project & Context -->
         <div class="field-group">
-          <label class="field-label">
+          <label class="field-label" for="task-project-input">
             <span class="label-icon" style:color="#b197fc">+</span>
             {t('taskForm.project')}
           </label>
           <input
+            id="task-project-input"
             type="text"
             class="field-input"
             bind:value={project}
@@ -460,11 +462,11 @@
         </div>
 
         <div class="field-group">
-          <label class="field-label">
+          <label class="field-label" for="task-mood-input">
             <span class="label-icon" style:color="#74c0fc">@</span>
             {t('taskForm.mood')}
           </label>
-          <select class="field-input mood-select" bind:value={mood}>
+          <select id="task-mood-input" class="field-input mood-select" bind:value={mood}>
             {#each moodOptions as option}
               <option value={option.value}>{option.label}</option>
             {/each}
@@ -472,11 +474,12 @@
         </div>
 
         <div class="field-group">
-          <label class="field-label">
+          <label class="field-label" for="task-tags-input">
             <span class="label-icon" style:color="#63e6be">#</span>
             {t('taskForm.tags')}
           </label>
           <input
+            id="task-tags-input"
             type="text"
             class="field-input"
             bind:value={tags}
@@ -494,11 +497,12 @@
       <div class="form-row">
         <!-- Dates & Pomodoro -->
         <div class="field-group">
-          <label class="field-label">
+          <label class="field-label" for="task-due-date-input">
             <span class="label-icon">📅</span>
             {t('taskForm.dueDate')}
           </label>
           <input
+            id="task-due-date-input"
             type="date"
             class="field-input"
             bind:value={dueDate}
@@ -506,11 +510,12 @@
         </div>
 
         <div class="field-group">
-          <label class="field-label">
+          <label class="field-label" for="task-threshold-date-input">
             <span class="label-icon">⏳</span>
             {t('taskForm.thresholdDate')}
           </label>
           <input
+            id="task-threshold-date-input"
             type="date"
             class="field-input"
             bind:value={thresholdDate}
@@ -519,10 +524,11 @@
         </div>
 
         <div class="field-group pomodoro-input">
-          <label class="field-label pomodoro-label">
+          <label class="field-label pomodoro-label" for="task-pomodoros-input">
             <span class="label-icon">🍅</span>
           </label>
           <input
+            id="task-pomodoros-input"
             type="number"
             class="field-input"
             bind:value={estimatedPomodoros}
@@ -533,11 +539,11 @@
         </div>
 
         <div class="field-group recurrence-input">
-          <label class="field-label">
+          <label class="field-label" for="task-recurrence-input">
             <span class="label-icon">🔄</span>
             {t('taskForm.recurrence')}
           </label>
-          <select class="field-input" bind:value={recurrence}>
+          <select id="task-recurrence-input" class="field-input" bind:value={recurrence}>
             {#each recurrenceOptions as option}
               <option value={option.value}>{option.label}</option>
             {/each}
@@ -548,11 +554,11 @@
       <!-- Priority Selector -->
       <div class="form-row priority-row">
         <div class="field-group priority-selector">
-          <label class="field-label">
+          <div class="field-label" id="task-priority-label">
             <span class="label-icon">🎯</span>
             {t('syntax.priority')}
-          </label>
-          <div class="priority-buttons">
+          </div>
+          <div class="priority-buttons" role="group" aria-labelledby="task-priority-label">
             {#each priorityOptions as p}
               <button
                 type="button"
@@ -981,8 +987,7 @@
       gap: 10px;
     }
 
-    .field-group,
-    .field-group.small {
+    .field-group {
       flex: none;
       min-width: 100%;
     }

@@ -1,14 +1,14 @@
-import type { Task, Priority } from '$lib/types';
-import { PRIORITY_CONFIG } from '$lib/types';
+import type { ActivePriority, ActivePriorityCounts, Task, Priority } from '$lib/types';
+import { ACTIVE_PRIORITIES, PRIORITY_CONFIG, isActivePriority } from '$lib/types';
 
 /**
  * Count active (non-completed) tasks by priority
  */
-export function countActiveByPriority(tasks: Task[]): Record<Priority, number> {
-  const counts: Record<Priority, number> = { A: 0, B: 0, C: 0, D: 0, E: 0, F: 0 };
+export function countActiveByPriority(tasks: Task[]): ActivePriorityCounts {
+  const counts: ActivePriorityCounts = { A: 0, B: 0, C: 0, D: 0, E: 0, F: 0 };
 
   for (const task of tasks) {
-    if (!task.completed) {
+    if (!task.completed && isActivePriority(task.priority)) {
       counts[task.priority]++;
     }
   }
@@ -19,11 +19,11 @@ export function countActiveByPriority(tasks: Task[]): Record<Priority, number> {
 /**
  * Get remaining quota for each priority
  */
-export function getRemainingQuota(tasks: Task[]): Record<Priority, number> {
+export function getRemainingQuota(tasks: Task[]): ActivePriorityCounts {
   const counts = countActiveByPriority(tasks);
-  const remaining: Record<Priority, number> = { A: 0, B: 0, C: 0, D: 0, E: 0, F: Infinity };
+  const remaining: ActivePriorityCounts = { A: 0, B: 0, C: 0, D: 0, E: 0, F: Infinity };
 
-  for (const priority of Object.keys(PRIORITY_CONFIG) as Priority[]) {
+  for (const priority of ACTIVE_PRIORITIES) {
     const quota = PRIORITY_CONFIG[priority].quota;
     remaining[priority] = quota === Infinity ? Infinity : Math.max(0, quota - counts[priority]);
   }
@@ -35,6 +35,8 @@ export function getRemainingQuota(tasks: Task[]): Record<Priority, number> {
  * Check if adding a task of given priority is allowed
  */
 export function canAddTask(tasks: Task[], priority: Priority): boolean {
+  if (!isActivePriority(priority)) return false;
+
   // F category (Idea Pool) has unlimited quota
   if (priority === 'F') return true;
 
@@ -47,6 +49,10 @@ export function canAddTask(tasks: Task[], priority: Priority): boolean {
  * Returns error message if not allowed, null if ok
  */
 export function validateQuota(tasks: Task[], priority: Priority): string | null {
+  if (!isActivePriority(priority)) {
+    return 'Cannot add directly to a hidden priority';
+  }
+
   if (canAddTask(tasks, priority)) {
     return null;
   }
@@ -76,7 +82,7 @@ export function applyHighlanderRule(tasks: Task[], newTask: Task): Task[] {
  * Get quota usage summary for display
  */
 export function getQuotaSummary(tasks: Task[]): Array<{
-  priority: Priority;
+  priority: ActivePriority;
   name: string;
   used: number;
   quota: number;
@@ -84,7 +90,7 @@ export function getQuotaSummary(tasks: Task[]): Array<{
 }> {
   const counts = countActiveByPriority(tasks);
 
-  return (['A', 'B', 'C', 'D', 'E', 'F'] as Priority[]).map(priority => {
+  return ACTIVE_PRIORITIES.map(priority => {
     const config = PRIORITY_CONFIG[priority];
     const used = counts[priority];
     const quota = config.quota;
@@ -102,7 +108,7 @@ export function getQuotaSummary(tasks: Task[]): Array<{
 /**
  * Suggest priority based on available quota
  */
-export function suggestPriority(tasks: Task[]): Priority {
+export function suggestPriority(tasks: Task[]): ActivePriority {
   const remaining = getRemainingQuota(tasks);
 
   // Prefer lower priorities first (E, D, C, B, A)
@@ -120,7 +126,11 @@ export function suggestPriority(tasks: Task[]): Priority {
  * Check if task can be promoted to higher priority
  */
 export function canPromote(tasks: Task[], task: Task): { canPromote: boolean; targetPriority: Priority | null } {
-  const priorities: Priority[] = ['A', 'B', 'C', 'D', 'E', 'F'];
+  if (!isActivePriority(task.priority)) {
+    return { canPromote: false, targetPriority: null };
+  }
+
+  const priorities: ActivePriority[] = ACTIVE_PRIORITIES;
   const currentIndex = priorities.indexOf(task.priority);
 
   if (currentIndex === 0) {
@@ -146,7 +156,11 @@ export function canPromote(tasks: Task[], task: Task): { canPromote: boolean; ta
  * Check if task can be demoted to lower priority
  */
 export function canDemote(task: Task): { canDemote: boolean; targetPriority: Priority | null } {
-  const priorities: Priority[] = ['A', 'B', 'C', 'D', 'E', 'F'];
+  if (!isActivePriority(task.priority)) {
+    return { canDemote: false, targetPriority: null };
+  }
+
+  const priorities: ActivePriority[] = ACTIVE_PRIORITIES;
   const currentIndex = priorities.indexOf(task.priority);
 
   if (currentIndex === priorities.length - 1) {

@@ -87,7 +87,7 @@
       }
     }
 
-    reorderTask(priority, e.detail.items);
+    reorderTask(priority, e.detail.items, movedTasks[0]?.id);
   }
 
   // Idea Pool (F zone) derived values
@@ -293,6 +293,8 @@
 
         <div 
           class="column-tasks" 
+          role="listbox"
+          aria-label={t(`priority.${priority}`)}
           use:dndzone={{ items: activeTasks, flipDurationMs: dndConfig.flipDurationMs, dropTargetStyle: { outline: `2px solid ${config.color}`, outlineOffset: '-2px', borderRadius: '8px' } }}
           onconsider={(e) => handleDndConsider(priority, e)}
           onfinalize={(e) => handleDndFinalize(priority, e)}
@@ -301,6 +303,8 @@
             <div
               class="task-item-wrapper"
               id={`task-${task.id}`}
+              role="option"
+              aria-selected={focusedTaskId === task.id}
               tabindex={focusedTaskId === task.id ? 0 : -1}
               animate:flip={{ duration: dndConfig.flipDurationMs }}
             >
@@ -534,33 +538,6 @@
     min-height: 40px;
   }
 
-  .completed-section {
-    padding: 10px;
-    border-top: 1px solid var(--border-subtle);
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    flex-shrink: 0;
-    max-height: 120px;
-    overflow-y: auto;
-  }
-
-  .completed-label {
-    font-size: 10px;
-    font-weight: 500;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    margin-bottom: 4px;
-  }
-
-  .more-count {
-    font-size: 11px;
-    color: var(--text-muted);
-    text-align: center;
-    padding: 4px;
-  }
-
   /* Recently completed tasks section */
   .recently-completed-section {
     padding: 10px;
@@ -731,11 +708,6 @@
 
   .idea-pool-panel.collapsed {
     width: 52px;
-  }
-
-  .idea-pool-panel.drop-target {
-    border-color: var(--primary);
-    box-shadow: 0 0 0 2px var(--primary);
   }
 
   .idea-pool-panel.focus-dimmed {
