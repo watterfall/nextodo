@@ -32,8 +32,8 @@ export const easings = {
   decelerate: 'cubic-bezier(0, 0, 0.2, 1)',
   // Accelerate - for exiting elements
   accelerate: 'cubic-bezier(0.4, 0, 1, 1)',
-  // Bouncy - overshoots slightly
-  bounce: 'cubic-bezier(0.34, 1.56, 0.64, 1)',
+  // Bouncy preset is deprecated — bounce/elastic feel dated. Aliased to smoothOut.
+  bounce: 'cubic-bezier(0.16, 1, 0.3, 1)',
   // Smooth out - gentle deceleration
   smoothOut: 'cubic-bezier(0.16, 1, 0.3, 1)'
 } as const;
@@ -133,4 +133,43 @@ export function createTransition(
 // Helper to generate staggered delay for list items
 export function staggerDelay(index: number, baseDelay = 30): number {
   return index * baseDelay;
+}
+
+// =========================================
+// svelte-dnd-action type re-exports + helpers
+// (Centralized so components don't need to know
+// the underlying event shape.)
+// =========================================
+
+export type DndItem = { id: string } & Record<string, unknown>;
+
+export type DndConsiderEvent<T extends DndItem = DndItem> = CustomEvent<{
+  items: T[];
+  info: {
+    trigger: string;
+    id: string;
+    source: string;
+  };
+}>;
+
+export type DndFinalizeEvent<T extends DndItem = DndItem> = CustomEvent<{
+  items: T[];
+  info: {
+    trigger: string;
+    id: string;
+    source: string;
+  };
+}>;
+
+/**
+ * Shallow-compare two task arrays by id + position.
+ * Used to avoid unnecessary re-syncs when DnD ghost re-renders fire spurious updates.
+ */
+export function areTaskArraysEqual<T extends { id: string }>(a: T[], b: T[]): boolean {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i].id !== b[i].id) return false;
+  }
+  return true;
 }
