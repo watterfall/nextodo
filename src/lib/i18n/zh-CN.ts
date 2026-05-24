@@ -53,6 +53,8 @@ export default {
     D: '临时任务',
     E: '快速处理',
     F: '灵感收集',
+    N: '未来推进',
+    S: '持续推进',
     description: {
       A: '深度工作，需 2+ 小时专注',
       B: '项目关键节点，45-90分钟',
@@ -60,6 +62,8 @@ export default {
       D: '计划外的临时任务',
       E: '15分钟内可完成',
       F: '收集想法、待分类任务',
+      N: '重要但长期的推进任务',
+      S: '一周持续推进的重要项目',
     },
     tooltip: {
       A: '核心挑战 · 配额 1/周期 · 2+ 小时 · 高难度高价值',
@@ -68,6 +72,7 @@ export default {
       D: '临时任务 · 配额 4/周期 · 计划外意外 · 保持弹性',
       E: '快速处理 · 配额 5/周期 · <15 分钟 · 快速完成',
       F: '灵感收集 · 无限制 · 收集想法 · 稍后分类',
+      N: '未来推进 · 无配额 · 默认隐藏 · 准备好再激活',
     },
     quota: {
       A: '1/周期',
@@ -76,6 +81,7 @@ export default {
       D: '4/周期',
       E: '5/周期',
       F: '无限制',
+      N: '无配额',
     },
     difficulty: {
       A: '高难度',
@@ -84,6 +90,7 @@ export default {
       D: '意外任务',
       E: '低难度',
       F: '待分类',
+      N: '长期',
     },
     time: {
       A: '2+ 小时',
@@ -92,6 +99,7 @@ export default {
       D: '不定',
       E: '<15 分钟',
       F: '不定',
+      N: '长期',
     },
   },
 
@@ -130,7 +138,9 @@ export default {
     biweekly: '每两周',
     monthly: '每月',
     keyboardHint: '按 Ctrl+Enter 快速添加',
-    syntaxHint: '支持语法: !A-F +项目 @状态 #标签 ~日期 thr:延后日期 🍅数量',
+    syntaxHint: '支持语法: !A-F !S !N 或 【A】-【N】 +项目 @状态 #标签 ~日期 thr:延后日期 🍅数量',
+    subtasks: '子任务',
+    subtaskPlaceholder: '添加一个子任务 · 回车确认',
   },
 
   // Inbox Panel (Idea Pool)
@@ -367,6 +377,12 @@ export default {
     noContexts: '暂无状态',
     collapse: '收起侧边栏',
     showAll: '显示全部',
+    futureProgress: '未来推进',
+    futureProgressHint: '长期重要事项 · 默认隐藏，准备好再激活',
+    futureProgressEmpty: '暂无未来推进任务',
+    sustained: '持续推进',
+    sustainedHint: '一周持续推进的项目 · 可分解为子任务勾选',
+    sustainedEmpty: '暂无持续推进项目',
   },
 
   // Priority tooltips (for ListView)
@@ -383,6 +399,13 @@ export default {
     dropHere: '拖拽任务到这里',
     empty: '暂无任务',
     quotaInfo: '{current}/{max}',
+    movedTo: '已移到 {priority} · {name}',
+    moveFailed: '移动失败',
+    demotedToB: '已将原持续项目「{name}」降级到 B 区',
+    demoteFailed: '降级原持续项目失败（B 区可能已满）',
+    subtaskPromotedTo: '子任务已提升到 {priority}',
+    promotedTo: '已提升到 {name} ({priority})',
+    promoteFailed: '提升失败',
   },
 
   // View modes
@@ -437,6 +460,8 @@ export default {
     restore: '恢复',
     permanentDelete: '永久删除',
     evolve: '演化',
+    activate: '激活',
+    moveToFuture: '移入未来推进',
   },
 
   // History modal
@@ -470,6 +495,8 @@ export default {
     taskMovedToTrash: '任务已移至回收站',
     taskCancelled: '任务已取消',
     taskEvolved: '任务已演化，新任务已创建',
+    taskActivated: '任务已激活到 {priority} 区',
+    activateChooseTarget: '激活到哪个优先级？',
     evolveTaskTitle: '演化任务',
     evolveTaskHint: '完成当前任务并创建演化版本',
     // Priority change confirmation

@@ -1,5 +1,5 @@
 import type { ActivePriority, ActivePriorityCounts, Task, Priority } from '$lib/types';
-import { ACTIVE_PRIORITIES, PRIORITY_CONFIG, isActivePriority } from '$lib/types';
+import { ACTIVE_PRIORITIES, PRIORITY_CONFIG, isActivePriority, isFuturePriority, isSustainedPriority } from '$lib/types';
 
 /**
  * Count active (non-completed) tasks by priority
@@ -35,6 +35,13 @@ export function getRemainingQuota(tasks: Task[]): ActivePriorityCounts {
  * Check if adding a task of given priority is allowed
  */
 export function canAddTask(tasks: Task[], priority: Priority): boolean {
+  // Future-progress (N) has no quota — always allowed
+  if (isFuturePriority(priority)) return true;
+  // Sustained (S) has quota of 1 — week-long single-project semantics
+  if (isSustainedPriority(priority)) {
+    const sCount = tasks.filter(t => !t.completed && t.priority === 'S').length;
+    return sCount < 1;
+  }
   if (!isActivePriority(priority)) return false;
 
   // F category (Idea Pool) has unlimited quota
@@ -49,6 +56,14 @@ export function canAddTask(tasks: Task[], priority: Priority): boolean {
  * Returns error message if not allowed, null if ok
  */
 export function validateQuota(tasks: Task[], priority: Priority): string | null {
+  // Future-progress (N) has no quota
+  if (isFuturePriority(priority)) return null;
+
+  // Sustained (S) is quota 1 — replaced via Highlander logic in store
+  if (isSustainedPriority(priority)) {
+    return canAddTask(tasks, priority) ? null : '本周已有一个持续推进项目（点击替换或先完成现有的）';
+  }
+
   if (!isActivePriority(priority)) {
     return 'Cannot add directly to a hidden priority';
   }
@@ -182,8 +197,8 @@ export function validatePomodoroEstimate(priority: Priority, estimatedPomodoros:
   const config = PRIORITY_CONFIG[priority];
   const { min, max, recommended } = config.pomodoroRange;
 
-  // F priority has no constraints
-  if (priority === 'F') {
+  // F (Idea Pool), N (Future) and S (Sustained) have no pomodoro constraints
+  if (priority === 'F' || priority === 'N' || priority === 'S') {
     return { isValid: true, warning: null, suggestion: null };
   }
 
@@ -213,7 +228,7 @@ export function getPomodoroHint(priority: Priority): string {
   const config = PRIORITY_CONFIG[priority];
   const { min, max, recommended } = config.pomodoroRange;
 
-  if (priority === 'F') {
+  if (priority === 'F' || priority === 'N' || priority === 'S') {
     return '无番茄限制';
   }
 

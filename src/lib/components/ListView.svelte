@@ -1,9 +1,12 @@
 <script lang="ts">
-  import { getTasksStore } from '$lib/stores/tasks.svelte';
+  import { changePriority, getTasksStore, promoteSubtask } from '$lib/stores/tasks.svelte';
   import { getI18nStore } from '$lib/i18n';
   import { slide } from 'svelte/transition';
   import { PRIORITY_CONFIG, type Priority, type Task, isActivePriority } from '$lib/types';
   import TaskCard from './TaskCard.svelte';
+  import ZoneRail from './ZoneRail.svelte';
+  import DropZone from './DropZone.svelte';
+  import type { TaskDragPayload, SubtaskDragPayload } from '$lib/utils/dnd';
   import { isToday, isOverdue, parseISODate, getRelativeDayLabel } from '$lib/utils/unitCalc';
 
   type GroupBy = 'priority' | 'project' | 'context' | 'due' | 'tag' | 'none';
@@ -97,8 +100,9 @@
     }
 
     // Convert to ordered list with labels
+    // F (Idea Pool) is intentionally excluded — it lives in the ReservoirPanel above the view
     if (groupBy === 'priority') {
-      const order: Priority[] = ['A', 'B', 'C', 'D', 'E', 'F'];
+      const order: Priority[] = ['A', 'B', 'C', 'D', 'E'];
       for (const p of order) {
         const t = buckets[p] || [];
         result.push({
@@ -157,6 +161,24 @@
   });
 
   const totalTasks = $derived(groups.reduce((sum, g) => sum + g.tasks.length, 0));
+  const listDropPriorities: Priority[] = ['A', 'B', 'C', 'D', 'E'];
+
+  function isListDropPriority(key: string): key is Priority {
+    return listDropPriorities.includes(key as Priority);
+  }
+
+  async function handleDropTaskInGroup(priority: Priority, payload: TaskDragPayload) {
+    if (payload.fromPriority === priority) return null;
+    const result = await changePriority(payload.taskId, priority, true);
+    if (!result.success) return { success: false, error: result.error || '移动失败' };
+    return { success: true, toast: `已移到 ${priority} · ${t(`priority.${priority}`)}` };
+  }
+
+  async function handleDropSubtaskInGroup(priority: Priority, payload: SubtaskDragPayload) {
+    const result = await promoteSubtask(payload.parentTaskId, payload.subtaskId, priority);
+    if (!result.success) return { success: false, error: result.error || '提升失败' };
+    return { success: true, toast: `子任务已提升到 ${priority} · ${t(`priority.${priority}`)}` };
+  }
 
   function toggleCollapsed(key: string) {
     collapsed[key] = !collapsed[key];
@@ -173,7 +195,7 @@
 </script>
 
 <div class="list-view">
-  <!-- Toolbar: Group-by selector + sort direction -->
+  <!-- 2-column layout: A-E groups on left, S/F/N zone rail on right -->
   <div class="list-toolbar">
     <div class="toolbar-left">
       <span class="toolbar-label">{t('list.groupByLabel') || '分组方式'}</span>
@@ -212,53 +234,101 @@
     </div>
   </div>
 
-  <!-- Groups -->
-  <div class="groups-scroll">
-    {#if groups.length === 0 || totalTasks === 0}
-      <div class="empty">
-        <div class="empty-icon">🍃</div>
-        <p>{t('list.empty') || '当前分组下没有任务'}</p>
-      </div>
-    {:else}
-      {#each groups as group (group.key)}
-        {#if group.tasks.length > 0}
-          <section class="group">
-            <header
-              class="group-header"
-              role="button"
-              tabindex="0"
-              onclick={() => toggleCollapsed(group.key)}
-              onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && toggleCollapsed(group.key)}
+  <!-- Two-column body: A-E groups (left) + S/F/N zone rail (right) -->
+  <div class="list-body">
+    <div class="groups-scroll">
+      {#if groupBy !== 'priority' && (groups.length === 0 || totalTasks === 0)}
+        <div class="empty">
+          <div class="empty-icon">🍃</div>
+          <p>{t('list.empty') || '当前分组下没有任务'}</p>
+        </div>
+      {:else}
+        {#each groups as group (group.key)}
+          {#if groupBy === 'priority' && isListDropPriority(group.key)}
+            {@const priority = group.key}
+            <DropZone
+              color={PRIORITY_CONFIG[priority].color}
+              class="list-priority-drop-zone"
+              onTaskDrop={(p) => handleDropTaskInGroup(priority, p)}
+              onSubtaskDrop={(p) => handleDropSubtaskInGroup(priority, p)}
             >
-              <svg
-                class="chevron"
-                class:collapsed={collapsed[group.key]}
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2.5"
-                stroke-linecap="round"
+              <header
+                class="group-header"
+                role="button"
+                tabindex="0"
+                onclick={() => toggleCollapsed(group.key)}
+                onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && toggleCollapsed(group.key)}
               >
-                <polyline points="6 9 12 15 18 9" />
-              </svg>
-              {#if group.meta}
-                <span class="group-color-dot" style:background={group.meta}></span>
-              {/if}
-              <span class="group-label">{group.label}</span>
-              <span class="group-count font-num">{group.tasks.length}</span>
-            </header>
+                <svg
+                  class="chevron"
+                  class:collapsed={collapsed[group.key]}
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.5"
+                  stroke-linecap="round"
+                >
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+                <span class="group-color-dot" style:background={PRIORITY_CONFIG[priority].color}></span>
+                <span class="group-label">{group.label}</span>
+                <span class="group-count font-num">{group.tasks.length}</span>
+              </header>
 
-            {#if !collapsed[group.key]}
-              <div class="group-body" transition:slide={{ duration: 180 }}>
-                {#each group.tasks as task (task.id)}
-                  <TaskCard {task} showPriority={groupBy !== 'priority'} />
-                {/each}
-              </div>
-            {/if}
-          </section>
-        {/if}
-      {/each}
-    {/if}
+              {#if !collapsed[group.key]}
+                <div class="group-body" transition:slide={{ duration: 180 }}>
+                  {#each group.tasks as task (task.id)}
+                    <TaskCard {task} showPriority={false} />
+                  {:else}
+                    <div class="group-empty-drop">拖任务到此</div>
+                  {/each}
+                </div>
+              {/if}
+            </DropZone>
+          {:else if group.tasks.length > 0}
+            <section class="group">
+              <header
+                class="group-header"
+                role="button"
+                tabindex="0"
+                onclick={() => toggleCollapsed(group.key)}
+                onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && toggleCollapsed(group.key)}
+              >
+                <svg
+                  class="chevron"
+                  class:collapsed={collapsed[group.key]}
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.5"
+                  stroke-linecap="round"
+                >
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+                {#if group.meta}
+                  <span class="group-color-dot" style:background={group.meta}></span>
+                {/if}
+                <span class="group-label">{group.label}</span>
+                <span class="group-count font-num">{group.tasks.length}</span>
+              </header>
+
+              {#if !collapsed[group.key]}
+                <div class="group-body" transition:slide={{ duration: 180 }}>
+                  {#each group.tasks as task (task.id)}
+                    <TaskCard {task} showPriority={groupBy !== 'priority'} />
+                  {/each}
+                </div>
+              {/if}
+            </section>
+          {/if}
+        {/each}
+      {/if}
+    </div>
+
+    <!-- S/F/N rail on the right — vertical stack, spatially adjacent for easy DnD -->
+    <aside class="rail-column">
+      <ZoneRail orientation="vertical" />
+    </aside>
   </div>
 </div>
 
@@ -269,6 +339,35 @@
     height: 100%;
     width: 100%;
     min-width: 0;
+  }
+
+  /* Two-column body: groups (left) + S/F/N rail (right) */
+  .list-body {
+    flex: 1;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 320px;
+    gap: var(--space-md);
+    overflow: hidden;
+    min-height: 0;
+  }
+
+  .rail-column {
+    height: 100%;
+    overflow: hidden;
+    border-radius: var(--radius-lg);
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-hairline);
+    padding: 8px;
+  }
+
+  @media (max-width: 900px) {
+    .list-body {
+      grid-template-columns: 1fr;
+      grid-template-rows: 1fr auto;
+    }
+    .rail-column {
+      max-height: 50vh;
+    }
   }
 
   /* ===== Toolbar ===== */
@@ -387,14 +486,20 @@
 
   /* ===== Groups ===== */
   .groups-scroll {
-    flex: 1;
+    height: 100%;
     overflow-y: auto;
     padding-bottom: var(--space-2xl);
     padding-right: 2px;
+    min-height: 0;
   }
 
   .group {
     margin-bottom: var(--space-lg);
+  }
+
+  :global(.list-priority-drop-zone) {
+    margin-bottom: var(--space-lg);
+    border-radius: var(--radius-md);
   }
 
   .group-header {
@@ -455,6 +560,18 @@
     padding: 6px 0 0 18px;
   }
 
+  .group-empty-drop {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px dashed var(--border-subtle);
+    border-radius: var(--radius-md);
+    color: var(--text-muted);
+    font-size: var(--text-sm);
+    background: color-mix(in srgb, var(--card-bg) 80%, transparent);
+  }
+
   /* ===== Empty ===== */
   .empty {
     display: flex;
@@ -483,6 +600,10 @@
   }
 
   :global(.density-compact) .group {
+    margin-bottom: var(--space-md);
+  }
+
+  :global(.density-compact .list-priority-drop-zone) {
     margin-bottom: var(--space-md);
   }
 

@@ -1,5 +1,5 @@
-import type { Task, Priority, FilterState, UnitInfo, AppData, ActiveData, PomodoroHistoryData } from '$lib/types';
-import { createEmptyTask, createDefaultAppData, isThresholdPassed, calculateEZoneAge, isActivePriority, ACTIVE_PRIORITIES, isWithinRetentionPeriod } from '$lib/types';
+import type { Task, Subtask, Priority, FilterState, UnitInfo, AppData, ActiveData, PomodoroHistoryData } from '$lib/types';
+import { createEmptyTask, createDefaultAppData, isThresholdPassed, calculateEZoneAge, isActivePriority, isCountedPriority, isFuturePriority, isSustainedPriority, isOperablePriority, createSubtask, ACTIVE_PRIORITIES, isWithinRetentionPeriod } from '$lib/types';
 import { loadAppData, saveAppData, reloadFile } from '$lib/utils/storage';
 import { applyHighlanderRule, canAddTask, validateQuota } from '$lib/utils/quota';
 import { createTaskFromInput } from '$lib/utils/parser';
@@ -204,7 +204,7 @@ export async function updateTask(taskId: string, updates: Partial<Task>): Promis
 // Cancel a task (move to H priority)
 export async function cancelTask(taskId: string): Promise<void> {
   appData.tasks = appData.tasks.map(task => {
-    if (task.id === taskId && isActivePriority(task.priority)) {
+    if (task.id === taskId && isOperablePriority(task.priority)) {
       return {
         ...task,
         originalPriority: task.priority, // Save original priority for retention period calculation
@@ -224,7 +224,7 @@ export async function deleteTask(taskId: string): Promise<void> {
 
 export async function completeTask(taskId: string): Promise<void> {
   // Find the task first to check for recurrence
-  const taskToComplete = appData.tasks.find(t => t.id === taskId && isActivePriority(t.priority));
+  const taskToComplete = appData.tasks.find(t => t.id === taskId && isOperablePriority(t.priority));
   let nextRecurringTask: Task | null = null;
 
   // Create next occurrence before modifying the task
@@ -240,7 +240,7 @@ export async function completeTask(taskId: string): Promise<void> {
 
   // Move task to G (completed) priority, preserving original priority for retention display
   appData.tasks = appData.tasks.map(task => {
-    if (task.id === taskId && isActivePriority(task.priority)) {
+    if (task.id === taskId && isOperablePriority(task.priority)) {
       return {
         ...task,
         originalPriority: task.priority, // Save original priority for retention period calculation
@@ -345,8 +345,8 @@ export async function uncompleteTask(taskId: string): Promise<void> {
 
 // Restore a task to a specific priority
 export async function restoreTask(taskId: string, targetPriority: Priority = 'F'): Promise<void> {
-  // Only allow restoring to active priorities
-  if (!isActivePriority(targetPriority)) {
+  // Only allow restoring to operable (active or future) priorities
+  if (!isOperablePriority(targetPriority)) {
     targetPriority = 'F';
   }
 
@@ -369,6 +369,194 @@ export async function restoreTask(taskId: string, targetPriority: Priority = 'F'
 export async function permanentlyDeleteTask(taskId: string): Promise<void> {
   appData.tasks = appData.tasks.filter(t => t.id !== taskId);
   await persist();
+}
+
+// ============================================================================
+// Subtask operations — embedded lightweight checklist items on a parent Task
+// ============================================================================
+
+export async function addSubtask(taskId: string, content: string): Promise<void> {
+  const trimmed = content.trim();
+  if (!trimmed) return;
+  appData.tasks = appData.tasks.map(task => {
+    if (task.id === taskId) {
+      const subtasks = [...(task.subtasks ?? []), createSubtask(trimmed)];
+      return { ...task, subtasks };
+    }
+    return task;
+  });
+  await persist();
+}
+
+export async function removeSubtask(taskId: string, subtaskId: string): Promise<void> {
+  appData.tasks = appData.tasks.map(task => {
+    if (task.id === taskId && task.subtasks) {
+      return { ...task, subtasks: task.subtasks.filter(s => s.id !== subtaskId) };
+    }
+    return task;
+  });
+  await persist();
+}
+
+export async function toggleSubtask(taskId: string, subtaskId: string): Promise<void> {
+  const nowIso = new Date().toISOString();
+  appData.tasks = appData.tasks.map(task => {
+    if (task.id === taskId && task.subtasks) {
+      return {
+        ...task,
+        subtasks: task.subtasks.map(s => {
+          if (s.id !== subtaskId) return s;
+          const next = !s.completed;
+          return { ...s, completed: next, completedAt: next ? nowIso : null };
+        })
+      };
+    }
+    return task;
+  });
+  await persist();
+}
+
+// Promote a subtask out of its parent into a standalone task at target priority.
+// The subtask is removed from the parent. The new task inherits the subtask's
+// content and the parent's projects/contexts/tags as default classification.
+export async function promoteSubtask(
+  parentTaskId: string,
+  subtaskId: string,
+  targetPriority: Priority
+): Promise<{ success: boolean; error?: string }> {
+  const parent = appData.tasks.find(t => t.id === parentTaskId);
+  if (!parent || !parent.subtasks) {
+    return { success: false, error: 'Parent task not found' };
+  }
+  const subtask = parent.subtasks.find(s => s.id === subtaskId);
+  if (!subtask) {
+    return { success: false, error: 'Subtask not found' };
+  }
+  if (!isOperablePriority(targetPriority)) {
+    return { success: false, error: 'Invalid target priority' };
+  }
+
+  // Quota check (skip for A — handled by Highlander below; skip for F — unlimited).
+  // canAddTask handles S and N internally; pass full task list so S count is accurate.
+  if (targetPriority !== 'A' && targetPriority !== 'F') {
+    if (!canAddTask(appData.tasks, targetPriority)) {
+      return { success: false, error: t('message.quotaExceeded', { priority: targetPriority }) };
+    }
+  }
+
+  // Build the new standalone task from the subtask content
+  const now = new Date().toISOString();
+  const newTask: Task = {
+    id: crypto.randomUUID(),
+    content: subtask.content,
+    priority: targetPriority,
+    completed: false,
+    completedAt: null,
+    createdAt: now,
+    unitStart: now.split('T')[0],
+    projects: [...parent.projects],
+    contexts: [...parent.contexts],
+    customTags: [...parent.customTags],
+    dueDate: null,
+    thresholdDate: null,
+    recurrence: null,
+    pomodoros: { estimated: 0, completed: 0 },
+    notes: '',
+    evolvedFrom: parentTaskId
+  };
+
+  // Apply Highlander if needed
+  let nextTasks = [...appData.tasks];
+  if (targetPriority === 'A') {
+    nextTasks = applyHighlanderRule(nextTasks, newTask);
+  }
+  // Append new task
+  nextTasks = [...nextTasks, newTask];
+  // Remove subtask from parent
+  nextTasks = nextTasks.map(item => {
+    if (item.id === parentTaskId && item.subtasks) {
+      return { ...item, subtasks: item.subtasks.filter(s => s.id !== subtaskId) };
+    }
+    return item;
+  });
+  appData.tasks = nextTasks;
+  await persist();
+  return { success: true };
+}
+
+export async function updateSubtaskContent(taskId: string, subtaskId: string, content: string): Promise<void> {
+  const trimmed = content.trim();
+  if (!trimmed) {
+    return removeSubtask(taskId, subtaskId);
+  }
+  appData.tasks = appData.tasks.map(task => {
+    if (task.id === taskId && task.subtasks) {
+      return {
+        ...task,
+        subtasks: task.subtasks.map(s => s.id === subtaskId ? { ...s, content: trimmed } : s)
+      };
+    }
+    return task;
+  });
+  await persist();
+}
+
+// Activate a future-progress (N) task into an active priority (A-F).
+// Subject to the target priority's quota.
+export async function activateFutureTask(
+  taskId: string,
+  targetPriority: Priority = 'F'
+): Promise<{ success: boolean; error?: string }> {
+  const task = appData.tasks.find(t => t.id === taskId);
+  if (!task) return { success: false, error: 'Task not found' };
+  if (!isFuturePriority(task.priority)) {
+    return { success: false, error: 'Task is not in future-progress' };
+  }
+  if (!isOperablePriority(targetPriority)) {
+    return { success: false, error: 'Invalid target priority' };
+  }
+
+  // S Highlander: if activating into S and another S exists, demote it to B first.
+  // Surface a quota failure (e.g. B is full) before mutating anything else.
+  if (isSustainedPriority(targetPriority)) {
+    const existingS = appData.tasks.find(t => t.id !== taskId && t.priority === 'S' && !t.completed);
+    if (existingS) {
+      const demote = await changePriority(existingS.id, 'B', true);
+      if (!demote.success) {
+        return { success: false, error: demote.error || t('zone.demoteFailed') };
+      }
+    }
+  }
+
+  // Quota check — skip A (Highlander handles it) and S (handled above).
+  // canAddTask understands all priority types; pass full task list so S/N are counted correctly.
+  const otherTasks = appData.tasks.filter(t => t.id !== taskId);
+  if (targetPriority !== 'A' && !isSustainedPriority(targetPriority) && !canAddTask(otherTasks, targetPriority)) {
+    return { success: false, error: t('message.quotaExceeded', { priority: targetPriority }) };
+  }
+
+  // Apply Highlander rule if activating to A
+  let nextTasks = appData.tasks.map(item => {
+    if (item.id === taskId) {
+      return {
+        ...item,
+        priority: targetPriority,
+        lastPriorityChangeAt: new Date().toISOString()
+      };
+    }
+    return item;
+  });
+
+  if (targetPriority === 'A') {
+    const promoted = nextTasks.find(t => t.id === taskId);
+    if (promoted) {
+      nextTasks = applyHighlanderRule(nextTasks, promoted);
+    }
+  }
+
+  appData.tasks = nextTasks;
+  await persist();
+  return { success: true };
 }
 
 // Priority tiers for detecting drastic changes
@@ -434,9 +622,9 @@ export async function changePriority(taskId: string, newPriority: Priority, skip
     return { success: false, error: 'Task not found' };
   }
 
-  // Only allow changing to active priorities (A-F) through this function
+  // Allow changing to active (A-F) or future (N) priorities through this function
   // Use completeTask or cancelTask for G/H
-  if (!isActivePriority(newPriority)) {
+  if (!isOperablePriority(newPriority)) {
     return { success: false, error: 'Cannot change to hidden priority directly' };
   }
 
@@ -453,9 +641,11 @@ export async function changePriority(taskId: string, newPriority: Priority, skip
     }
   }
 
-  // Check quota for new priority (only among active tasks)
-  const otherActiveTasks = appData.tasks.filter(t => t.id !== taskId && isActivePriority(t.priority));
-  if (newPriority !== 'A' && !canAddTask(otherActiveTasks, newPriority)) {
+  // Check quota for new priority — pass full task list so canAddTask can correctly
+  // count S (Sustained, quota 1) and N (Future, unlimited); the A-F branch
+  // internally filters by isActivePriority via getRemainingQuota.
+  const otherTasks = appData.tasks.filter(t => t.id !== taskId);
+  if (newPriority !== 'A' && !canAddTask(otherTasks, newPriority)) {
     return { success: false, error: t('message.quotaExceeded', { priority: newPriority }) };
   }
 
@@ -576,13 +766,19 @@ export function setCurrentUnit(unit: UnitInfo): void {
 }
 
 // Derived values - Step 1: Filter active priorities (A-F)
+// N (future-progress) is intentionally NOT included here; it is rendered via
+// the persistent PriorityTray, not in the main view chain.
 const activeTasks = $derived(appData.tasks.filter(t => isActivePriority(t.priority)));
+
+// Tasks that count toward cross-cutting aggregations (sidebar project/context/
+// tag badges, etc.). Includes A-F + N + S — everything not hidden (G/H).
+const countedTasks = $derived(appData.tasks.filter(t => isCountedPriority(t.priority)));
 
 // Derived values - Step 2: Filter by threshold date
 const visibleTasks = $derived.by(() => {
   const now = new Date();
   now.setHours(0, 0, 0, 0);
-  
+
   if (filter.showFutureTasks) {
     return activeTasks.filter(t => {
       if (!t.thresholdDate) return false;
@@ -591,7 +787,7 @@ const visibleTasks = $derived.by(() => {
       return threshold > now;
     });
   }
-  
+
   return activeTasks.filter(t => {
     if (!t.thresholdDate) return true;
     const threshold = new Date(t.thresholdDate);
@@ -662,7 +858,9 @@ const tasksByPriority = $derived.by(() => {
     E: [],
     F: [],
     G: [],
-    H: []
+    H: [],
+    N: [],
+    S: []
   };
 
   for (const task of filteredTasks) {
@@ -694,14 +892,47 @@ const cancelledTasks = $derived(
     })
 );
 
-// Only count active tasks for projects/contexts (use visibleTasks to respect threshold, or activeTasks to show all available?)
-// Typically project lists should show all active projects even if tasks are dormant?
-// Let's use activeTasks to be safe so counts don't fluctuate wildly based on threshold visibility
-// const activeTasks = ... is already defined above
+// Future-progress tasks (N priority) — long-horizon, default hidden from daily views
+const futureTasks = $derived(
+  appData.tasks.filter(t => isFuturePriority(t.priority))
+    .sort((a, b) => {
+      const dateA = new Date(a.createdAt).getTime();
+      const dateB = new Date(b.createdAt).getTime();
+      return dateB - dateA;
+    })
+);
 
+const futureTasksTotal = $derived(futureTasks.length);
+
+// Sustained tasks (S priority) — week-long projects, surfaced in the tray with progress
+const sustainedTasks = $derived(
+  appData.tasks.filter(t => isSustainedPriority(t.priority))
+    .sort((a, b) => {
+      const dateA = new Date(a.createdAt).getTime();
+      const dateB = new Date(b.createdAt).getTime();
+      return dateB - dateA;
+    })
+);
+
+const sustainedTasksTotal = $derived(sustainedTasks.length);
+
+// Overall subtask completion across all S tasks (for tray progress display)
+const sustainedSubtaskProgress = $derived.by(() => {
+  let done = 0;
+  let total = 0;
+  for (const task of sustainedTasks) {
+    const subs = task.subtasks ?? [];
+    total += subs.length;
+    done += subs.filter(s => s.completed).length;
+  }
+  return { done, total, ratio: total === 0 ? 0 : done / total };
+});
+
+// Project/context aggregations use countedTasks (A-F + N + S) so that tags
+// attached to Future (N) and Sustained (S) tasks also surface in the sidebar.
 const allProjects = $derived.by(() => {
   const projects = new Set<string>();
-  for (const task of activeTasks) {
+  for (const task of countedTasks) {
     for (const project of task.projects) {
       projects.add(project);
     }
@@ -711,7 +942,7 @@ const allProjects = $derived.by(() => {
 
 const allContexts = $derived.by(() => {
   const contexts = new Set<string>();
-  for (const task of activeTasks) {
+  for (const task of countedTasks) {
     for (const context of task.contexts) {
       contexts.add(context);
     }
@@ -721,7 +952,7 @@ const allContexts = $derived.by(() => {
 
 const projectCounts = $derived.by(() => {
   const counts: Record<string, number> = {};
-  for (const task of activeTasks) {
+  for (const task of countedTasks) {
     for (const project of task.projects) {
       counts[project] = (counts[project] || 0) + 1;
     }
@@ -731,7 +962,7 @@ const projectCounts = $derived.by(() => {
 
 const contextCounts = $derived.by(() => {
   const counts: Record<string, number> = {};
-  for (const task of activeTasks) {
+  for (const task of countedTasks) {
     for (const context of task.contexts) {
       counts[context] = (counts[context] || 0) + 1;
     }
@@ -783,7 +1014,7 @@ const agingEZoneTasks = $derived(agingFZoneTasks);
 // These will be shown with strikethrough in their original zone
 const recentlyCompletedTasksByPriority = $derived.by(() => {
   const byPriority: Record<Priority, Task[]> = {
-    A: [], B: [], C: [], D: [], E: [], F: [], G: [], H: []
+    A: [], B: [], C: [], D: [], E: [], F: [], G: [], H: [], N: [], S: []
   };
 
   const recentlyCompleted = appData.tasks.filter(t =>
@@ -815,8 +1046,14 @@ export function getTasksStore() {
     get appData() { return appData; },
     get tasks() { return appData.tasks; },
     get activeTasks() { return activeTasks; },
+    get countedTasks() { return countedTasks; },
     get completedTasks() { return completedTasks; },
     get cancelledTasks() { return cancelledTasks; },
+    get futureTasks() { return futureTasks; },
+    get futureTasksTotal() { return futureTasksTotal; },
+    get sustainedTasks() { return sustainedTasks; },
+    get sustainedTasksTotal() { return sustainedTasksTotal; },
+    get sustainedSubtaskProgress() { return sustainedSubtaskProgress; },
     get isLoading() { return isLoading; },
     get lastError() { return lastError; },
     get currentUnit() { return currentUnit; },

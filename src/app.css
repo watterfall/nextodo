@@ -511,15 +511,16 @@ a:hover {
   40%, 80% { transform: translateX(3px); }
 }
 
-/* View crossfade — for switching between view modes */
+/* View crossfade — for switching between view modes.
+   Slight rise + tiny scale-up for tactile "settled into place" feel. */
 @keyframes view-fade-in {
   from {
     opacity: 0;
-    transform: translateY(4px);
+    transform: translateY(6px) scale(0.992);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: translateY(0) scale(1);
   }
 }
 
@@ -544,7 +545,8 @@ a:hover {
 }
 
 .anim-view-enter {
-  animation: view-fade-in 0.18s var(--ease-out-expo);
+  animation: view-fade-in 0.26s var(--ease-out-expo);
+  will-change: opacity, transform;
 }
 
 .anim-pulse-soft {
@@ -579,35 +581,55 @@ a:hover {
 /* Toast Container - Sleek minimal design */
 .toast-container {
   position: fixed;
-  bottom: 20px;
-  right: 20px;
+  /* Lifted above PriorityTray (which sits at the bottom of main content) so
+     toast isn't visually colliding with the chip row. */
+  bottom: 96px;
+  right: 24px;
   z-index: 1000;
+  pointer-events: none;
 }
 
 .toast {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 14px 18px;
+  padding: 12px 16px;
+  min-width: 220px;
+  max-width: 380px;
   background: var(--card-bg);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-lg);
-  animation: slideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1);
-  backdrop-filter: blur(12px);
+  box-shadow: var(--shadow-lg), 0 0 0 1px rgba(255, 255, 255, 0.03);
+  animation: toast-pop 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+  backdrop-filter: blur(14px);
+  pointer-events: auto;
 }
 
-/* Toast variants — icon-tinted background, no side-tab strip */
+@keyframes toast-pop {
+  0%   { opacity: 0; transform: translateY(8px) scale(0.96); }
+  60%  { opacity: 1; transform: translateY(-1px) scale(1.01); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Toast variants — left edge accent + tinted background hint */
 .toast.success {
-  background: linear-gradient(90deg, var(--success-bg), var(--card-bg) 30%);
+  border-left: 3px solid var(--success);
+  background: linear-gradient(90deg, var(--success-bg), var(--card-bg) 35%);
 }
 
 .toast.error {
-  background: linear-gradient(90deg, var(--error-bg), var(--card-bg) 30%);
+  border-left: 3px solid var(--error);
+  background: linear-gradient(90deg, var(--error-bg), var(--card-bg) 35%);
 }
 
 .toast.info {
-  background: linear-gradient(90deg, var(--info-bg), var(--card-bg) 30%);
+  border-left: 3px solid var(--info, var(--primary));
+  background: linear-gradient(90deg, var(--info-bg, var(--primary-bg)), var(--card-bg) 35%);
+}
+
+.toast.warning {
+  border-left: 3px solid var(--warning, #f59f00);
+  background: linear-gradient(90deg, rgba(245, 159, 0, 0.12), var(--card-bg) 35%);
 }
 
 .toast-message {
@@ -998,6 +1020,17 @@ kbd {
    DRAG AND DROP SYSTEM (svelte-dnd-action)
    =========================================== */
 
+/* WKWebView fix — explicitly mark draggable elements for HTML5 drag.
+   Without this, WebKit on macOS sometimes fires dragstart but fails to
+   begin the visual drag operation for <div draggable="true">. user-select
+   is suppressed ONLY while a drag is active so task text stays selectable. */
+[draggable="true"] {
+  -webkit-user-drag: element;
+}
+body.is-dragging-task [draggable="true"] {
+  user-select: none;
+}
+
 /* Base draggable item styling — soft dashed placeholder */
 [data-is-dnd-shadow-item="true"] {
   opacity: 0.35 !important;
@@ -1038,10 +1071,27 @@ kbd {
 
 /* Active drop target — uses ring instead of heavy border + bg shift */
 .dnd-drop-target-active {
-  transform: scale(1.004);
+  transform: scale(1.006);
   box-shadow: inset 0 0 0 1.5px var(--zone-color, var(--primary)),
-              0 6px 20px rgba(0, 0, 0, 0.08) !important;
+              0 6px 22px rgba(0, 0, 0, 0.1) !important;
   background: var(--zone-bg, var(--primary-bg)) !important;
+}
+
+/* Subtle "this is a valid drop zone" pulse on the active target during DnD */
+.dnd-drop-target-active::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow: inset 0 0 0 1px var(--zone-color, var(--primary));
+  opacity: 0;
+  animation: drop-zone-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes drop-zone-pulse {
+  0%, 100% { opacity: 0; }
+  50% { opacity: 0.6; }
 }
 
 /* Touch-specific optimizations */

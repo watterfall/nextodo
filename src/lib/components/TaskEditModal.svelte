@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import type { Task, Priority } from '$lib/types';
   import { PRIORITY_CONFIG } from '$lib/types';
-  import { updateTask, getTasksStore, needsPriorityChangeConfirmation, changePriority } from '$lib/stores/tasks.svelte';
+  import { updateTask, getTasksStore, needsPriorityChangeConfirmation, changePriority, addSubtask, removeSubtask, toggleSubtask } from '$lib/stores/tasks.svelte';
   import { closeEditModal, showToast, showConfirmation } from '$lib/stores/ui.svelte';
   import { getI18nStore } from '$lib/i18n';
   import { highlightSyntax } from '$lib/utils/parser';
@@ -78,8 +78,30 @@
     }
   });
 
-  // Priority options
-  const priorityOptions: Priority[] = ['A', 'B', 'C', 'D', 'E', 'F'];
+  // Priority options — S (sustained) sits between A and B semantically;
+  // N (future) is shown last as a low-pressure parking zone.
+  const priorityOptions: Priority[] = ['A', 'S', 'B', 'C', 'D', 'E', 'F', 'N'];
+
+  // Subtask editor state — live source from the task; mutations go through the store
+  let newSubtaskContent = $state('');
+  const liveTask = $derived(tasks.tasks.find(t => t.id === task.id) ?? task);
+  const liveSubtasks = $derived(liveTask.subtasks ?? []);
+  const subtaskDone = $derived(liveSubtasks.filter(s => s.completed).length);
+
+  async function handleAddSubtask() {
+    const content = newSubtaskContent.trim();
+    if (!content) return;
+    await addSubtask(task.id, content);
+    newSubtaskContent = '';
+  }
+
+  function handleSubtaskKey(e: KeyboardEvent) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      e.stopPropagation();
+      handleAddSubtask();
+    }
+  }
 
   // Handle priority selection with confirmation check
   function handlePrioritySelect(newPriority: Priority) {
@@ -303,6 +325,73 @@
               <span class="priority-name">{t(`priority.${p}`)}</span>
             </button>
           {/each}
+        </div>
+      </div>
+
+      <!-- Subtasks (most useful for S Sustained tasks, but available for any task) -->
+      <div class="field-group subtasks-group">
+        <div class="field-label">
+          <span class="label-icon">☑</span>
+          {t('taskForm.subtasks')}
+          {#if liveSubtasks.length > 0}
+            <span class="subtask-progress-text">{subtaskDone}/{liveSubtasks.length}</span>
+          {/if}
+        </div>
+        {#if liveSubtasks.length > 0}
+          <ul class="subtask-list">
+            {#each liveSubtasks as sub (sub.id)}
+              <li class="subtask-row" class:done={sub.completed}>
+                <button
+                  type="button"
+                  class="subtask-check"
+                  class:checked={sub.completed}
+                  onclick={() => toggleSubtask(task.id, sub.id)}
+                  aria-label={sub.completed ? '取消勾选' : '标记完成'}
+                >
+                  {#if sub.completed}
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                      <polyline points="20 6 9 17 4 12"></polyline>
+                    </svg>
+                  {/if}
+                </button>
+                <span class="subtask-text">{sub.content}</span>
+                <button
+                  type="button"
+                  class="subtask-remove"
+                  onclick={() => removeSubtask(task.id, sub.id)}
+                  aria-label={t('action.delete')}
+                  title={t('action.delete')}
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                  </svg>
+                </button>
+              </li>
+            {/each}
+          </ul>
+        {/if}
+        <div class="subtask-add">
+          <input
+            type="text"
+            class="field-input subtask-input"
+            placeholder={t('taskForm.subtaskPlaceholder')}
+            bind:value={newSubtaskContent}
+            onkeydown={handleSubtaskKey}
+          />
+          <button
+            type="button"
+            class="subtask-add-btn"
+            onclick={handleAddSubtask}
+            disabled={!newSubtaskContent.trim()}
+            aria-label={t('action.add')}
+            title={t('action.add')}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+          </button>
         </div>
       </div>
 
@@ -693,6 +782,158 @@
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
     gap: 12px;
+  }
+
+  /* Subtasks editor — compact checklist with inline add */
+  .subtasks-group {
+    padding: 12px 14px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+  }
+
+  .subtask-progress-text {
+    margin-left: auto;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--priority-s-color, #20c997);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .subtask-list {
+    list-style: none;
+    margin: 6px 0 8px;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .subtask-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 6px;
+    border-radius: var(--radius-sm);
+    transition: background var(--transition-fast);
+  }
+
+  .subtask-row:hover {
+    background: var(--hover-bg);
+  }
+
+  .subtask-row.done .subtask-text {
+    text-decoration: line-through;
+    color: var(--text-muted);
+  }
+
+  .subtask-check {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    border: 1.5px solid var(--priority-s-color, #20c997);
+    border-radius: var(--radius-full);
+    background: transparent;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    transition: all var(--transition-fast);
+  }
+
+  .subtask-check:hover {
+    background: var(--priority-s-bg, rgba(32, 201, 151, 0.1));
+  }
+
+  .subtask-check.checked {
+    background: var(--priority-s-color, #20c997);
+  }
+
+  .subtask-check svg {
+    width: 9px;
+    height: 9px;
+    color: white;
+  }
+
+  .subtask-text {
+    flex: 1;
+    font-size: 13px;
+    color: var(--text-primary);
+    word-break: break-word;
+  }
+
+  .subtask-remove {
+    width: 22px;
+    height: 22px;
+    flex-shrink: 0;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text-muted);
+    opacity: 0;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all var(--transition-fast);
+  }
+
+  .subtask-row:hover .subtask-remove {
+    opacity: 1;
+  }
+
+  .subtask-remove:hover {
+    color: var(--error, #ff6b6b);
+    background: var(--hover-bg);
+  }
+
+  .subtask-remove svg {
+    width: 12px;
+    height: 12px;
+  }
+
+  .subtask-add {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+
+  .subtask-input {
+    flex: 1;
+    height: 32px;
+    font-size: 13px;
+  }
+
+  .subtask-add-btn {
+    width: 32px;
+    height: 32px;
+    flex-shrink: 0;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: var(--card-bg);
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all var(--transition-fast);
+  }
+
+  .subtask-add-btn:hover:not(:disabled) {
+    color: var(--priority-s-color, #20c997);
+    border-color: var(--priority-s-color, #20c997);
+    background: var(--priority-s-bg, rgba(32, 201, 151, 0.08));
+  }
+
+  .subtask-add-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .subtask-add-btn svg {
+    width: 14px;
+    height: 14px;
   }
 
   .pomodoro-field .field-input {

@@ -53,6 +53,8 @@ export default {
     D: 'Ad-hoc Tasks',
     E: 'Quick Action',
     F: 'Idea Pool',
+    N: 'Future Progress',
+    S: 'Sustained Progress',
     description: {
       A: 'Deep work, 2+ hours focus',
       B: 'Project milestones, 45-90 min',
@@ -60,6 +62,8 @@ export default {
       D: 'Unplanned, ad-hoc tasks',
       E: 'Under 15 minutes',
       F: 'Ideas & tasks to sort',
+      N: 'Important long-horizon work',
+      S: 'Week-long project, decompose with subtasks',
     },
     tooltip: {
       A: 'Core Challenge · Quota 1/cycle · 2+ hours · High difficulty & value',
@@ -68,6 +72,7 @@ export default {
       D: 'Ad-hoc Tasks · Quota 4/cycle · Unplanned · Stay flexible',
       E: 'Quick Action · Quota 5/cycle · <15 min · Fast completion',
       F: 'Idea Pool · Unlimited · Capture ideas · Sort later',
+      N: 'Future Progress · No quota · Hidden by default · Activate when ready',
     },
     quota: {
       A: '1/cycle',
@@ -76,6 +81,7 @@ export default {
       D: '4/cycle',
       E: '5/cycle',
       F: 'Unlimited',
+      N: 'No quota',
     },
     difficulty: {
       A: 'High',
@@ -84,6 +90,7 @@ export default {
       D: 'Ad-hoc',
       E: 'Low',
       F: 'To sort',
+      N: 'Long-horizon',
     },
     time: {
       A: '2+ hours',
@@ -92,6 +99,7 @@ export default {
       D: 'Varies',
       E: '<15 min',
       F: 'Varies',
+      N: 'Long-term',
     },
   },
 
@@ -130,7 +138,9 @@ export default {
     biweekly: 'Biweekly',
     monthly: 'Monthly',
     keyboardHint: 'Press Ctrl+Enter to add quickly',
-    syntaxHint: 'Syntax: !A-F +project @context #tag ~date thr:defer',
+    syntaxHint: 'Syntax: !A-F !S !N or 【A】-【N】 +project @context #tag ~date thr:defer',
+    subtasks: 'Subtasks',
+    subtaskPlaceholder: 'Add a subtask · press Enter',
   },
 
   // Inbox Panel (Idea Pool)
@@ -367,6 +377,12 @@ export default {
     noContexts: 'No contexts',
     collapse: 'Collapse sidebar',
     showAll: 'Show all',
+    futureProgress: 'Future Progress',
+    futureProgressHint: 'Long-term important · Hidden by default, activate when ready',
+    futureProgressEmpty: 'No future-progress tasks',
+    sustained: 'Sustained',
+    sustainedHint: 'Week-long projects with subtask breakdown',
+    sustainedEmpty: 'No sustained projects',
   },
 
   // Priority tooltips (for ListView)
@@ -383,6 +399,13 @@ export default {
     dropHere: 'Drop tasks here',
     empty: 'No tasks',
     quotaInfo: '{current}/{max}',
+    movedTo: 'Moved to {priority} · {name}',
+    moveFailed: 'Move failed',
+    demotedToB: 'Demoted previous sustained project "{name}" to B',
+    demoteFailed: 'Failed to demote previous sustained project (B may be full)',
+    subtaskPromotedTo: 'Subtask promoted to {priority}',
+    promotedTo: 'Promoted to {name} ({priority})',
+    promoteFailed: 'Promote failed',
   },
 
   // View modes
@@ -439,6 +462,8 @@ export default {
     restore: 'Restore',
     permanentDelete: 'Delete permanently',
     evolve: 'Evolve',
+    activate: 'Activate',
+    moveToFuture: 'Move to Future Progress',
   },
 
   // History modal
@@ -472,6 +497,8 @@ export default {
     taskMovedToTrash: 'Task moved to trash',
     taskCancelled: 'Task cancelled',
     taskEvolved: 'Task evolved, new task created',
+    taskActivated: 'Task activated to {priority} zone',
+    activateChooseTarget: 'Activate to which priority?',
     evolveTaskTitle: 'Evolve Task',
     evolveTaskHint: 'Complete current task and create an evolved version',
     // Priority change confirmation

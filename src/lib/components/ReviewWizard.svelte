@@ -115,9 +115,8 @@
     step = 0;
     window.dispatchEvent(new CustomEvent('close-review'));
 
-    // Redirect to Week View and ensure Sidebar is open to access Inbox if we add it there
-    setViewMode('week');
-    // Ideally open Inbox too, but we haven't implemented the toggle yet
+    // Return to Today view after wizard closes (WeekView was removed)
+    setViewMode('today');
   }
 
   const steps = [

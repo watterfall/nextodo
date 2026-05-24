@@ -1,8 +1,9 @@
 <script lang="ts">
   import type { Task, Priority } from '$lib/types';
-  import { PRIORITY_CONFIG, isThresholdPassed, isActivePriority } from '$lib/types';
-  import { completeTask, uncompleteTask, cancelTask, changePriority, evolveTask, toggleFilterAttribute, isFilterActive } from '$lib/stores/tasks.svelte';
-  import { openEditModal, getUIStore, showToast } from '$lib/stores/ui.svelte';
+  import { PRIORITY_CONFIG, isThresholdPassed, isActivePriority, isFuturePriority, isSustainedPriority, isOperablePriority, subtaskProgress } from '$lib/types';
+  import { completeTask, uncompleteTask, cancelTask, changePriority, evolveTask, toggleFilterAttribute, isFilterActive, activateFutureTask } from '$lib/stores/tasks.svelte';
+  import { openEditModal, getUIStore, showToast, setDraggingTask } from '$lib/stores/ui.svelte';
+  import { clearDragPayload, startTaskDrag } from '$lib/utils/dnd';
   import { startPomodoro, getPomodoroStore } from '$lib/stores/pomodoro.svelte';
   import { formatRecurrence } from '$lib/utils/recurrence';
   import { isOverdue, getRelativeDayLabel, parseISODate } from '$lib/utils/unitCalc';
@@ -28,6 +29,39 @@
   let isHovered = $state(false);
   let justCompleted = $state(false);
 
+  // Right-click context menu — quick priority changes without dragging
+  let ctxMenuOpen = $state(false);
+  let ctxMenuX = $state(0);
+  let ctxMenuY = $state(0);
+  const ctxPriorityOptions: Priority[] = ['A', 'S', 'B', 'C', 'D', 'E', 'F', 'N'];
+
+  function handleContextMenu(e: MouseEvent) {
+    e.preventDefault();
+    ctxMenuX = e.clientX;
+    ctxMenuY = e.clientY;
+    ctxMenuOpen = true;
+  }
+
+  async function handleCtxMove(target: Priority) {
+    ctxMenuOpen = false;
+    if (target === task.priority) return;
+    const result = await changePriority(task.id, target);
+    if (!result.success && result.error) {
+      showToast(result.error, 'error');
+    } else if (result.success) {
+      showToast(`已移到 ${target} 区`, 'success');
+    }
+  }
+
+  function closeCtxMenu(e?: PointerEvent | KeyboardEvent) {
+    if (!ctxMenuOpen) return;
+    if (e && 'target' in e) {
+      const target = (e as PointerEvent).target as Element | null;
+      if (target && target.closest('.task-ctx-menu')) return;
+    }
+    ctxMenuOpen = false;
+  }
+
   // Derived energy level
   const energyTag = $derived(task.customTags.find(t => ['⚡高能量', '😴低能量', '☕中等'].includes(t)));
   const energyLevel = $derived(
@@ -52,11 +86,21 @@
     return { display: text, isEmoji: false };
   }
 
+  async function handleActivate() {
+    // Activate N task to F (inbox) by default — user can then reprioritize.
+    const result = await activateFutureTask(task.id, 'F');
+    if (result.success) {
+      showToast(i18n.t('message.taskActivated', { priority: 'F' }) || '任务已激活', 'success');
+    } else if (result.error) {
+      showToast(result.error, 'error');
+    }
+  }
+
   function handleCheck() {
     if (task.priority === 'G') {
       // Task is completed, restore it
       uncompleteTask(task.id);
-    } else if (isActivePriority(task.priority)) {
+    } else if (isOperablePriority(task.priority)) {
       // Capture priority BEFORE completion (completeTask mutates it to 'G')
       const wasAPriority = task.priority === 'A';
       // Trigger press micro-interaction
@@ -96,8 +140,8 @@
     }
   }
 
-  function handlePriorityChange(newPriority: Priority) {
-    const result = changePriority(task.id, newPriority);
+  async function handlePriorityChange(newPriority: Priority) {
+    const result = await changePriority(task.id, newPriority);
     if (!result.success && result.error) {
       showToast(result.error, 'error');
     }
@@ -109,6 +153,11 @@
   const dueDateLabel = $derived(task.dueDate ? getRelativeDayLabel(parseISODate(task.dueDate)) : null);
   const isCompleted = $derived(task.priority === 'G');
   const isCancelled = $derived(task.priority === 'H');
+  // Visually de-emphasize lower-pressure zones so they do not compete with A-E
+  const isLowPressure = $derived(task.priority === 'F' || task.priority === 'N');
+  const isFuture = $derived(task.priority === 'N');
+  const isSustained = $derived(task.priority === 'S');
+  const subProgress = $derived(subtaskProgress(task));
 
   // Check if task is dormant (has threshold date in the future)
   const isDormant = $derived(!isThresholdPassed(task));
@@ -147,11 +196,28 @@
   class:hovered={isHovered}
   class:keyboard-focused={isFocused}
   class:just-completed={justCompleted}
+  class:low-pressure={isLowPressure}
+  class:future-progress={isFuture}
+  class:sustained-progress={isSustained}
   style:--priority-color={config.color}
   style:--priority-bg={config.bgColor}
   style:--priority-border={config.borderColor}
   onmouseenter={() => isHovered = true}
   onmouseleave={() => isHovered = false}
+  oncontextmenu={handleContextMenu}
+  draggable="true"
+  ondragstart={(e) => {
+    if (!isOperablePriority(task.priority)) {
+      e.preventDefault();
+      return;
+    }
+    startTaskDrag(e, { taskId: task.id, fromPriority: task.priority });
+    setDraggingTask(true, task.priority);
+  }}
+  ondragend={() => {
+    clearDragPayload();
+    setDraggingTask(false);
+  }}
   role="listitem"
 >
 
@@ -255,6 +321,17 @@
     {/if}
   </div>
 
+  {#if subProgress.total > 0 && !isCompleted && !isCancelled}
+    <!-- Subtask progress bar — surfaces breakdown completion at a glance.
+         Compact (single bar + count), most useful on S Sustained tasks. -->
+    <div class="subtask-progress" title="{subProgress.done}/{subProgress.total} 子任务完成">
+      <div class="progress-track">
+        <div class="progress-fill" style:width="{Math.round(subProgress.ratio * 100)}%"></div>
+      </div>
+      <span class="progress-count">{subProgress.done}/{subProgress.total}</span>
+    </div>
+  {/if}
+
   {#if !compact && !kanbanMode && (task.dueDate || task.recurrence || task.thresholdDate)}
     <div class="task-footer">
       {#if task.thresholdDate && isDormant}
@@ -304,6 +381,13 @@
           <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
         </svg>
       </button>
+      {#if isFuturePriority(task.priority)}
+        <button class="action-btn activate" onclick={handleActivate} title={i18n.t('action.activate') || '激活到当前周期'}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+          </svg>
+        </button>
+      {/if}
       {#if isActivePriority(task.priority)}
         <button class="action-btn evolve" onclick={handleEvolve} title={i18n.t('message.evolveTaskHint') || '完成并演化'}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -312,6 +396,8 @@
             <circle cx="12" cy="12" r="3"></circle>
           </svg>
         </button>
+      {/if}
+      {#if isOperablePriority(task.priority)}
         <button class="action-btn cancel" onclick={handleCancel} title={i18n.t('action.cancel') || '取消任务'}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -329,6 +415,59 @@
   {/if}
 </div>
 
+{#if ctxMenuOpen}
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <!-- svelte-ignore a11y_click_events_have_key_events -->
+  <div
+    class="task-ctx-menu"
+    style:left="{ctxMenuX}px"
+    style:top="{ctxMenuY}px"
+    role="menu"
+  >
+    <div class="ctx-section-label">移到优先级</div>
+    <div class="ctx-priority-grid">
+      {#each ctxPriorityOptions as p}
+        <button
+          class="ctx-priority-btn"
+          class:current={p === task.priority}
+          style:--p-color={PRIORITY_CONFIG[p].color}
+          onclick={() => handleCtxMove(p)}
+          title={PRIORITY_CONFIG[p].description}
+          disabled={p === task.priority}
+        >
+          <span class="ctx-letter">{p}</span>
+          <span class="ctx-name">{i18n.t(`priority.${p}`)}</span>
+        </button>
+      {/each}
+    </div>
+    <div class="ctx-divider"></div>
+    <button class="ctx-action" onclick={() => { ctxMenuOpen = false; handleEdit(); }}>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+      </svg>
+      编辑详情
+    </button>
+    {#if isActivePriority(task.priority)}
+      <button class="ctx-action" onclick={() => { ctxMenuOpen = false; handleCheck(); }}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+        标记完成
+      </button>
+      <button class="ctx-action danger" onclick={() => { ctxMenuOpen = false; handleCancel(); }}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+        取消任务
+      </button>
+    {/if}
+  </div>
+{/if}
+
+<svelte:window onpointerdown={closeCtxMenu} onkeydown={(e) => e.key === 'Escape' && (ctxMenuOpen = false)} />
+
 <style>
   .task-card {
     display: flex;
@@ -342,11 +481,32 @@
                 border-color var(--transition-fast),
                 box-shadow var(--transition-fast),
                 transform var(--transition-fast),
-                max-height var(--transition-normal);
-    cursor: default;
+                max-height var(--transition-normal),
+                filter var(--transition-fast);
+    cursor: grab;
     position: relative;
     max-height: 100px;
     overflow: hidden;
+    /* Subtle entry animation — fade-in with small rise so newly added cards
+       have a moment of "settled into place". Backwards fill prevents flash. */
+    animation: card-enter 0.22s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+  }
+
+  @keyframes card-enter {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .task-card {
+      animation: none;
+    }
   }
 
   /* Priority accent — subtle dot at top-left corner instead of side-tab border.
@@ -374,7 +534,17 @@
     background: var(--card-hover-bg);
     border-color: var(--border-subtle);
     box-shadow: var(--elevation-2);
-    transform: translateY(-1px);
+    transform: translateY(-2px);
+    filter: brightness(1.04);
+  }
+
+  /* Press response — momentary press-in. Excluded when clicking a child button
+     (the button gets its own active state). */
+  .task-card:active {
+    transform: translateY(0) scale(0.992);
+    transition-duration: 0.08s;
+    filter: brightness(1.02);
+    cursor: grabbing;
   }
 
   /* Keyboard focus state — primary ring (not background change) */
@@ -403,6 +573,88 @@
                 0 0 30px var(--priority-bg),
                 var(--shadow-md);
     z-index: 10;
+  }
+
+  /* Low-pressure zones (F idea pool, N future progress) — quieter visual weight
+     so they do not compete with A-E daily flow. Reduce opacity, slightly lighter
+     text. Restore on hover so they remain fully accessible. */
+  .task-card.low-pressure {
+    opacity: 0.78;
+    background: var(--card-bg);
+  }
+
+  .task-card.low-pressure .task-text {
+    font-weight: 400;
+    color: var(--text-secondary);
+  }
+
+  .task-card.low-pressure::before {
+    opacity: 0.55;
+  }
+
+  .task-card.low-pressure:hover,
+  .task-card.low-pressure.keyboard-focused {
+    opacity: 1;
+  }
+
+  .task-card.low-pressure:hover .task-text,
+  .task-card.low-pressure.keyboard-focused .task-text {
+    color: var(--text-primary);
+  }
+
+  /* Future-progress (N) — subtle dashed border hint that this is "in the queue" */
+  .task-card.future-progress {
+    border-style: dashed;
+    border-color: var(--priority-n-border, rgba(116, 143, 252, 0.22));
+  }
+
+  .task-card.future-progress:hover {
+    border-style: solid;
+  }
+
+  /* Sustained (S) — left edge accent in S color, denotes "持续推进" */
+  .task-card.sustained-progress {
+    border-left: 2px solid var(--priority-s-color, #20c997);
+    padding-left: 14px;
+  }
+
+  /* Subtask progress strip — slim, sits below content */
+  .subtask-progress {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+    padding: 0 2px;
+  }
+
+  .progress-track {
+    flex: 1;
+    height: 4px;
+    background: var(--bg-tertiary, rgba(128, 128, 128, 0.15));
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: var(--priority-s-color, #20c997);
+    border-radius: 2px;
+    transition: width 0.3s var(--ease-out-expo, cubic-bezier(0.16, 1, 0.3, 1));
+  }
+
+  .progress-count {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    min-width: 28px;
+    text-align: right;
+  }
+
+  .action-btn.activate:hover {
+    color: var(--priority-n-color, #748ffc);
+    background: var(--priority-n-bg, rgba(116, 143, 252, 0.12));
   }
 
   .task-card.completed {
@@ -970,6 +1222,119 @@
     50% {
       box-shadow: 0 0 0 2px var(--priority-color), 0 0 12px var(--priority-bg);
     }
+  }
+
+  /* Right-click context menu — quick priority change without dragging.
+     Floats at the cursor position via fixed positioning. */
+  :global(.task-ctx-menu) {
+    position: fixed;
+    z-index: 200;
+    min-width: 240px;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22);
+    padding: 8px;
+    animation: ctx-pop 0.14s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  @keyframes ctx-pop {
+    from { opacity: 0; transform: translateY(-4px) scale(0.96); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  :global(.ctx-section-label) {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    padding: 4px 6px 6px;
+    letter-spacing: 0.04em;
+  }
+
+  :global(.ctx-priority-grid) {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 3px;
+  }
+
+  :global(.ctx-priority-btn) {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    font-family: inherit;
+    text-align: left;
+  }
+
+  :global(.ctx-priority-btn:hover:not(:disabled)) {
+    border-color: var(--p-color);
+    background: color-mix(in srgb, var(--p-color) 12%, transparent);
+    color: var(--p-color);
+  }
+
+  :global(.ctx-priority-btn.current) {
+    background: color-mix(in srgb, var(--p-color) 18%, transparent);
+    border-color: var(--p-color);
+    color: var(--p-color);
+    opacity: 0.6;
+    cursor: default;
+  }
+
+  :global(.ctx-letter) {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--p-color);
+    font-family: var(--font-mono);
+    min-width: 10px;
+  }
+
+  :global(.ctx-name) {
+    font-size: 11px;
+  }
+
+  :global(.ctx-divider) {
+    height: 1px;
+    background: var(--border-subtle);
+    margin: 6px 0;
+  }
+
+  :global(.ctx-action) {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 6px 8px;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 12px;
+    font-family: inherit;
+    text-align: left;
+    transition: all var(--transition-fast);
+  }
+
+  :global(.ctx-action:hover) {
+    background: var(--hover-bg);
+    color: var(--text-primary);
+  }
+
+  :global(.ctx-action.danger:hover) {
+    background: rgba(255, 107, 107, 0.1);
+    color: var(--error, #ff6b6b);
+  }
+
+  :global(.ctx-action svg) {
+    width: 13px;
+    height: 13px;
   }
 
 </style>

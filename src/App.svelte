@@ -34,7 +34,8 @@
     closeSearch,
     exitImmersiveMode,
     setViewMode,
-    setBadgesOpen
+    setBadgesOpen,
+    setDraggingTask
   } from '$lib/stores/ui.svelte';
   import {
     initPomodoro,
@@ -119,10 +120,14 @@
 
     // Setup file watcher for external changes (with conflict protection)
     unlistenFileWatcher = await setupFileWatcher(async (fileType) => {
-      // Conflict protection: Don't reload if user is editing or pomodoro is active
+      // Conflict protection: Don't reload if user is editing, dragging, or pomodoro is active
       if (ui.editingTaskId) {
         console.log('Skipping reload - user is editing a task');
         showToast(t('error.externalChangeIgnored') || 'External data change detected but ignored due to active session. Please save and reload manually to avoid conflicts.', 'warning');
+        return;
+      }
+      if (ui.isDraggingTask) {
+        console.log('Skipping reload - drag in progress');
         return;
       }
       if (pomodoro.state !== 'idle') {
@@ -140,6 +145,14 @@
       showConfetti = true;
       setTimeout(() => showConfetti = false, 100);
     }) as EventListener);
+
+    // Window-level safety net: guarantees the global drag flag is reset even
+    // when the source element is unmounted mid-drag (so its ondragend never
+    // fires) or the user cancels with ESC over a non-DropZone region. Without
+    // this, body.is-dragging-task can stay sticky and DropZones keep showing
+    // the "drag-eligible" outline indefinitely.
+    window.addEventListener('dragend', () => setDraggingTask(false));
+    window.addEventListener('drop', () => setDraggingTask(false));
 
     isInitialized = true;
   });
@@ -343,6 +356,9 @@
       </div>
     {/if}
 
+    <!-- S/F/N moved into each view's ZoneRail (right column in ListView,
+         bottom row in KanbanView) for spatial adjacency with A-E and easy DnD. -->
+
     <!-- Main Layout Switcher - Views fill available space -->
     <div class="content-layout">
       {#key ui.viewMode}
@@ -362,6 +378,7 @@
         </div>
       {/key}
     </div>
+
   </main>
 
   <!-- Search Overlay -->

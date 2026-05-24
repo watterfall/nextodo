@@ -30,8 +30,8 @@
   let showSyntaxHint = $state(false);
   let hasStartedTyping = $state(false);
 
-  // Priority options for selector (A-E have quotas, F is default Idea Pool)
-  const priorityOptions: Priority[] = ['A', 'B', 'C', 'D', 'E', 'F'];
+  // Priority options for selector (A-E have quotas, F idea pool, S sustained, N future)
+  const priorityOptions: Priority[] = ['A', 'S', 'B', 'C', 'D', 'E', 'F', 'N'];
 
   const moodOptions = $derived([
     { value: '', label: t('taskForm.moodPlaceholder'), emoji: '' },
@@ -172,6 +172,8 @@
   }
 
   function handleKeydown(e: KeyboardEvent) {
+    // Don't intercept any keystrokes during IME composition (Enter must commit candidate).
+    if (isComposing || e.isComposing || e.keyCode === 229) return;
     if (showSuggestions && filteredSuggestions.length > 0) {
       if (e.key === 'ArrowDown') {
         e.preventDefault();
@@ -258,13 +260,18 @@
     // Datalist is easiest to implement "pop up".
   }
 
+  // IME composition guard — suppress autocomplete popup while composing
+  // (e.g. Pinyin), so Enter commits the IME candidate instead of selecting a tag.
+  let isComposing = $state(false);
+
   function handleContentInput(e: Event) {
     const input = e.target as HTMLInputElement;
     const value = input.value;
     const cursorPos = input.selectionStart || 0;
-    
+
     content = value;
-    
+    if (isComposing) return;
+
     // Simple autocomplete trigger detection
     // Look for the last special char before cursor
     const lastPlus = value.lastIndexOf('+', cursorPos);
@@ -363,6 +370,8 @@
         value={content}
         oninput={handleContentInput}
         onkeydown={handleKeydown}
+        oncompositionstart={() => { isComposing = true; }}
+        oncompositionend={(e) => { isComposing = false; handleContentInput(e); }}
         onfocus={handleInputFocus}
         onblur={handleInputBlur}
         placeholder={t('taskForm.placeholder')}

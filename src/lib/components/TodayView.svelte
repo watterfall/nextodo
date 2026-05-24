@@ -2,7 +2,6 @@
   import { getTasksStore } from '$lib/stores/tasks.svelte';
   import { getPomodoroStore, startPomodoro } from '$lib/stores/pomodoro.svelte';
   import TaskCard from './TaskCard.svelte';
-  import InboxPanel from './InboxPanel.svelte';
   import { getI18nStore } from '$lib/i18n';
   import { fade, slide } from 'svelte/transition';
   import { isToday, isOverdue, getCurrentUnit } from '$lib/utils/unitCalc';
@@ -12,8 +11,6 @@
   const pomodoro = getPomodoroStore();
   const i18n = getI18nStore();
   const t = i18n.t;
-
-  let isInboxOpen = $state(false);
 
   // Tasks due today or overdue
   const todayTasks = $derived(tasks.tasks.filter(task =>
@@ -36,13 +33,6 @@
 
   // Remaining tasks (excluding hero)
   const remainingTasks = $derived(todayTasks.filter(t => t.id !== heroTask?.id));
-
-  // Idea Pool suggestions — first 3 active F-priority tasks
-  const inspirationTasks = $derived(
-    (tasks.tasksByPriority['F'] || [])
-      .filter(t => !t.completed)
-      .slice(0, 3)
-  );
 
   // Stats
   const totalToday = $derived(todayTasks.length + completedTodayTasks.length);
@@ -99,7 +89,7 @@
   });
 </script>
 
-<div class="today-view-container" class:with-drawer={isInboxOpen} class:review-day={isReviewDay}>
+<div class="today-view-container" class:review-day={isReviewDay}>
   <div class="today-scroll">
     <div class="today-content" in:fade={{ duration: 220 }}>
       <!-- Header strip -->
@@ -113,23 +103,8 @@
             <span class="greeting-tail">{t('todayView.readyToFocus')}</span>
           </h1>
         </div>
-        <button
-          class="inbox-toggle"
-          class:active={isInboxOpen}
-          onclick={() => (isInboxOpen = !isInboxOpen)}
-          title={isInboxOpen ? t('todayView.hideInbox') : t('todayView.showInbox')}
-          aria-label={isInboxOpen ? t('todayView.hideInbox') : t('todayView.showInbox')}
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M22 12h-6l-2 3h-4l-2-3H2"></path>
-            <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path>
-          </svg>
-          {#if (tasks.tasksByPriority['F'] || []).filter(t => !t.completed).length > 0}
-            <span class="count-badge font-num">
-              {(tasks.tasksByPriority['F'] || []).filter(t => !t.completed).length}
-            </span>
-          {/if}
-        </button>
+        <!-- Inbox toggle removed — F (灵感池) is now accessed via the
+             persistent ReservoirPanel at the top of every view. -->
       </header>
 
       <!-- Unit Rhythm — bi-daily cycle made felt -->
@@ -283,29 +258,9 @@
         </section>
       {/if}
 
-      <!-- Inspiration pool -->
-      {#if inspirationTasks.length > 0}
-        <section class="inspiration">
-          <div class="inspiration-head">
-            <span class="inspiration-icon">💡</span>
-            <h3 class="inspiration-title">{t('todayView.inspiration.title')}</h3>
-          </div>
-          <div class="inspiration-chips">
-            {#each inspirationTasks as task (task.id)}
-              <div class="inspiration-chip" title={task.content}>
-                <span class="chip-arrow">→</span>
-                <span class="chip-text">{task.content}</span>
-              </div>
-            {/each}
-          </div>
-        </section>
-      {/if}
+      <!-- Inspiration / Inbox sections removed — F is shown in ReservoirPanel
+           above every view to keep one canonical location for it. -->
     </div>
-  </div>
-
-  <!-- Inbox Drawer -->
-  <div class="inbox-drawer" class:open={isInboxOpen}>
-    <InboxPanel isDrawer={true} />
   </div>
 </div>
 

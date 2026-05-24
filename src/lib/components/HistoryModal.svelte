@@ -1,6 +1,6 @@
 <script lang="ts">
   import { getTasksStore, uncompleteTask, permanentlyDeleteTask } from '$lib/stores/tasks.svelte';
-  import { getUIStore } from '$lib/stores/ui.svelte';
+  import { getUIStore, showConfirmation, showToast } from '$lib/stores/ui.svelte';
   import { getI18nStore } from '$lib/i18n';
   import TaskCard from './TaskCard.svelte';
 
@@ -30,13 +30,14 @@
   }
 
   function handlePermanentDelete(taskId: string) {
-    ui.showConfirmation({
+    showConfirmation({
       title: i18n.t('action.permanentDelete') || '永久删除',
       message: i18n.t('message.confirmPermanentDelete') || '确定要永久删除这个任务吗？此操作不可撤销。',
       confirmText: i18n.t('action.delete') || '删除',
       cancelText: i18n.t('action.cancel') || '取消',
-      onConfirm: () => {
-        permanentlyDeleteTask(taskId);
+      onConfirm: async () => {
+        await permanentlyDeleteTask(taskId);
+        showToast('任务已永久删除', 'success');
       }
     });
   }

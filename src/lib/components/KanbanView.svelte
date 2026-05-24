@@ -2,14 +2,16 @@
   import type { Task, Priority } from '$lib/types';
   import { PRIORITY_CONFIG, getRetentionRemaining } from '$lib/types';
   import TaskCard from './TaskCard.svelte';
-  import { getTasksStore, reorderTask, needsPriorityChangeConfirmation, changePriority } from '$lib/stores/tasks.svelte';
+  import ZoneRail from './ZoneRail.svelte';
+  import DropZone from './DropZone.svelte';
+  import type { TaskDragPayload, SubtaskDragPayload } from '$lib/utils/dnd';
+  import { getTasksStore, reorderTask, changePriority, promoteSubtask } from '$lib/stores/tasks.svelte';
   import { getPomodoroStore } from '$lib/stores/pomodoro.svelte';
   import { getUIStore, openEditModal } from '$lib/stores/ui.svelte';
   import { countActiveByPriority } from '$lib/utils/quota';
   import { getI18nStore } from '$lib/i18n';
   import { slide } from 'svelte/transition';
   import { tick } from 'svelte';
-  import { dndzone } from 'svelte-dnd-action';
   import { flip } from 'svelte/animate';
   import { dndConfig } from '$lib/utils/motion';
   import { validateQuota, canAddTask } from '$lib/utils/quota';
@@ -21,73 +23,37 @@
   const i18n = getI18nStore();
   const t = i18n.t;
 
-  // Main priorities (A-E with quotas) shown in grid, F (Idea Pool) shown on the right side
+  // Main priorities (A-E with quotas). F/N/S live in the persistent
+  // ReservoirPanel above the view to avoid duplication.
   const mainPriorities: Priority[] = ['A', 'B', 'C', 'D', 'E'];
-  const priorities: Priority[] = ['A', 'B', 'C', 'D', 'E', 'F'];
+  const priorities: Priority[] = ['A', 'B', 'C', 'D', 'E'];
   const counts = $derived(countActiveByPriority(tasks.tasks));
 
   // Focus mode check
   const isFocusMode = $derived(pomodoro.state === 'work' && pomodoro.activeTaskId !== null);
 
-  // Local state for DnD items
-  // We need to maintain a local copy because dndzone updates it during drag
-  let columnItems = $state<Record<Priority, Task[]>>({
-    A: [], B: [], C: [], D: [], E: [], F: []
-  });
-
-  let isDragging = $state(false);
-
-  // Sync from store when not dragging
-  $effect(() => {
-    if (!isDragging) {
-      priorities.forEach(p => {
-        columnItems[p] = tasks.tasksByPriority[p].filter(t => !t.completed);
-      });
+  // Derived view onto tasks per priority (no local mirror needed —
+  // native DnD doesn't require items array bookkeeping).
+  const columnItems = $derived.by(() => {
+    const r: Record<Priority, Task[]> = { A: [], B: [], C: [], D: [], E: [], F: [], G: [], H: [], N: [], S: [] };
+    for (const p of priorities) {
+      r[p] = (tasks.tasksByPriority[p] ?? []).filter(t => !t.completed);
     }
+    return r;
   });
 
-  function handleDndConsider(priority: Priority, e: CustomEvent<DndEvent<Task>>) {
-    isDragging = true;
-    columnItems[priority] = e.detail.items;
+  // Native HTML5 DnD drop handlers — called by DropZone wrapper
+  async function handleDropTaskInColumn(priority: Priority, payload: TaskDragPayload) {
+    if (payload.fromPriority === priority) return null;
+    const result = await changePriority(payload.taskId, priority, true);
+    if (!result.success) return { success: false, error: result.error || '移动失败' };
+    return { success: true, toast: `已移到 ${priority} · ${t(`priority.${priority}`)}` };
   }
 
-  async function handleDndFinalize(priority: Priority, e: CustomEvent<DndEvent<Task>>) {
-    isDragging = false;
-    columnItems[priority] = e.detail.items;
-
-    // Check for tasks that changed priority
-    const previousTasks = tasks.tasksByPriority[priority].filter(t => !t.completed);
-    const previousIds = new Set(previousTasks.map(t => t.id));
-    const newTasks = e.detail.items;
-
-    // Find tasks that were moved TO this priority
-    const movedTasks = newTasks.filter(t => !previousIds.has(t.id) && t.priority !== priority);
-
-    // Check for priority change confirmation for each moved task
-    for (const task of movedTasks) {
-      const confirmCheck = needsPriorityChangeConfirmation(task, priority);
-      if (confirmCheck.needsConfirmation && confirmCheck.message) {
-        // Show confirmation dialog
-        pendingPriorityChange = {
-          taskId: task.id,
-          newPriority: priority,
-          reason: confirmCheck.message
-        };
-        return; // Don't proceed until user confirms
-      }
-    }
-
-    // Check quota if item was moved
-    if (priority !== 'F') { // F has no quota
-      const newCount = newTasks.length;
-      const quota = PRIORITY_CONFIG[priority].quota;
-
-      if (newCount > quota && quota !== Infinity) {
-        showToast(t('message.quotaExceeded', { priority }), 'warning');
-      }
-    }
-
-    reorderTask(priority, e.detail.items, movedTasks[0]?.id);
+  async function handleDropSubtaskInColumn(priority: Priority, payload: SubtaskDragPayload) {
+    const result = await promoteSubtask(payload.parentTaskId, payload.subtaskId, priority);
+    if (!result.success) return { success: false, error: result.error || '提升失败' };
+    return { success: true, toast: `子任务已提升到 ${priority} · ${t(`priority.${priority}`)}` };
   }
 
   // Idea Pool (F zone) derived values
@@ -127,10 +93,7 @@
 
   function cancelPriorityChange() {
     pendingPriorityChange = null;
-    // Refresh columnItems to revert the visual change
-    priorities.forEach(p => {
-      columnItems[p] = tasks.tasksByPriority[p].filter(t => !t.completed);
-    });
+    // columnItems is derived; nothing to manually refresh
   }
 
   // Keyboard navigation state
@@ -266,38 +229,32 @@
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div class="kanban-container" onclick={handleContainerClick}>
-  <!-- Main priority columns (A-D) as horizontal kanban columns -->
-  <div class="kanban-main" class:expanded={!showQuickAction}>
+  <!-- Main priority columns (A-E) as horizontal kanban columns. F lives in ReservoirPanel. -->
+  <div class="kanban-main expanded">
     {#each mainPriorities as priority}
       {@const config = PRIORITY_CONFIG[priority]}
-      {@const activeTasks = columnItems[priority]}
+      {@const activeTasks = tasks.tasksByPriority[priority].filter(t => !t.completed)}
       {@const completedTasks = getCompletedForPriority(priority)}
       {@const isFull = counts[priority] >= config.quota}
       {@const isDimmed = isFocusMode && !hasActiveTaskInColumn(priority)}
       {@const recentlyCompletedTasks = getRecentlyCompletedForPriority(priority)}
 
-      <div
-        class="priority-column"
-        class:is-full={isFull}
-        class:focus-dimmed={isDimmed}
-        class:drop-target={false} 
-        style:--card-color={config.color}
-        role="region"
-        aria-label={t(`priority.${priority}`)}
+      <DropZone
+        color={config.color}
+        class="priority-column drop-zone-column {isFull ? 'is-full' : ''} {isDimmed ? 'focus-dimmed' : ''}"
+        onTaskDrop={(p) => handleDropTaskInColumn(priority, p)}
+        onSubtaskDrop={(p) => handleDropSubtaskInColumn(priority, p)}
       >
-        <div class="column-header" title={t(`priority.tooltip.${priority}`)}>
+        <div class="column-header" title={t(`priority.tooltip.${priority}`)} style:--card-color={config.color}>
           <span class="column-letter" style:background={config.color}>{priority}</span>
           <span class="column-name">{t(`priority.${priority}`)}</span>
           <span class="column-count">{counts[priority]}</span>
         </div>
 
-        <div 
-          class="column-tasks" 
+        <div
+          class="column-tasks"
           role="listbox"
           aria-label={t(`priority.${priority}`)}
-          use:dndzone={{ items: activeTasks, flipDurationMs: dndConfig.flipDurationMs, dropTargetStyle: { outline: `2px solid ${config.color}`, outlineOffset: '-2px', borderRadius: '8px' } }}
-          onconsider={(e) => handleDndConsider(priority, e)}
-          onfinalize={(e) => handleDndFinalize(priority, e)}
         >
           {#each activeTasks as task (task.id)}
             <div
@@ -306,7 +263,6 @@
               role="option"
               aria-selected={focusedTaskId === task.id}
               tabindex={focusedTaskId === task.id ? 0 : -1}
-              animate:flip={{ duration: dndConfig.flipDurationMs }}
             >
               <TaskCard
                 {task}
@@ -317,7 +273,9 @@
             </div>
           {/each}
           {#if activeTasks.length === 0}
-            <div class="empty-column-spacer"></div>
+            <div class="empty-column-hint">
+              拖任务到此 ↓
+            </div>
           {/if}
         </div>
 
@@ -352,50 +310,15 @@
             {/if}
           </div>
         {/if}
-      </div>
+      </DropZone>
     {/each}
   </div>
 
-  <!-- Idea Pool (F zone) - fixed on right side, toggleable -->
-  <aside
-    class="idea-pool-panel"
-    class:collapsed={!showQuickAction}
-    class:focus-dimmed={ideaPoolDimmed}
-  >
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="pool-header" onclick={() => showQuickAction = !showQuickAction} title={t('priority.tooltip.F')}>
-      <span class="pool-badge" style:background={PRIORITY_CONFIG.F.color}>💡</span>
-      {#if showQuickAction}
-        <span class="pool-title">{t('inbox.title')}</span>
-        <span class="pool-count">{ideaPoolTasks.length}</span>
-      {/if}
-      <svg class="toggle-icon" class:rotated={!showQuickAction} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <polyline points="9 18 15 12 9 6"></polyline>
-      </svg>
-    </div>
-
-    {#if showQuickAction}
-      <div 
-        class="pool-tasks" 
-        transition:slide
-        use:dndzone={{ items: ideaPoolTasks, flipDurationMs: dndConfig.flipDurationMs, dropTargetStyle: { outline: `2px solid ${PRIORITY_CONFIG.F.color}`, outlineOffset: '-2px', borderRadius: '8px' } }}
-        onconsider={(e) => handleDndConsider('F', e)}
-        onfinalize={(e) => handleDndFinalize('F', e)}
-      >
-        {#each ideaPoolTasks as task (task.id)}
-          <div
-            class="pool-task-item"
-            animate:flip={{ duration: dndConfig.flipDurationMs }}
-          >
-            <TaskCard {task} compact kanbanMode={true} />
-          </div>
-        {/each}
-        {#if ideaPoolTasks.length === 0}
-          <div class="pool-empty-spacer"></div>
-        {/if}
-      </div>
-    {/if}
-  </aside>
+  <!-- Bottom rail: S / F / N as a horizontal 3-zone strip below A-E.
+       Spatially adjacent for short-distance DnD. -->
+  <div class="kanban-rail">
+    <ZoneRail orientation="horizontal" />
+  </div>
 
   <!-- Priority change confirmation dialog -->
   {#if pendingPriorityChange}
@@ -419,27 +342,37 @@
 </div>
 
 <style>
+  /* Two-row layout: A-E top, S/F/N rail bottom */
   .kanban-container {
     display: flex;
+    flex-direction: column;
     width: 100%;
     height: 100%;
-    gap: 12px;
+    gap: 10px;
     overflow: hidden;
     outline: none;
   }
 
-  /* Main area with A/B/C/D as horizontal columns */
+  /* Main area with A/B/C/D/E as horizontal columns */
   .kanban-main {
-    flex: 1;
-    min-width: 0;
+    flex: 1.7;
+    min-height: 0;
     display: flex;
     gap: 12px;
     overflow-x: auto;
     transition: all 0.3s ease;
   }
 
+  /* Bottom rail — S/F/N strip */
+  .kanban-rail {
+    flex: 1;
+    min-height: 180px;
+    max-height: 38%;
+    overflow: hidden;
+  }
+
   /* Priority Column (A/B/C/D) - vertical kanban columns */
-  .priority-column {
+  :global(.priority-column) {
     flex: 1 1 0;
     min-width: 180px;
     display: flex;
@@ -453,16 +386,16 @@
     -webkit-backdrop-filter: blur(8px);
   }
 
-  .priority-column.drop-target {
+  :global(.priority-column.drop-target) {
     border-color: var(--card-color);
     box-shadow: 0 0 0 2px var(--card-color);
   }
 
-  .priority-column.is-full {
+  :global(.priority-column.is-full) {
     opacity: 0.7;
   }
 
-  .priority-column.focus-dimmed {
+  :global(.priority-column.focus-dimmed) {
     opacity: 0.3;
     filter: grayscale(0.4) blur(0.5px);
     pointer-events: none;
@@ -791,7 +724,7 @@
 
   /* Responsive adjustments */
   @media (max-width: 1200px) {
-    .priority-column {
+    :global(.priority-column) {
       min-width: 160px;
     }
     .idea-pool-panel {
@@ -812,7 +745,7 @@
       flex-direction: column;
     }
 
-    .priority-column {
+    :global(.priority-column) {
       flex: none;
       min-width: unset;
       max-width: unset;

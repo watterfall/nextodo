@@ -39,15 +39,28 @@
       return tasks.tasks.filter(task => !task.completed && task.priority === priority).length;
     }
   
-    // Count tasks per project/context/tag
+    // Count tasks per project/context/tag. Uses countedTasks so that tags
+    // attached to Future (N) and Sustained (S) tasks are included — the user's
+    // sidebar badges reflect everything in their working set, not just A-F.
     function getProjectCount(project: string): number {
-      return tasks.activeTasks.filter(task => task.projects.includes(project)).length;
+      return tasks.countedTasks.filter(task => task.projects.includes(project)).length;
     }
     function getContextCount(context: string): number {
-      return tasks.activeTasks.filter(task => task.contexts.includes(context)).length;
+      return tasks.countedTasks.filter(task => task.contexts.includes(context)).length;
     }
     function getTagCount(tag: string): number {
-      return tasks.activeTasks.filter(task => task.customTags.includes(tag)).length;
+      return tasks.countedTasks.filter(task => task.customTags.includes(tag)).length;
+    }
+
+    // Project completion: count completed (G) vs total for this project.
+    // Provides at-a-glance "this project is X% done" signal in sidebar tooltip
+    // and visual progress underline on the badge.
+    function getProjectCompletion(project: string): { active: number; completed: number; ratio: number } {
+      const inProject = tasks.tasks.filter(t => t.projects.includes(project));
+      const completed = inProject.filter(t => t.priority === 'G').length;
+      const active = inProject.filter(t => t.priority !== 'G' && t.priority !== 'H').length;
+      const total = active + completed;
+      return { active, completed, ratio: total === 0 ? 0 : completed / total };
     }
 
   let dueDatesExpanded = $state(true);
@@ -213,15 +226,22 @@
                 {@const count = getProjectCount(project)}
                 {#if count > 0}
                   {@const displayInfo = getDisplayText(project)}
+                  {@const comp = getProjectCompletion(project)}
                   <button
                     class="tag-badge-btn project"
                     class:active={tasks.filter.project === project}
                     class:emoji-only={displayInfo.isEmoji}
                     onclick={() => handleProjectFilter(project)}
-                    title={project}
+                    title="{project} · {comp.completed}/{comp.active + comp.completed} 已完成 ({Math.round(comp.ratio * 100)}%)"
                   >
                     <span class="badge-text">{displayInfo.display}</span>
                     <span class="badge-sup">{count}</span>
+                    {#if comp.ratio > 0}
+                      <span
+                        class="badge-progress"
+                        style:width="{Math.round(comp.ratio * 100)}%"
+                      ></span>
+                    {/if}
                   </button>
                 {/if}
               {/each}
@@ -690,6 +710,24 @@
     transition: all var(--transition-fast);
     font-size: 12px;
     font-weight: 500;
+    overflow: hidden;
+  }
+
+  /* Project completion underline — thin bar grown to ratio% along bottom edge.
+     Subtle so it reads as ambient info, not a noisy metric. */
+  .badge-progress {
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    height: 2px;
+    background: var(--priority-s-color, #20c997);
+    opacity: 0.55;
+    transition: width 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    pointer-events: none;
+  }
+
+  .tag-badge-btn:hover .badge-progress {
+    opacity: 0.85;
   }
 
   .tag-badge-btn:hover {

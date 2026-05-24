@@ -1,8 +1,12 @@
 // Priority levels
 // A-E are work priorities with quotas, F is the Idea Pool (unlimited)
+// S is "Sustained Progress" — week-long important projects with subtasks
+// N is "Future Progress" — long-term important but non-urgent
 // G is for completed tasks, H is for cancelled tasks (both hidden by default)
-export type Priority = 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H';
-export type ActivePriority = Exclude<Priority, 'G' | 'H'>;
+export type Priority = 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H' | 'N' | 'S';
+export type ActivePriority = Exclude<Priority, 'G' | 'H' | 'N' | 'S'>;
+export type FuturePriority = Extract<Priority, 'N'>;
+export type SustainedPriority = Extract<Priority, 'S'>;
 export type HiddenPriority = Extract<Priority, 'G' | 'H'>;
 export type ActivePriorityCounts = Record<ActivePriority, number>;
 
@@ -17,6 +21,17 @@ export interface Recurrence {
   // For patterns like mon,wed,fri or 1m@15
   customPattern?: string;
   nextDue: string | null;
+}
+
+// Lightweight subtask — embedded inside a parent Task. Used most commonly by
+// Sustained (S) tasks for breaking a week-long project into checkable steps.
+// Subtasks are intentionally minimal: no priority/dates/pomodoros — they are
+// bullets you tick off, not standalone tasks.
+export interface Subtask {
+  id: string;
+  content: string;
+  completed: boolean;
+  completedAt?: string | null;
 }
 
 // Task interface - with Threshold Date support
@@ -40,6 +55,8 @@ export interface Task {
     completed: number;
   };
   notes: string;
+  // NEW: Embedded subtasks for breakdown — most useful on S (Sustained) tasks
+  subtasks?: Subtask[];
   // NEW: Unit override for flexible unit control
   unitOverride?: {
     extendedUntil?: string;
@@ -281,6 +298,24 @@ export const PRIORITY_CONFIG: Record<Priority, PriorityConfig> = {
     bgColor: 'var(--priority-h-bg, rgba(134, 142, 150, 0.08))',
     borderColor: 'var(--priority-h-border, rgba(134, 142, 150, 0.2))',
     pomodoroRange: { min: 0, max: Infinity, recommended: 0 }
+  },
+  N: {
+    name: '未来推进',
+    quota: Infinity,
+    description: '重要但长期的推进任务，默认隐藏不打扰',
+    color: 'var(--priority-n-color, #748ffc)',
+    bgColor: 'var(--priority-n-bg, rgba(116, 143, 252, 0.08))',
+    borderColor: 'var(--priority-n-border, rgba(116, 143, 252, 0.22))',
+    pomodoroRange: { min: 0, max: Infinity, recommended: 0 }
+  },
+  S: {
+    name: '持续推进',
+    quota: 1,
+    description: '本周唯一的持续推进项目，用子任务分解执行',
+    color: 'var(--priority-s-color, #20c997)',
+    bgColor: 'var(--priority-s-bg, rgba(32, 201, 151, 0.1))',
+    borderColor: 'var(--priority-s-border, rgba(32, 201, 151, 0.28))',
+    pomodoroRange: { min: 0, max: Infinity, recommended: 0 }
   }
 };
 
@@ -445,6 +480,8 @@ export const COMPLETED_RETENTION_HOURS: Record<Priority, number> = {
   D: 6,   // Ad-hoc tasks - 6 hours retention
   E: 4,   // Quick action - 4 hours retention
   F: 4,   // Idea pool - 4 hours retention
+  N: 8,   // Future progress - 8 hours retention (important, treat like C)
+  S: 12,  // Sustained - keep visible longest, week-long project completion is significant
   G: 0,   // Already completed
   H: 0,   // Already cancelled
 };
@@ -497,15 +534,69 @@ export function getRetentionRemaining(task: Task): { hours: number; minutes: num
 // Active priorities (shown in main views)
 export const ACTIVE_PRIORITIES: ActivePriority[] = ['A', 'B', 'C', 'D', 'E', 'F'];
 
+// Future priorities (collapsed, separate entry; not shown in daily views)
+export const FUTURE_PRIORITIES: FuturePriority[] = ['N'];
+
+// Sustained priorities (week-long ongoing projects with subtasks)
+export const SUSTAINED_PRIORITIES: SustainedPriority[] = ['S'];
+
 // Hidden priorities (completed/cancelled)
 export const HIDDEN_PRIORITIES: HiddenPriority[] = ['G', 'H'];
 
-// Check if a task is in an active (visible) priority
+// Check if a task is in an active (daily-visible) priority
 export function isActivePriority(priority: Priority): priority is ActivePriority {
   return (ACTIVE_PRIORITIES as readonly Priority[]).includes(priority);
+}
+
+// Check if a task is in a future (long-horizon, default-hidden) priority
+export function isFuturePriority(priority: Priority): priority is FuturePriority {
+  return (FUTURE_PRIORITIES as readonly Priority[]).includes(priority);
+}
+
+// Check if a task is in a sustained (weekly ongoing) priority
+export function isSustainedPriority(priority: Priority): priority is SustainedPriority {
+  return (SUSTAINED_PRIORITIES as readonly Priority[]).includes(priority);
+}
+
+// Check if a task can be operated on (complete/cancel/edit) — active OR future OR sustained
+export function isOperablePriority(priority: Priority): boolean {
+  return isActivePriority(priority) || isFuturePriority(priority) || isSustainedPriority(priority);
+}
+
+// Check if a task should be COUNTED in cross-cutting aggregations such as
+// sidebar project/context/tag badges — i.e. any task that lives in the user's
+// working set (not yet completed or cancelled). Currently equivalent to
+// isOperablePriority, kept as a separate predicate so the two intents
+// (UI permission vs. counting) can evolve independently without one site
+// silently changing the other's semantics.
+export function isCountedPriority(priority: Priority): boolean {
+  return !isHiddenPriority(priority);
 }
 
 // Check if a task is completed (G) or cancelled (H)
 export function isHiddenPriority(priority: Priority): priority is HiddenPriority {
   return (HIDDEN_PRIORITIES as readonly Priority[]).includes(priority);
+}
+
+// ============================================================================
+// Subtask helpers
+// ============================================================================
+
+// Get subtask completion ratio for a task (0..1). Returns 0 if no subtasks.
+export function subtaskProgress(task: Task): { done: number; total: number; ratio: number } {
+  const subs = task.subtasks ?? [];
+  const total = subs.length;
+  if (total === 0) return { done: 0, total: 0, ratio: 0 };
+  const done = subs.filter(s => s.completed).length;
+  return { done, total, ratio: done / total };
+}
+
+// Create a new subtask record
+export function createSubtask(content: string): Subtask {
+  return {
+    id: crypto.randomUUID(),
+    content: content.trim(),
+    completed: false,
+    completedAt: null
+  };
 }

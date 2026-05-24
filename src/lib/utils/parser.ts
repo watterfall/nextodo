@@ -18,7 +18,7 @@ interface ParsedTask {
  * - +project for projects
  * - @context for contexts
  * - #tag for custom tags
- * - !A !B !C !D !E for priority
+ * - !A !B !C !D !E !F !N !S for priority (or 【A】…【S】 with Chinese full-width brackets)
  * - ~2024-12-01 or ~tomorrow or ~today for due date
  * - thr:2024-12-01 or thr:+3d for threshold date
  * - rec:1d rec:1w rec:mon,wed,fri rec:1m@15 for recurrence
@@ -35,11 +35,26 @@ export function parseTaskInput(input: string): ParsedTask {
   let estimatedPomodoros = 0;
   let recurrence: Recurrence | null = null;
 
-  // Extract priority (!A, !B, etc.)
-  const priorityMatch = content.match(/!([ABCDEF])(?![A-Za-z])/i);
+  // Extract priority — prefer !X, fall back to 【X】 (Chinese full-width brackets, easier
+  // to type on CN IME). The bracket form requires anchor at start/end or surrounding
+  // whitespace so that pasted content like "见【A】部分" does not silently reassign priority.
+  const bracketPriority = /(^|\s)【\s*([ABCDEFNS])\s*】(\s|$)/i;
+  let priorityMatch = content.match(/!([ABCDEFNS])(?![A-Za-z])/i);
+  let usedBracketForm = false;
+  if (!priorityMatch) {
+    const m = content.match(bracketPriority);
+    if (m) {
+      priorityMatch = [m[0], m[2]] as RegExpMatchArray;
+      usedBracketForm = true;
+    }
+  }
   if (priorityMatch) {
     priority = priorityMatch[1].toUpperCase() as Priority;
-    content = content.replace(/!([ABCDEF])(?![A-Za-z])/gi, '').trim();
+    content = content.replace(/!([ABCDEFNS])(?![A-Za-z])/gi, '');
+    if (usedBracketForm) {
+      content = content.replace(new RegExp(bracketPriority.source, 'gi'), ' ');
+    }
+    content = content.replace(/\s+/g, ' ').trim();
   }
 
   // Extract projects (+project)
@@ -293,8 +308,9 @@ export function formatTaskDisplay(task: Task): string {
 export function highlightSyntax(input: string): string {
   let html = escapeHtml(input);
 
-  // Highlight priority
-  html = html.replace(/!([ABCDEF])(?![A-Za-z])/gi, '<span class="syntax-priority">!$1</span>');
+  // Highlight priority — both !X and 【X】 forms
+  html = html.replace(/!([ABCDEFNS])(?![A-Za-z])/gi, '<span class="syntax-priority">!$1</span>');
+  html = html.replace(/【\s*([ABCDEFNS])\s*】/gi, '<span class="syntax-priority">【$1】</span>');
 
   // Highlight projects
   html = html.replace(/(\+\S+)/g, '<span class="syntax-project">$1</span>');
