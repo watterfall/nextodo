@@ -1,3 +1,5 @@
+import { isCompletedInCurrentUnit, getUnitRetentionRemaining, currentUnitStartLocal } from '$lib/utils/unitCalc';
+
 // Priority levels
 // A-E are work priorities with quotas, F is the Idea Pool (unlimited)
 // S is "Sustained Progress" — week-long important projects with subtasks
@@ -171,6 +173,33 @@ export interface Settings {
   unitBoundaryFlexHours: number;
   // NEW: UI density mode — 'comfortable' (default) | 'compact' (denser layout)
   density: 'comfortable' | 'compact';
+  // NEW: send a daily summary notification for tasks due today / overdue
+  dueReminders: boolean;
+  // NEW: when a 2-day period ends under-completed, prompt a micro-review instead
+  // of silently merging into the next period
+  lowCompletionPrompt: boolean;
+}
+
+// Dynamic 2-day cycle state. The active work window normally equals the calendar
+// unit; when a period ends with low (priority-weighted) completion the next
+// period is flagged as a continued ("merged") window and the unfinished A-E
+// tasks roll into it. Saturday (review day) never participates.
+export interface CycleState {
+  anchorStart: string;        // local YYYY-MM-DD — start of the current 2-day window
+  windowEnd: string;          // local YYYY-MM-DD — inclusive end of the current window
+  merged: boolean;            // current window continues an under-completed prior period
+  lastEvaluatedStart: string; // anchorStart of the period already scored (dedupe)
+  // Set when a period ended under-completed AND lowCompletionPrompt is on: the
+  // merge is deferred until the user resolves the micro-review banner.
+  pendingReview?: { periodStart: string; completion: number } | null;
+}
+
+// One scored 2-day period, recorded when the cycle advances (for the completion
+// history sparkline and observability of the merge engine).
+export interface CycleHistoryEntry {
+  periodStart: string;        // local YYYY-MM-DD start of the scored period
+  completion: number | null;  // priority-weighted completion ratio (null = nothing planned)
+  merged: boolean;            // whether this low score triggered a merge into the next period
 }
 
 // Active data file structure (hot data)
@@ -182,6 +211,8 @@ export interface ActiveData {
   customTagGroups: CustomTagGroups;
   settings: Settings;
   gamification?: GamificationData;
+  cycleState?: CycleState;
+  cycleHistory?: CycleHistoryEntry[];
 }
 
 // Archive data file structure (cold data) - DEPRECATED, kept for migration
@@ -208,6 +239,8 @@ export interface AppData {
   pomodoroHistory: PomodoroSession[];
   settings: Settings;
   gamification?: GamificationData;
+  cycleState?: CycleState;
+  cycleHistory?: CycleHistoryEntry[];
 }
 
 // Priority configuration
@@ -359,7 +392,7 @@ export function createEmptyTask(priority: Priority = 'F'): Task {
     completed: false,
     completedAt: null,
     createdAt: now,
-    unitStart: now.split('T')[0],
+    unitStart: currentUnitStartLocal(),
     projects: [],
     contexts: [],
     customTags: [],
@@ -388,7 +421,9 @@ export function createDefaultSettings(): Settings {
     eZoneAgingDays: 3,
     showFutureTasks: false,
     unitBoundaryFlexHours: 12, // Default: half day flexibility
-    density: 'comfortable'
+    density: 'comfortable',
+    dueReminders: true,
+    lowCompletionPrompt: true
   };
 }
 
@@ -471,64 +506,19 @@ export function calculateEZoneAge(task: Task, unitDays: number = 7): number {
   return calculateFZoneAge(task, unitDays);
 }
 
-// Retention duration in hours based on original priority level
-// Higher priority tasks stay visible longer after completion
-export const COMPLETED_RETENTION_HOURS: Record<Priority, number> = {
-  A: 12,  // Core challenge - 12 hours retention
-  B: 10,  // Key progress - 10 hours retention
-  C: 8,   // Steady progress - 8 hours retention
-  D: 6,   // Ad-hoc tasks - 6 hours retention
-  E: 4,   // Quick action - 4 hours retention
-  F: 4,   // Idea pool - 4 hours retention
-  N: 8,   // Future progress - 8 hours retention (important, treat like C)
-  S: 12,  // Sustained - keep visible longest, week-long project completion is significant
-  G: 0,   // Already completed
-  H: 0,   // Already cancelled
-};
-
-// Check if a completed task is still within its retention period
+// A completed task stays visible (struck-through in its original zone) until the
+// 2-day unit it was completed in ends. Once the current unit advances past that
+// unit, the task is hidden. Tied to the unit cycle rather than a fixed duration.
 export function isWithinRetentionPeriod(task: Task): boolean {
   if (!task.completedAt) return false;
-
-  // Use originalPriority if available, otherwise estimate based on pomodoros
-  const originalPriority = task.originalPriority || estimateOriginalPriority(task);
-  const retentionHours = COMPLETED_RETENTION_HOURS[originalPriority] || 4;
-
-  const completedAt = new Date(task.completedAt).getTime();
-  const now = Date.now();
-  const retentionMs = retentionHours * 60 * 60 * 1000;
-
-  return (now - completedAt) < retentionMs;
+  return isCompletedInCurrentUnit(task.completedAt);
 }
 
-// Estimate original priority based on task characteristics (fallback for legacy tasks)
-function estimateOriginalPriority(task: Task): Priority {
-  const estimated = task.pomodoros.estimated;
-  if (estimated >= 5) return 'A';
-  if (estimated >= 3) return 'B';
-  if (estimated >= 2) return 'C';
-  if (estimated >= 1) return 'D';
-  return 'E';
-}
-
-// Get remaining retention time as a human-readable string
+// Time remaining until the completed task's unit ends (when it will be hidden).
+// Returns null once that unit has already ended.
 export function getRetentionRemaining(task: Task): { hours: number; minutes: number } | null {
   if (!task.completedAt) return null;
-
-  const originalPriority = task.originalPriority || estimateOriginalPriority(task);
-  const retentionHours = COMPLETED_RETENTION_HOURS[originalPriority] || 4;
-
-  const completedAt = new Date(task.completedAt).getTime();
-  const now = Date.now();
-  const retentionMs = retentionHours * 60 * 60 * 1000;
-  const remainingMs = retentionMs - (now - completedAt);
-
-  if (remainingMs <= 0) return null;
-
-  const hours = Math.floor(remainingMs / (60 * 60 * 1000));
-  const minutes = Math.floor((remainingMs % (60 * 60 * 1000)) / (60 * 1000));
-
-  return { hours, minutes };
+  return getUnitRetentionRemaining(task.completedAt);
 }
 
 // Active priorities (shown in main views)

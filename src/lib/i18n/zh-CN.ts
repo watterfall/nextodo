@@ -143,6 +143,11 @@ export default {
     subtaskPlaceholder: '添加一个子任务 · 回车确认',
   },
 
+  quickAdd: {
+    add: '添加任务',
+    placeholder: '输入任务，回车添加…',
+  },
+
   // Inbox Panel (Idea Pool)
   inbox: {
     title: '灵感池',
@@ -239,6 +244,8 @@ export default {
     biDaily: '双日制',
     prev: '上一个周期',
     next: '下一个周期',
+    merged: '延续',
+    mergedHint: '上个周期完成度偏低，已延续为新的 2 天窗口',
     stats: {
       planned: '计划',
       completed: '完成',
@@ -309,6 +316,8 @@ export default {
       import: '导入数据',
       clear: '清除所有数据',
       autoBackup: '自动备份',
+      backupDesc: '导出为 JSON 备份，或从 JSON 文件导入（导入会覆盖当前数据）',
+      importConfirm: '导入将覆盖当前所有数据（已自动备份）。确定继续吗？',
     },
     autoArchive: '自动归档天数',
     autoArchiveDesc: '已完成任务在多少天后自动归档',
@@ -316,9 +325,15 @@ export default {
     eZoneAgingDesc: '待处理任务超过多少天提示处理',
     unitBoundaryFlex: '周期边界弹性',
     unitBoundaryFlexDesc: '任务可延迟或提前的小时数',
+    dueReminders: '截止日提醒',
+    dueRemindersDesc: '每天提醒今天到期或已逾期的任务（仅桌面端）',
+    lowCompletionPrompt: '低完成度微复盘',
+    lowCompletionPromptDesc: '某2天周期完成度低于30%时，先提示复盘再决定是否顺延（关闭则自动合并）',
     hours: '小时',
     minutes: '分钟',
     days: '天',
+    on: '开',
+    off: '关',
     methodology: {
       title: '方法论说明',
       subtitle: '1-2-3-5 双日周期模型',
@@ -383,6 +398,7 @@ export default {
     sustained: '持续推进',
     sustainedHint: '一周持续推进的项目 · 可分解为子任务勾选',
     sustainedEmpty: '暂无持续推进项目',
+    projectProgress: '{project} · {done}/{total} 已完成 ({pct}%)',
   },
 
   // Priority tooltips (for ListView)
@@ -406,6 +422,55 @@ export default {
     subtaskPromotedTo: '子任务已提升到 {priority}',
     promotedTo: '已提升到 {name} ({priority})',
     promoteFailed: '提升失败',
+  },
+
+  reminders: {
+    dueTitle: '今天有任务到期',
+    dueBody: '你有 {count} 个任务今天到期或已逾期',
+  },
+
+  lowCompletion: {
+    banner: '上个 2 天周期只完成了 {pct}%。未完成的任务要顺延到本期吗？',
+    rollover: '全部顺延到本期',
+    dismiss: '忽略此次',
+  },
+
+  taskCard: {
+    moveToPriority: '移到优先级',
+    editDetails: '编辑详情',
+    markComplete: '标记完成',
+    cancelTask: '取消任务',
+    subtasksDone: '{done}/{total} 子任务完成',
+  },
+
+  rail: {
+    sHint: '拖任务到此 · 或输入 !S 创建本周持续推进项目',
+    fHint: '收集想法 · 拖到这里或输入 !F',
+    nHint: '暂不打扰 · 拖到这里或输入 !N',
+    doubleClickEdit: '双击编辑',
+    dragToPromote: '拖动到 A-E/F/N 任意区即提升为独立任务',
+    promoteHint: '提升为独立任务（或直接拖到目标区）',
+    promoteTo: '提升到',
+    check: '标记完成',
+    uncheck: '取消勾选',
+  },
+
+  week: {
+    title: '本周概览',
+    planned: '已计划',
+    done: '已完成',
+    showInbox: '显示收集箱 (用于排期)',
+    hideInbox: '隐藏收集箱',
+    reviewDay: '复盘日',
+  },
+
+  freshStart: {
+    title: '新的开始',
+    bodyPre: '我们注意到你有 ',
+    bodyPost: ' 个任务已经超过 30 天未处理。',
+    question: '过去已经过去。要将它们移入冷冻柜(归档)，重新开始吗？',
+    confirm: '是的，帮我清理',
+    dismiss: '不，我还记得它们',
   },
 
   // View modes
@@ -494,6 +559,7 @@ export default {
     taskMoved: '任务已移动到 {priority} 区',
     taskMovedToTrash: '任务已移至回收站',
     taskCancelled: '任务已取消',
+    taskPermanentlyDeleted: '任务已永久删除',
     taskEvolved: '任务已演化，新任务已创建',
     taskActivated: '任务已激活到 {priority} 区',
     activateChooseTarget: '激活到哪个优先级？',
@@ -504,6 +570,13 @@ export default {
     confirmPriorityChange: '确定要更改此任务的优先级吗？',
     frequentPriorityChange: '您刚才更改过此任务的优先级。频繁调整优先级可能影响工作效率，确定要继续吗？',
     drasticPriorityChange: '从 {from} 级到 {to} 级是较大的优先级跨越，确定要继续吗？',
+    movedTo: '已移到 {priority} · {name}',
+    moveFailed: '移动失败',
+    promoteFailed: '提升失败',
+    promotedTo: '子任务已提升到 {priority} · {name}',
+    quotaFull: '{name}（{priority}）已达配额上限 {quota} 个',
+    sustainedExists: '本周已有一个持续推进项目（点击替换或先完成现有的）',
+    dropHere: '拖任务到此',
   },
 
   // Date/Time
@@ -553,6 +626,7 @@ export default {
       evening: '晚上好',
     },
     readyToFocus: '准备好专注了吗？',
+    completionHistory: '完成率',
     taskCount: '你有 {count} 个任务计划在今天完成。',
     progress: '今日进度',
     showInbox: '显示收集箱 (用于规划)',

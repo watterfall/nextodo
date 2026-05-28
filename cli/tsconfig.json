@@ -1,0 +1,12 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "baseUrl": "..",
+    "paths": {
+      "$lib/*": ["src/lib/*"]
+    },
+    "noEmit": true
+  },
+  "include": ["./**/*.ts"]
+}

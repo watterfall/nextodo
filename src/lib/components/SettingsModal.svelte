@@ -3,6 +3,9 @@
   import { getI18nStore, availableLanguages, setLanguage, currentLanguage } from '$lib/i18n';
   import type { Language } from '$lib/types';
   import { PRIORITY_CONFIG } from '$lib/types';
+  import { exportData, importData, createBackup } from '$lib/utils/storage';
+  import { getTasksStore, replaceAllData } from '$lib/stores/tasks.svelte';
+  import { showToast } from '$lib/stores/ui.svelte';
 
   interface Props {
     isOpen: boolean;
@@ -12,8 +15,46 @@
   let { isOpen, onClose }: Props = $props();
 
   const settings = getSettingsStore();
+  const tasks = getTasksStore();
   const i18n = getI18nStore();
   const t = i18n.t;
+
+  let fileInput: HTMLInputElement;
+
+  async function handleExport() {
+    try {
+      await exportData(tasks.appData);
+      showToast(t('message.dataExported'), 'success');
+    } catch (e) {
+      showToast(String(e), 'error');
+    }
+  }
+
+  function triggerImport() {
+    fileInput?.click();
+  }
+
+  async function handleImportFile(e: Event) {
+    const input = e.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+    if (!confirm(t('settings.data.importConfirm'))) {
+      input.value = '';
+      return;
+    }
+    try {
+      await createBackup(); // safety backup before overwrite
+      const data = await importData(file);
+      await replaceAllData(data);
+      showToast(t('message.dataImported'), 'success');
+      // Reload so every store re-initializes from the imported data.
+      setTimeout(() => location.reload(), 400);
+    } catch (err) {
+      showToast(String(err), 'error');
+    } finally {
+      input.value = '';
+    }
+  }
 
   let pomodoroWork = $state(settings.pomodoroWork);
   let pomodoroShortBreak = $state(settings.pomodoroShortBreak);
@@ -291,6 +332,46 @@
               <span class="input-suffix">{t('settings.hours')}</span>
             </div>
           </div>
+
+          <div class="setting-row">
+            <div class="setting-info">
+              <span class="setting-label">{t('settings.dueReminders')}</span>
+              <span class="setting-desc">{t('settings.dueRemindersDesc')}</span>
+            </div>
+            <div class="theme-buttons">
+              <button class="theme-btn" class:active={settings.dueReminders !== false} onclick={() => updateSettings({ dueReminders: true })}>{t('settings.on')}</button>
+              <button class="theme-btn" class:active={settings.dueReminders === false} onclick={() => updateSettings({ dueReminders: false })}>{t('settings.off')}</button>
+            </div>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-info">
+              <span class="setting-label">{t('settings.lowCompletionPrompt')}</span>
+              <span class="setting-desc">{t('settings.lowCompletionPromptDesc')}</span>
+            </div>
+            <div class="theme-buttons">
+              <button class="theme-btn" class:active={settings.lowCompletionPrompt !== false} onclick={() => updateSettings({ lowCompletionPrompt: true })}>{t('settings.on')}</button>
+              <button class="theme-btn" class:active={settings.lowCompletionPrompt === false} onclick={() => updateSettings({ lowCompletionPrompt: false })}>{t('settings.off')}</button>
+            </div>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-info">
+              <span class="setting-label">{t('settings.data.backup')}</span>
+              <span class="setting-desc">{t('settings.data.backupDesc')}</span>
+            </div>
+            <div class="data-actions">
+              <button class="btn-data" onclick={handleExport}>{t('settings.data.export')}</button>
+              <button class="btn-data" onclick={triggerImport}>{t('settings.data.import')}</button>
+              <input
+                bind:this={fileInput}
+                type="file"
+                accept="application/json,.json"
+                style="display:none"
+                onchange={handleImportFile}
+              />
+            </div>
+          </div>
         </section>
 
         <!-- Methodology Guide -->
@@ -505,6 +586,30 @@
     flex: 1;
     overflow-y: auto;
     padding: 16px 24px;
+  }
+
+  .data-actions {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .btn-data {
+    padding: 6px 12px;
+    font-size: 13px;
+    font-weight: 500;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+  }
+
+  .btn-data:hover {
+    background: var(--hover-bg);
+    color: var(--text-primary);
+    border-color: var(--primary);
   }
 
   .settings-section {

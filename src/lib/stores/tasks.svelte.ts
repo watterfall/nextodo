@@ -1,10 +1,12 @@
 import type { Task, Subtask, Priority, FilterState, UnitInfo, AppData, ActiveData, PomodoroHistoryData } from '$lib/types';
 import { createEmptyTask, createDefaultAppData, isThresholdPassed, calculateEZoneAge, isActivePriority, isCountedPriority, isFuturePriority, isSustainedPriority, isOperablePriority, createSubtask, ACTIVE_PRIORITIES, isWithinRetentionPeriod } from '$lib/types';
-import { loadAppData, saveAppData, reloadFile } from '$lib/utils/storage';
+import { loadAppData, saveAppData, reloadFile, archiveTasks } from '$lib/utils/storage';
 import { applyHighlanderRule, canAddTask, validateQuota } from '$lib/utils/quota';
 import { createTaskFromInput } from '$lib/utils/parser';
 import { processRecurringTasks, createNextOccurrence } from '$lib/utils/recurrence';
-import { getCurrentUnit, isDateInUnit, isToday, isOverdue, isThisWeek } from '$lib/utils/unitCalc';
+import { evaluateCycle, rollUnfinishedIntoWindow } from '$lib/utils/cycleEngine';
+import { maybeNotifyDueTasks } from '$lib/utils/reminders';
+import { getCurrentUnit, isDateInUnit, isToday, isOverdue, isThisWeek, currentUnitStartLocal, parseISODate } from '$lib/utils/unitCalc';
 import { t } from '$lib/i18n';
 import { getGamificationStore } from './gamification.svelte';
 
@@ -35,26 +37,39 @@ let searchQuery = $state('');
 function cleanupOldTasks(): void {
   const now = Date.now();
   const twoDaysMs = 2 * 24 * 60 * 60 * 1000;
-  
+  // Completed (G) tasks older than this move to cold storage. Kept >= the 14-day
+  // History window so HistoryModal still shows recent completions.
+  const archiveAfterMs = 14 * 24 * 60 * 60 * 1000;
+
   const originalCount = appData.tasks.length;
-  
+  const toArchive: Task[] = [];
+
   appData.tasks = appData.tasks.filter(task => {
-    // If task is cancelled (H priority)
+    // Cancelled (H): hard-delete after 2 days
     if (task.priority === 'H') {
       if (!task.completedAt) return true; // Keep if no timestamp (shouldn't happen but safe)
-      
       const cancelledTime = new Date(task.completedAt).getTime();
-      // If cancelled more than 2 days ago, delete it
       if (now - cancelledTime > twoDaysMs) {
         return false;
       }
     }
-    
+
+    // Completed (G): archive to cold storage after the History window, drop from active
+    if (task.priority === 'G' && task.completedAt) {
+      const completedTime = new Date(task.completedAt).getTime();
+      if (now - completedTime > archiveAfterMs) {
+        toArchive.push(task);
+        return false;
+      }
+    }
+
     return true;
   });
-  
+
+  if (toArchive.length > 0) {
+    archiveTasks(toArchive).catch(err => console.error('Failed to archive old completed tasks:', err));
+  }
   if (appData.tasks.length !== originalCount) {
-    console.log(`Cleaned up ${originalCount - appData.tasks.length} old cancelled tasks`);
     // Don't await save here to avoid blocking init, but trigger it
     saveAppData(appData).catch(err => console.error('Failed to save after cleanup:', err));
   }
@@ -67,12 +82,29 @@ export async function initializeData(): Promise<void> {
     lastError = null;
     appData = await loadAppData();
 
+    // One-time normalization: unitStart was historically the creation day; make it
+    // the unit's start date so the field is canonical across the app. Idempotent.
+    let normalized = false;
+    appData.tasks = appData.tasks.map(task => {
+      if (!task.unitStart) return task;
+      const canonical = currentUnitStartLocal(parseISODate(task.unitStart));
+      if (canonical !== task.unitStart) {
+        normalized = true;
+        return { ...task, unitStart: canonical };
+      }
+      return task;
+    });
+
     // Cleanup old tasks (Cancelled > 2 days)
     cleanupOldTasks();
 
+    // Evaluate the dynamic 2-day cycle: advance to the new period, and merge
+    // (roll unfinished A-E tasks forward) when the prior period was under-completed.
+    const cycleResult = evaluateCycle(appData);
+
     // Process recurring tasks
     const newRecurringTasks = processRecurringTasks(appData.tasks.filter(t => isActivePriority(t.priority)));
-    let dataChanged = newRecurringTasks.length > 0;
+    let dataChanged = newRecurringTasks.length > 0 || cycleResult.changed || normalized;
     if (dataChanged) {
       appData.tasks = [...appData.tasks, ...newRecurringTasks];
     }
@@ -80,6 +112,9 @@ export async function initializeData(): Promise<void> {
     if (dataChanged) {
       await saveAppData(appData);
     }
+
+    // Fire-and-forget: daily due-task summary notification (desktop only)
+    maybeNotifyDueTasks(appData).catch(err => console.error('Due reminder failed:', err));
   } catch (error) {
     lastError = error instanceof Error ? error.message : 'Failed to load data';
     console.error('Failed to initialize data:', error);
@@ -114,7 +149,9 @@ export async function reloadData(fileType: string): Promise<void> {
           reviews: activeData.reviews || [],
           customTagGroups: activeData.customTagGroups || appData.customTagGroups,
           settings: activeData.settings || appData.settings,
-          gamification: activeData.gamification || appData.gamification
+          gamification: activeData.gamification || appData.gamification,
+          cycleState: activeData.cycleState ?? appData.cycleState,
+          cycleHistory: activeData.cycleHistory ?? appData.cycleHistory
         };
         break;
       }
@@ -285,7 +322,7 @@ export async function evolveTask(taskId: string, newContent?: string): Promise<{
     completed: false,
     completedAt: null,
     createdAt: now,
-    unitStart: now.split('T')[0],
+    unitStart: currentUnitStartLocal(),
     projects: [...originalTask.projects],
     contexts: [...originalTask.contexts],
     customTags: [...originalTask.customTags],
@@ -371,6 +408,29 @@ export async function permanentlyDeleteTask(taskId: string): Promise<void> {
   await persist();
 }
 
+// Replace the entire dataset (used by import). Persists to storage; callers
+// should reload the app afterwards so all stores re-init from the new data.
+export async function replaceAllData(newData: AppData): Promise<void> {
+  appData = newData;
+  await persist();
+}
+
+// Resolve a pending low-completion micro-review (W4b). 'rollover' carries the
+// under-completed period's unfinished A-E tasks into the current window and
+// marks it merged; 'dismiss' leaves tasks where they are. Either clears the prompt.
+export async function resolvePendingReview(action: 'rollover' | 'dismiss'): Promise<void> {
+  const cs = appData.cycleState;
+  if (!cs?.pendingReview) return;
+
+  if (action === 'rollover') {
+    appData.tasks = rollUnfinishedIntoWindow(appData.tasks, cs.pendingReview.periodStart, cs.anchorStart, cs.windowEnd);
+    appData.cycleState = { ...cs, merged: true, pendingReview: null };
+  } else {
+    appData.cycleState = { ...cs, pendingReview: null };
+  }
+  await persist();
+}
+
 // ============================================================================
 // Subtask operations — embedded lightweight checklist items on a parent Task
 // ============================================================================
@@ -453,7 +513,7 @@ export async function promoteSubtask(
     completed: false,
     completedAt: null,
     createdAt: now,
-    unitStart: now.split('T')[0],
+    unitStart: currentUnitStartLocal(),
     projects: [...parent.projects],
     contexts: [...parent.contexts],
     customTags: [...parent.customTags],
@@ -1075,6 +1135,8 @@ export function getTasksStore() {
     get agingEZoneTasks() { return agingEZoneTasks; },
     get recentlyCompletedTasksByPriority() { return recentlyCompletedTasksByPriority; },
     get customTagGroups() { return appData.customTagGroups; },
-    get settings() { return appData.settings; }
+    get settings() { return appData.settings; },
+    get cycleState() { return appData.cycleState; },
+    get cycleHistory() { return appData.cycleHistory ?? []; }
   };
 }

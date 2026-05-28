@@ -3,6 +3,7 @@
   import { PRIORITY_CONFIG, subtaskProgress } from '$lib/types';
   import TaskCard from './TaskCard.svelte';
   import DropZone from './DropZone.svelte';
+  import QuickAddRow from './QuickAddRow.svelte';
   import {
     changePriority,
     getTasksStore,
@@ -49,7 +50,7 @@
     }
     const result = await changePriority(payload.taskId, target as Priority, true);
     if (!result.success) return { success: false, error: result.error || t('zone.moveFailed') };
-    return { success: true, toast: t('zone.movedTo', { priority: target, name: PRIORITY_CONFIG[target as Priority].name }) };
+    return { success: true, toast: t('zone.movedTo', { priority: target, name: t(`priority.${target}`) }) };
   }
 
   async function handleSubtaskDrop(target: ZoneKey, payload: SubtaskDragPayload) {
@@ -150,7 +151,7 @@
         <polyline points="22 4 12 14.01 9 11.01"></polyline>
       </svg>
       <span class="zone-letter">S</span>
-      <span class="zone-label">持续推进</span>
+      <span class="zone-label">{t('priority.S')}</span>
       {#if sTask && !showS}
         <span class="zone-peek">{sTask.content}</span>
       {/if}
@@ -168,12 +169,13 @@
       <div class="zone-body">
         {#if !sTask}
           <div class="zone-empty">
-            拖任务到此 · 或输入 <code>!S</code> 创建本周持续推进项目
+            {t('rail.sHint')}
           </div>
+          <div class="zone-quick-add"><QuickAddRow priority="S" /></div>
         {:else}
           <div class="featured">
             <!-- svelte-ignore a11y_no_static_element_interactions -->
-            <h3 class="featured-title" ondblclick={() => openEditModal(sTask)} title="双击编辑">
+            <h3 class="featured-title" ondblclick={() => openEditModal(sTask)} title={t('rail.doubleClickEdit')}>
               {sTask.content}
             </h3>
             {#if (sTask.subtasks ?? []).length > 0}
@@ -191,13 +193,13 @@
                       clearDragPayload();
                       setDraggingTask(false);
                     }}
-                    title="拖动到 A-E/F/N 任意区即提升为独立任务"
+                    title={t('rail.dragToPromote')}
                   >
                     <button
                       class="sub-check"
                       class:checked={sub.completed}
                       onclick={(e) => { e.stopPropagation(); toggleSubtask(sTask.id, sub.id); }}
-                      aria-label={sub.completed ? '取消勾选' : '标记完成'}
+                      aria-label={sub.completed ? t('rail.uncheck') : t('rail.check')}
                     >
                       {#if sub.completed}
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
@@ -212,21 +214,21 @@
                         <button
                           class="subtask-promote-btn"
                           onclick={(e) => { e.stopPropagation(); promoteOpenFor = promoteOpenFor === sub.id ? null : sub.id; }}
-                          title="提升为独立任务（或直接拖到目标区）"
+                          title={t('rail.promoteHint')}
                         >↗</button>
                         {#if promoteOpenFor === sub.id}
                           <div class="promote-popup" role="menu">
-                            <div class="promote-label">提升到</div>
+                            <div class="promote-label">{t('rail.promoteTo')}</div>
                             <div class="promote-options">
                               {#each promoteTargets as target}
                                 <button
                                   class="promote-option"
                                   style:--target-color={PRIORITY_CONFIG[target].color}
                                   onclick={() => handlePromoteFromPopup(sub.id, target)}
-                                  title={PRIORITY_CONFIG[target].description}
+                                  title={t(`priority.description.${target}`)}
                                 >
                                   <span class="promote-letter">{target}</span>
-                                  <span class="promote-name">{PRIORITY_CONFIG[target].name}</span>
+                                  <span class="promote-name">{t(`priority.${target}`)}</span>
                                 </button>
                               {/each}
                             </div>
@@ -236,7 +238,7 @@
                       <button
                         class="sub-remove"
                         onclick={(e) => { e.stopPropagation(); removeSubtask(sTask.id, sub.id); }}
-                        title="删除"
+                        title={t('action.delete')}
                       >
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                           <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -252,7 +254,7 @@
               <input
                 type="text"
                 class="sub-input"
-                placeholder="拆解一个子任务 · 回车确认"
+                placeholder={t('taskForm.subtaskPlaceholder')}
                 bind:value={newSubtaskContent}
                 onkeydown={handleSubtaskInputKey}
               />
@@ -281,7 +283,7 @@
       </svg>
       <span class="zone-emoji">💡</span>
       <span class="zone-letter">F</span>
-      <span class="zone-label">灵感池</span>
+      <span class="zone-label">{t('priority.F')}</span>
       <span class="zone-count">{fTasks.length}</span>
     </button>
 
@@ -289,7 +291,7 @@
       <div class="zone-body">
         {#if fTasks.length === 0}
           <div class="zone-empty">
-            收集想法 · 拖到这里或输入 <code>!F</code>
+            {t('rail.fHint')}
           </div>
         {:else}
           <div class="card-list">
@@ -298,6 +300,7 @@
             {/each}
           </div>
         {/if}
+        <div class="zone-quick-add"><QuickAddRow priority="F" /></div>
       </div>
     {/if}
   </DropZone>
@@ -317,7 +320,7 @@
       </svg>
       <span class="zone-emoji">🌙</span>
       <span class="zone-letter">N</span>
-      <span class="zone-label">未来推进</span>
+      <span class="zone-label">{t('priority.N')}</span>
       <span class="zone-count">{nTasks.length}</span>
     </button>
 
@@ -325,7 +328,7 @@
       <div class="zone-body">
         {#if nTasks.length === 0}
           <div class="zone-empty">
-            暂不打扰 · 拖到这里或输入 <code>!N</code>
+            {t('rail.nHint')}
           </div>
         {:else}
           <div class="card-list">
@@ -334,6 +337,7 @@
             {/each}
           </div>
         {/if}
+        <div class="zone-quick-add"><QuickAddRow priority="N" /></div>
       </div>
     {/if}
   </DropZone>
@@ -536,6 +540,10 @@
     min-height: 0;
   }
 
+  .zone-quick-add {
+    margin-top: 8px;
+  }
+
   .zone-body::-webkit-scrollbar {
     width: 4px;
   }
@@ -550,15 +558,6 @@
     color: var(--text-muted);
     font-size: 11px;
     line-height: 1.5;
-  }
-
-  .zone-empty code {
-    background: var(--bg-secondary);
-    padding: 1px 5px;
-    border-radius: 3px;
-    font-family: var(--font-mono);
-    font-size: 10px;
-    color: var(--z-color);
   }
 
   .card-list {

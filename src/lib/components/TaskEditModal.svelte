@@ -346,7 +346,7 @@
                   class="subtask-check"
                   class:checked={sub.completed}
                   onclick={() => toggleSubtask(task.id, sub.id)}
-                  aria-label={sub.completed ? '取消勾选' : '标记完成'}
+                  aria-label={sub.completed ? t('rail.uncheck') : t('rail.check')}
                 >
                   {#if sub.completed}
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">

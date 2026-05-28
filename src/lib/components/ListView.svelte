@@ -6,6 +6,7 @@
   import TaskCard from './TaskCard.svelte';
   import ZoneRail from './ZoneRail.svelte';
   import DropZone from './DropZone.svelte';
+  import QuickAddRow from './QuickAddRow.svelte';
   import type { TaskDragPayload, SubtaskDragPayload } from '$lib/utils/dnd';
   import { isToday, isOverdue, parseISODate, getRelativeDayLabel } from '$lib/utils/unitCalc';
 
@@ -170,14 +171,14 @@
   async function handleDropTaskInGroup(priority: Priority, payload: TaskDragPayload) {
     if (payload.fromPriority === priority) return null;
     const result = await changePriority(payload.taskId, priority, true);
-    if (!result.success) return { success: false, error: result.error || '移动失败' };
-    return { success: true, toast: `已移到 ${priority} · ${t(`priority.${priority}`)}` };
+    if (!result.success) return { success: false, error: result.error || t('message.moveFailed') };
+    return { success: true, toast: t('message.movedTo', { priority, name: t(`priority.${priority}`) }) };
   }
 
   async function handleDropSubtaskInGroup(priority: Priority, payload: SubtaskDragPayload) {
     const result = await promoteSubtask(payload.parentTaskId, payload.subtaskId, priority);
-    if (!result.success) return { success: false, error: result.error || '提升失败' };
-    return { success: true, toast: `子任务已提升到 ${priority} · ${t(`priority.${priority}`)}` };
+    if (!result.success) return { success: false, error: result.error || t('message.promoteFailed') };
+    return { success: true, toast: t('message.promotedTo', { priority, name: t(`priority.${priority}`) }) };
   }
 
   function toggleCollapsed(key: string) {
@@ -280,8 +281,9 @@
                   {#each group.tasks as task (task.id)}
                     <TaskCard {task} showPriority={false} />
                   {:else}
-                    <div class="group-empty-drop">拖任务到此</div>
+                    <div class="group-empty-drop">{t('message.dropHere')}</div>
                   {/each}
+                  <QuickAddRow {priority} />
                 </div>
               {/if}
             </DropZone>

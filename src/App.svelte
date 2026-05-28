@@ -6,6 +6,7 @@
   import ListView from '$lib/components/ListView.svelte';
   import TodayView from '$lib/components/TodayView.svelte';
   import TaskForm from '$lib/components/TaskForm.svelte';
+  import LowCompletionBanner from '$lib/components/LowCompletionBanner.svelte';
   import QuotaMeter from '$lib/components/QuotaMeter.svelte';
   import UnitNav from '$lib/components/UnitNav.svelte';
   import ReviewPanel from '$lib/components/ReviewPanel.svelte';
@@ -348,6 +349,9 @@
     <div class="task-form-container">
       <TaskForm />
     </div>
+
+    <!-- Low-completion micro-review prompt (W4b) -->
+    <LowCompletionBanner />
 
     <!-- Badges Inline Section (Visible when badges open) -->
     {#if ui.isBadgesOpen}

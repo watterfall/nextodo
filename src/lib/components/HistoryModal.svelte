@@ -37,7 +37,7 @@
       cancelText: i18n.t('action.cancel') || '取消',
       onConfirm: async () => {
         await permanentlyDeleteTask(taskId);
-        showToast('任务已永久删除', 'success');
+        showToast(i18n.t('message.taskPermanentlyDeleted'), 'success');
       }
     });
   }

@@ -220,7 +220,9 @@ function loadFromLocalStorage(): AppData {
       },
       pomodoroHistory: pomodoro.sessions || [],
       settings: migrateSettings(active.settings),
-      gamification: active.gamification || createDefaultGamificationData()
+      gamification: active.gamification || createDefaultGamificationData(),
+      cycleState: active.cycleState,
+      cycleHistory: active.cycleHistory
     };
   } catch (error) {
     console.error('Failed to load from localStorage:', error);
@@ -241,7 +243,9 @@ function saveToLocalStorage(data: AppData): void {
       reviews: data.reviews,
       customTagGroups: data.customTagGroups,
       settings: data.settings,
-      gamification: data.gamification
+      gamification: data.gamification,
+      cycleState: data.cycleState,
+      cycleHistory: data.cycleHistory
     };
 
     const pomodoroHistory: PomodoroHistoryData = {
@@ -311,7 +315,9 @@ async function loadFromTauri(): Promise<AppData> {
       },
       pomodoroHistory: pomodoro.sessions || [],
       settings: migrateSettings(active.settings),
-      gamification: active.gamification || createDefaultGamificationData()
+      gamification: active.gamification || createDefaultGamificationData(),
+      cycleState: active.cycleState,
+      cycleHistory: active.cycleHistory
     };
   } catch (error) {
     console.error('Failed to load from Tauri:', error);
@@ -337,7 +343,9 @@ async function saveToTauri(data: AppData, filesToSave: PersistedFileType[] = ['a
       reviews: data.reviews,
       customTagGroups: data.customTagGroups,
       settings: data.settings,
-      gamification: data.gamification
+      gamification: data.gamification,
+      cycleState: data.cycleState,
+      cycleHistory: data.cycleHistory
     };
 
     const pomodoroHistory: PomodoroHistoryData = {
@@ -421,7 +429,9 @@ function migrateSettings(settings: any): AppData['settings'] {
     autoArchiveDays: settings?.autoArchiveDays ?? defaults.autoArchiveDays,
     eZoneAgingDays: settings?.eZoneAgingDays ?? defaults.eZoneAgingDays,
     showFutureTasks: settings?.showFutureTasks ?? defaults.showFutureTasks,
-    unitBoundaryFlexHours: settings?.unitBoundaryFlexHours ?? defaults.unitBoundaryFlexHours
+    unitBoundaryFlexHours: settings?.unitBoundaryFlexHours ?? defaults.unitBoundaryFlexHours,
+    dueReminders: settings?.dueReminders ?? defaults.dueReminders,
+    lowCompletionPrompt: settings?.lowCompletionPrompt ?? defaults.lowCompletionPrompt
   };
 }
 
@@ -479,7 +489,9 @@ function migrateData(data: any): AppData {
     customTagGroups: data.customTagGroups,
     pomodoroHistory: data.pomodoroHistory,
     settings: data.settings,
-    gamification: data.gamification || createDefaultGamificationData()
+    gamification: data.gamification || createDefaultGamificationData(),
+    cycleState: data.cycleState,
+    cycleHistory: data.cycleHistory
   };
 }
 
@@ -584,6 +596,30 @@ export async function importData(file: File): Promise<AppData> {
     reader.onerror = () => reject(new Error('Failed to read file'));
     reader.readAsText(file);
   });
+}
+
+/**
+ * Append tasks to cold storage (archive). Used to move long-completed tasks out
+ * of the hot active file so it doesn't grow unbounded.
+ */
+export async function archiveTasks(tasksToArchive: Task[]): Promise<void> {
+  if (tasksToArchive.length === 0) return;
+
+  if (isTauri()) {
+    const { invoke } = await import('@tauri-apps/api/core');
+    await invoke('append_archive_tasks', { newTasksJson: JSON.stringify(tasksToArchive) });
+  } else {
+    let archive: { version: string; lastModified: string; tasks: Task[] };
+    try {
+      const existing = localStorage.getItem(STORAGE_KEYS.archive);
+      archive = existing ? JSON.parse(existing) : { version: '3.0', lastModified: '', tasks: [] };
+    } catch {
+      archive = { version: '3.0', lastModified: '', tasks: [] };
+    }
+    archive.tasks = [...(archive.tasks || []), ...tasksToArchive];
+    archive.lastModified = new Date().toISOString();
+    localStorage.setItem(STORAGE_KEYS.archive, JSON.stringify(archive));
+  }
 }
 
 /**

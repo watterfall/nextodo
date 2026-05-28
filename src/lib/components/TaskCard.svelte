@@ -49,7 +49,7 @@
     if (!result.success && result.error) {
       showToast(result.error, 'error');
     } else if (result.success) {
-      showToast(`已移到 ${target} 区`, 'success');
+      showToast(i18n.t('message.taskMoved', { priority: target }), 'success');
     }
   }
 
@@ -324,7 +324,7 @@
   {#if subProgress.total > 0 && !isCompleted && !isCancelled}
     <!-- Subtask progress bar — surfaces breakdown completion at a glance.
          Compact (single bar + count), most useful on S Sustained tasks. -->
-    <div class="subtask-progress" title="{subProgress.done}/{subProgress.total} 子任务完成">
+    <div class="subtask-progress" title={i18n.t('taskCard.subtasksDone', { done: subProgress.done, total: subProgress.total })}>
       <div class="progress-track">
         <div class="progress-fill" style:width="{Math.round(subProgress.ratio * 100)}%"></div>
       </div>
@@ -424,7 +424,7 @@
     style:top="{ctxMenuY}px"
     role="menu"
   >
-    <div class="ctx-section-label">移到优先级</div>
+    <div class="ctx-section-label">{i18n.t('taskCard.moveToPriority')}</div>
     <div class="ctx-priority-grid">
       {#each ctxPriorityOptions as p}
         <button
@@ -446,21 +446,21 @@
         <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
         <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
       </svg>
-      编辑详情
+      {i18n.t('taskCard.editDetails')}
     </button>
     {#if isActivePriority(task.priority)}
       <button class="ctx-action" onclick={() => { ctxMenuOpen = false; handleCheck(); }}>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <polyline points="20 6 9 17 4 12"></polyline>
         </svg>
-        标记完成
+        {i18n.t('taskCard.markComplete')}
       </button>
       <button class="ctx-action danger" onclick={() => { ctxMenuOpen = false; handleCancel(); }}>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <line x1="18" y1="6" x2="6" y2="18"></line>
           <line x1="6" y1="6" x2="18" y2="18"></line>
         </svg>
-        取消任务
+        {i18n.t('taskCard.cancelTask')}
       </button>
     {/if}
   </div>

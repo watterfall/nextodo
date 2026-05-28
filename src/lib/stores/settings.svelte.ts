@@ -203,6 +203,10 @@ export function getSettingsStore() {
     get pomodoroLongBreak() { return settings.pomodoroLongBreak; },
     get autoArchiveDays() { return settings.autoArchiveDays; },
     get eZoneAgingDays() { return settings.eZoneAgingDays; },
-    get showFutureTasks() { return settings.showFutureTasks; }
+    get showFutureTasks() { return settings.showFutureTasks; },
+    get density() { return settings.density; },
+    get unitBoundaryFlexHours() { return settings.unitBoundaryFlexHours; },
+    get dueReminders() { return settings.dueReminders; },
+    get lowCompletionPrompt() { return settings.lowCompletionPrompt; }
   };
 }

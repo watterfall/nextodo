@@ -47,19 +47,19 @@
   <div class="fresh-start-modal" transition:fade>
     <div class="modal-content glass-medium" transition:scale={{ start: 0.9 }}>
       <div class="illustration">🌱</div>
-      <h3>新的开始</h3>
+      <h3>{t('freshStart.title')}</h3>
       <p>
-        我们注意到你有 <strong>{staleCount}</strong> 个任务已经超过 30 天未处理。
+        {t('freshStart.bodyPre')}<strong>{staleCount}</strong>{t('freshStart.bodyPost')}
         <br>
-        过去已经过去。要将它们移入冷冻柜(归档)，重新开始吗？
+        {t('freshStart.question')}
       </p>
-      
+
       <div class="actions">
         <button class="btn-primary" onclick={handleArchiveStale}>
-          是的，帮我清理
+          {t('freshStart.confirm')}
         </button>
         <button class="btn-secondary" onclick={handleDismiss}>
-          不，我还记得它们
+          {t('freshStart.dismiss')}
         </button>
       </div>
     </div>

@@ -23,12 +23,16 @@
       dateStr: date.toISOString().split('T')[0],
       dayName: date.toLocaleDateString('zh-CN', { weekday: 'short' }),
       dayNum: date.getDate(),
-      isToday: i === 0
+      isToday: i === 0,
+      // Saturday is the review day — it stays empty and never holds work tasks.
+      isReviewDay: date.getDay() === 6
     };
   }));
 
-  // Get tasks for a specific date
+  // Get tasks for a specific date. Saturday (review day) is always empty.
   function getTasksForDate(dateStr: string): Task[] {
+    const d = new Date(dateStr + 'T00:00:00');
+    if (d.getDay() === 6) return [];
     return tasks.tasks.filter(task => !task.completed && task.dueDate === dateStr);
   }
 </script>
@@ -36,19 +40,19 @@
 <div class="week-view-container" class:with-drawer={isInboxOpen}>
   <div class="week-view" in:fade={{ duration: 300 }}>
     <div class="week-header">
-      <h1>本周概览</h1>
-      
+      <h1>{t('week.title')}</h1>
+
       <div class="header-actions">
         <div class="week-legend">
-          <span class="legend-item"><span class="dot planned"></span> 已计划</span>
-          <span class="legend-item"><span class="dot done"></span> 已完成</span>
+          <span class="legend-item"><span class="dot planned"></span> {t('week.planned')}</span>
+          <span class="legend-item"><span class="dot done"></span> {t('week.done')}</span>
         </div>
 
-        <button 
-          class="inbox-toggle" 
+        <button
+          class="inbox-toggle"
           class:active={isInboxOpen}
           onclick={() => isInboxOpen = !isInboxOpen}
-          title={isInboxOpen ? "隐藏收集箱" : "显示收集箱 (用于排期)"}
+          title={isInboxOpen ? t('week.hideInbox') : t('week.showInbox')}
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
@@ -61,23 +65,29 @@
 
     <div class="week-grid">
       {#each weekDays as day}
-        <div class="day-column" class:today={day.isToday}>
+        <div class="day-column" class:today={day.isToday} class:review-day={day.isReviewDay}>
           <div class="day-header">
             <span class="day-name">{day.dayName}</span>
             <span class="day-num">{day.dayNum}</span>
           </div>
-          
-          <div class="day-tasks">
-            {#each getTasksForDate(day.dateStr) as task (task.id)}
-              <div class="task-wrapper">
-                <TaskCard {task} compact showPriority />
-              </div>
-            {/each}
 
-            {#if getTasksForDate(day.dateStr).length === 0}
-              <div class="empty-slot">
-                <span>{t('zone.empty')}</span>
+          <div class="day-tasks">
+            {#if day.isReviewDay}
+              <div class="empty-slot review-slot">
+                <span>🧭 {t('week.reviewDay')}</span>
               </div>
+            {:else}
+              {#each getTasksForDate(day.dateStr) as task (task.id)}
+                <div class="task-wrapper">
+                  <TaskCard {task} compact showPriority />
+                </div>
+              {/each}
+
+              {#if getTasksForDate(day.dateStr).length === 0}
+                <div class="empty-slot">
+                  <span>{t('zone.empty')}</span>
+                </div>
+              {/if}
             {/if}
           </div>
         </div>
@@ -222,6 +232,16 @@
     min-height: 40px;
     border: 1px dashed transparent;
     border-radius: var(--radius-md);
+  }
+
+  .day-column.review-day {
+    background: var(--bg-secondary);
+    border-style: dashed;
+  }
+
+  .review-slot {
+    opacity: 0.7;
+    font-weight: 500;
   }
 
   .inbox-toggle {

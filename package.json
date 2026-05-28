@@ -11,13 +11,18 @@
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
+    "cli:build": "esbuild cli/focusflow.ts --bundle --platform=node --format=esm '--alias:$lib=./src/lib' --outfile=dist-cli/focusflow.mjs --banner:js='#!/usr/bin/env node'",
+    "cli": "node dist-cli/focusflow.mjs",
     "clean": "rm -rf node_modules package-lock.json",
     "reinstall": "npm run clean && npm install"
   },
+  "bin": {
+    "focusflow": "./dist-cli/focusflow.mjs"
+  },
   "dependencies": {
-    "@tauri-apps/api": "^2.1.1",
-    "@tauri-apps/plugin-fs": "^2.2.0",
-    "@tauri-apps/plugin-notification": "^2.2.0",
+    "@tauri-apps/api": "^2.11.0",
+    "@tauri-apps/plugin-fs": "^2.5.1",
+    "@tauri-apps/plugin-notification": "^2.3.3",
     "motion": "^12.23.24",
     "svelte-dnd-action": "^0.9.67"
   },
@@ -27,6 +32,8 @@
     "@tauri-apps/cli": "^2.1.0",
     "@tauri-apps/cli-darwin-arm64": "2.9.5",
     "@tsconfig/svelte": "^5.0.4",
+    "@types/node": "^25.9.1",
+    "esbuild": "^0.28.0",
     "svelte": "^5.16.0",
     "typescript": "^5.7.2",
     "vite": "^6.0.5"

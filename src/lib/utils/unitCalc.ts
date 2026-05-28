@@ -77,6 +77,16 @@ export function getUnitStartString(date: Date = new Date()): string {
 }
 
 /**
+ * Unit start as a LOCAL YYYY-MM-DD (uses local date parts, not toISOString, so it
+ * doesn't shift a day across the UTC boundary). This is the canonical `unitStart`
+ * value for tasks — they belong to the unit's start, not their creation day.
+ */
+export function currentUnitStartLocal(date: Date = new Date()): string {
+  const d = getUnitForDate(date).startDate;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/**
  * Navigate to adjacent unit
  */
 export function navigateUnit(currentUnit: UnitInfo, direction: 'prev' | 'next'): UnitInfo {
@@ -119,6 +129,40 @@ export function getWeekUnits(weekStart: Date): UnitInfo[] {
   units.push(getUnitForDate(d));
 
   return units;
+}
+
+/**
+ * Check if two dates fall in the same 2-day unit (by unit start date).
+ * Saturday (review day) only matches another Saturday of the same date.
+ */
+export function isSameUnit(a: Date, b: Date): boolean {
+  const ua = getUnitForDate(a);
+  const ub = getUnitForDate(b);
+  return ua.startDate.getTime() === ub.startDate.getTime();
+}
+
+/**
+ * Whether a completion timestamp still belongs to the current active 2-day unit.
+ * Completed tasks stay struck-through until the unit they were completed in ends;
+ * once the current unit advances past it, the task is hidden.
+ */
+export function isCompletedInCurrentUnit(completedAtIso: string, now: Date = new Date()): boolean {
+  return isSameUnit(new Date(completedAtIso), now);
+}
+
+/**
+ * Remaining time until the end of the unit a completion belongs to (end of its
+ * last day). Returns null once that unit has already ended.
+ */
+export function getUnitRetentionRemaining(completedAtIso: string): { hours: number; minutes: number } | null {
+  const unit = getUnitForDate(new Date(completedAtIso));
+  const end = new Date(unit.endDate);
+  end.setHours(23, 59, 59, 999);
+  const remainingMs = end.getTime() - Date.now();
+  if (remainingMs <= 0) return null;
+  const hours = Math.floor(remainingMs / (60 * 60 * 1000));
+  const minutes = Math.floor((remainingMs % (60 * 60 * 1000)) / (60 * 1000));
+  return { hours, minutes };
 }
 
 /**

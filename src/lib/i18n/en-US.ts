@@ -143,6 +143,11 @@ export default {
     subtaskPlaceholder: 'Add a subtask · press Enter',
   },
 
+  quickAdd: {
+    add: 'Add task',
+    placeholder: 'Type a task, press Enter…',
+  },
+
   // Inbox Panel (Idea Pool)
   inbox: {
     title: 'Idea Pool',
@@ -239,6 +244,8 @@ export default {
     biDaily: 'Bi-daily',
     prev: 'Previous Period',
     next: 'Next Period',
+    merged: 'Extended',
+    mergedHint: 'Previous period was under-completed; continued as a new 2-day window',
     stats: {
       planned: 'Planned',
       completed: 'Completed',
@@ -309,6 +316,8 @@ export default {
       import: 'Import Data',
       clear: 'Clear All Data',
       autoBackup: 'Auto Backup',
+      backupDesc: 'Export a JSON backup, or import from a JSON file (import overwrites current data)',
+      importConfirm: 'Importing will overwrite all current data (a backup has been made). Continue?',
     },
     autoArchive: 'Auto Archive Days',
     autoArchiveDesc: 'Days until completed tasks are auto-archived',
@@ -316,9 +325,15 @@ export default {
     eZoneAgingDesc: 'Days until inbox tasks show aging warning',
     unitBoundaryFlex: 'Unit Boundary Flexibility',
     unitBoundaryFlexDesc: 'Hours a task can extend beyond unit boundary',
+    dueReminders: 'Due reminders',
+    dueRemindersDesc: 'Daily reminder for tasks due today or overdue (desktop only)',
+    lowCompletionPrompt: 'Low-completion review',
+    lowCompletionPromptDesc: 'When a 2-day period ends below 30%, prompt a quick review before rolling tasks over (off = auto-merge)',
     hours: 'hours',
     minutes: 'min',
     days: 'days',
+    on: 'On',
+    off: 'Off',
     methodology: {
       title: 'Methodology Guide',
       subtitle: '1-2-3-5 Bi-daily Cycle Model',
@@ -383,6 +398,7 @@ export default {
     sustained: 'Sustained',
     sustainedHint: 'Week-long projects with subtask breakdown',
     sustainedEmpty: 'No sustained projects',
+    projectProgress: '{project} · {done}/{total} done ({pct}%)',
   },
 
   // Priority tooltips (for ListView)
@@ -406,6 +422,55 @@ export default {
     subtaskPromotedTo: 'Subtask promoted to {priority}',
     promotedTo: 'Promoted to {name} ({priority})',
     promoteFailed: 'Promote failed',
+  },
+
+  reminders: {
+    dueTitle: 'Tasks due today',
+    dueBody: 'You have {count} tasks due today or overdue',
+  },
+
+  lowCompletion: {
+    banner: 'You completed only {pct}% of the last 2-day period. Carry the unfinished tasks into this period?',
+    rollover: 'Carry all over',
+    dismiss: 'Dismiss',
+  },
+
+  taskCard: {
+    moveToPriority: 'Move to priority',
+    editDetails: 'Edit details',
+    markComplete: 'Mark complete',
+    cancelTask: 'Cancel task',
+    subtasksDone: '{done}/{total} subtasks done',
+  },
+
+  rail: {
+    sHint: "Drop a task here, or type !S to start this week's sustained project",
+    fHint: 'Collect ideas · drop here or type !F',
+    nHint: 'Not now · drop here or type !N',
+    doubleClickEdit: 'Double-click to edit',
+    dragToPromote: 'Drag to any A-E/F/N zone to promote into a standalone task',
+    promoteHint: 'Promote to a standalone task (or drag to a zone)',
+    promoteTo: 'Promote to',
+    check: 'Mark complete',
+    uncheck: 'Uncheck',
+  },
+
+  week: {
+    title: 'This Week',
+    planned: 'Planned',
+    done: 'Done',
+    showInbox: 'Show inbox (for scheduling)',
+    hideInbox: 'Hide inbox',
+    reviewDay: 'Review day',
+  },
+
+  freshStart: {
+    title: 'A Fresh Start',
+    bodyPre: 'We noticed you have ',
+    bodyPost: ' tasks untouched for over 30 days.',
+    question: 'The past is the past. Move them to the freezer (archive) and start fresh?',
+    confirm: 'Yes, clean them up',
+    dismiss: "No, I still remember them",
   },
 
   // View modes
@@ -496,6 +561,7 @@ export default {
     taskMoved: 'Task moved to {priority} zone',
     taskMovedToTrash: 'Task moved to trash',
     taskCancelled: 'Task cancelled',
+    taskPermanentlyDeleted: 'Task permanently deleted',
     taskEvolved: 'Task evolved, new task created',
     taskActivated: 'Task activated to {priority} zone',
     activateChooseTarget: 'Activate to which priority?',
@@ -506,6 +572,13 @@ export default {
     confirmPriorityChange: 'Are you sure you want to change the priority of this task?',
     frequentPriorityChange: 'You recently changed this task\'s priority. Frequent priority changes may affect productivity. Continue anyway?',
     drasticPriorityChange: 'Changing from {from} to {to} is a significant priority shift. Continue anyway?',
+    movedTo: 'Moved to {priority} · {name}',
+    moveFailed: 'Move failed',
+    promoteFailed: 'Promote failed',
+    promotedTo: 'Subtask promoted to {priority} · {name}',
+    quotaFull: '{name} ({priority}) is at its quota of {quota}',
+    sustainedExists: 'You already have a Sustained project this week (replace it or finish the current one first)',
+    dropHere: 'Drop task here',
   },
 
   // Date/Time
@@ -555,6 +628,7 @@ export default {
       evening: 'Good evening',
     },
     readyToFocus: 'Ready to focus?',
+    completionHistory: 'Completion',
     taskCount: 'You have {count} tasks planned for today.',
     progress: "Today's Progress",
     showInbox: 'Show Inbox (for planning)',

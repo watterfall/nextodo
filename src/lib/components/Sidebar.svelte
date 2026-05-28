@@ -232,7 +232,7 @@
                     class:active={tasks.filter.project === project}
                     class:emoji-only={displayInfo.isEmoji}
                     onclick={() => handleProjectFilter(project)}
-                    title="{project} · {comp.completed}/{comp.active + comp.completed} 已完成 ({Math.round(comp.ratio * 100)}%)"
+                    title={t('sidebar.projectProgress', { project, done: comp.completed, total: comp.active + comp.completed, pct: Math.round(comp.ratio * 100) })}
                   >
                     <span class="badge-text">{displayInfo.display}</span>
                     <span class="badge-sup">{count}</span>

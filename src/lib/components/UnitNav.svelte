@@ -66,6 +66,10 @@
     </svg>
   </button>
 
+  {#if isCurrentCycle() && tasks.cycleState?.merged}
+    <span class="merged-badge" title={t('unit.mergedHint')}>{t('unit.merged')}</span>
+  {/if}
+
   {#if !isCurrentCycle()}
     <button class="today-btn" onclick={handleToday}>
       {t('date.today')}
@@ -122,6 +126,17 @@
 
   .unit-label.review {
     color: var(--primary);
+  }
+
+  .merged-badge {
+    padding: 2px 8px;
+    border-radius: var(--radius-full, 999px);
+    background: var(--primary-bg, rgba(116, 143, 252, 0.15));
+    color: var(--primary);
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: help;
   }
 
   .today-btn {
