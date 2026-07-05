@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Task, Priority } from '$lib/types';
+  import type { Task, Priority, ActivePriority } from '$lib/types';
   import { PRIORITY_CONFIG, getRetentionRemaining } from '$lib/types';
   import TaskCard from './TaskCard.svelte';
   import ZoneRail from './ZoneRail.svelte';
@@ -26,8 +26,8 @@
 
   // Main priorities (A-E with quotas). F/N/S live in the persistent
   // ReservoirPanel above the view to avoid duplication.
-  const mainPriorities: Priority[] = ['A', 'B', 'C', 'D', 'E'];
-  const priorities: Priority[] = ['A', 'B', 'C', 'D', 'E'];
+  const mainPriorities: ActivePriority[] = ['A', 'B', 'C', 'D', 'E'];
+  const priorities: ActivePriority[] = ['A', 'B', 'C', 'D', 'E'];
   const counts = $derived(countActiveByPriority(tasks.tasks));
 
   // Focus mode check
@@ -64,7 +64,7 @@
 
   // Recently completed tasks display state (per priority)
   let showRecentlyCompleted = $state<Record<Priority, boolean>>({
-    A: true, B: true, C: true, D: true, E: true, F: true, G: false, H: false
+    A: true, B: true, C: true, D: true, E: true, F: true, G: false, H: false, N: false, S: false
   });
 
   // Format retention time remaining
@@ -98,7 +98,7 @@
   }
 
   // Keyboard navigation state
-  let focusedPriority = $state<Priority | null>(null);
+  let focusedPriority = $state<ActivePriority | null>(null);
   let focusedTaskIndex = $state<number>(-1);
   let focusedTaskId = $state<string | null>(null);
 

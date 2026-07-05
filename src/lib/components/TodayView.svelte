@@ -50,7 +50,7 @@
   const focusMinutes = $derived(Math.floor((focusSecondsToday % 3600) / 60));
 
   // Date string
-  const locale = $derived(i18n.locale === 'zh-CN' ? 'zh-CN' : 'en-US');
+  const locale = $derived(i18n.language === 'zh-CN' ? 'zh-CN' : 'en-US');
   const todayDate = $derived(
     new Date().toLocaleDateString(locale, { weekday: 'long', month: 'long', day: 'numeric' })
   );
