@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-**FocusFlow** is a focus-first task management desktop application that combines GTD (Getting Things Done) methodology with the Pomodoro technique. Built with Tauri, Svelte 5, and Rust, it provides cross-platform support with a 5-tier priority system, bi-daily work units, and periodic reviews.
+**FocusFlow** is a focus-first task management desktop application that combines GTD (Getting Things Done) methodology with the Pomodoro technique. Built with Tauri, Svelte 5, and Rust, it provides cross-platform support with an A–F quota-based priority system (plus N/S long-horizon lanes), bi-daily work units, and periodic reviews.
 
 **Version:** 2.0.0
 **Data Version:** 4.0
@@ -14,13 +14,14 @@
 
 | Layer | Technology | Version |
 |-------|------------|---------|
-| Frontend | Svelte 5 (with runes) | ^5.16.0 |
-| Language | TypeScript | ^5.7.2 |
-| Build Tool | Vite | ^6.0.5 |
-| Desktop Framework | Tauri 2 | ^2.1.0 |
+| Frontend | Svelte 5 (with runes) | ^5.56.4 |
+| Language | TypeScript | ^5.9.3 |
+| Build Tool | Vite (Rolldown) | ^8.1.3 |
+| Desktop Framework | Tauri 2 | ^2.11.4 |
 | Backend | Rust (2021 edition) | - |
-| Animation | Motion | ^12.23.24 |
-| Drag & Drop | svelte-dnd-action | ^0.9.67 |
+| Animation | Motion | ^12.42.2 |
+| Drag & Drop | svelte-dnd-action | ^0.9.70 |
+| Testing | Vitest | ^4.1.9 |
 
 ### Directory Structure
 
@@ -28,9 +29,9 @@
 /
 ├── src/                          # Frontend (Svelte/TypeScript)
 │   ├── lib/
-│   │   ├── components/           # Svelte components (24 files)
+│   │   ├── components/           # Svelte components (27 files)
 │   │   ├── stores/               # Svelte 5 runes state management (6 stores)
-│   │   ├── utils/                # Business logic utilities (6 files)
+│   │   ├── utils/                # Business logic utilities (10 files)
 │   │   ├── types/                # TypeScript type definitions
 │   │   └── i18n/                 # Internationalization (4 files)
 │   ├── App.svelte                # Root component
@@ -45,9 +46,12 @@
 │   │   └── default.json         # Tauri permission capabilities
 │   ├── Cargo.toml               # Rust dependencies
 │   └── tauri.conf.json          # Tauri configuration
+├── cli/                          # focusflow CLI (esbuild → dist-cli/)
+│   └── focusflow.ts
 ├── package.json
 ├── tsconfig.json
 ├── vite.config.ts
+├── vitest.config.ts
 └── svelte.config.js
 ```
 
@@ -57,15 +61,15 @@
 |-----------|---------|
 | `App.svelte` | Root component, layout, routing |
 | `Sidebar.svelte` | Navigation, filters, project/context lists |
-| `ZoneContainer.svelte` | Priority zone container (A-D) with DnD support |
+| `ZoneRail.svelte` | S/F/N priority rail (Sustained / Idea Pool / Future lanes) |
 | `TaskCard.svelte` | Individual task display and actions |
 | `TaskForm.svelte` | Quick task input form |
 | `TaskInput.svelte` | Syntax-highlighted task input |
-| `InboxPanel.svelte` | F-zone (Idea Pool) task panel |
+| `QuickAddRow.svelte` | Inline quick-add row for fast task entry |
+| `DropZone.svelte` | Native HTML5 drag-and-drop drop target |
 | `KanbanView.svelte` | Kanban board view with priority columns |
 | `ListView.svelte` | List view with tasks grouped by priority |
 | `TodayView.svelte` | Today-focused task view with due/overdue tasks |
-| `WeekView.svelte` | 7-day calendar view with DnD scheduling |
 | `PomodoroTimer.svelte` | Pomodoro timer controls |
 | `ImmersivePomodoro.svelte` | Full-screen pomodoro mode |
 | `QuotaMeter.svelte` | Priority quota visualization |
@@ -81,6 +85,8 @@
 | `ConfirmationModal.svelte` | Reusable confirmation dialog for destructive actions |
 | `CalendarView.svelte` | Monthly calendar view with task scheduling |
 | `HistoryModal.svelte` | View completed and cancelled tasks history |
+| `CompletionSparkline.svelte` | Completion-rate sparkline from cycle history |
+| `LowCompletionBanner.svelte` | Low-completion micro-review banner |
 
 ### Store Architecture
 
@@ -101,8 +107,12 @@
 | Parser | `parser.ts` | Task input syntax parsing |
 | UnitCalc | `unitCalc.ts` | Bi-daily unit calculations |
 | Recurrence | `recurrence.ts` | Recurring task logic |
-| Quota | `quota.ts` | Priority quota validation and management |
-| Motion | `motion.ts` | Animation configs, DnD type definitions |
+| Quota | `quota.ts` | i18n-aware quota validation (thin wrapper over quotaCore) |
+| QuotaCore | `quotaCore.ts` | Node-safe quota core shared with the CLI (no i18n/Svelte/Tauri deps) |
+| CycleEngine | `cycleEngine.ts` | Dynamic cycle / low-completion merge logic |
+| Reminders | `reminders.ts` | Daily due/overdue notification scheduling |
+| Dnd | `dnd.ts` | Native HTML5 drag-and-drop payloads |
+| Motion | `motion.ts` | Animation configs, transition helpers |
 
 ## Development Workflow
 
@@ -113,6 +123,12 @@ npm run dev              # Start Vite dev server (frontend only)
 npm run build            # Build frontend to /dist
 npm run tauri:dev        # Full development with Tauri (recommended)
 npm run tauri:build      # Production build
+npm run typecheck        # tsc --noEmit type check
+npm run check            # svelte-check (Svelte + TS diagnostics)
+npm test                 # Run unit tests once (vitest run)
+npm run test:watch       # Run unit tests in watch mode
+npm run cli:build        # Bundle the focusflow CLI (esbuild → dist-cli/focusflow.mjs)
+npm run cli              # Run the built focusflow CLI
 npm run clean            # Remove node_modules and lock file
 npm run reinstall        # Clean reinstall
 ```
@@ -122,6 +138,12 @@ npm run reinstall        # Clean reinstall
 - Frontend runs on `http://localhost:1420`
 - Vite HMR enabled for Svelte components
 - Tauri watches backend and rebuilds automatically
+
+### CLI (focusflow)
+
+A headless CLI lives at `cli/focusflow.ts` for scripting and agent-driven use. Build it with `npm run cli:build` (esbuild bundles it to `dist-cli/focusflow.mjs`) and run it with `npm run cli`.
+
+Subcommands: `add`, `list`, `done`, `cancel`, `import-reminders`, `agent-guide`. The CLI shares the Node-safe quota core (`src/lib/utils/quotaCore.ts`) with the app, so priority/quota rules stay identical across both surfaces.
 
 ## Code Conventions
 
@@ -159,7 +181,8 @@ import TaskCard from '$lib/components/TaskCard.svelte';
 All types are centralized in `src/lib/types/index.ts`. Key types:
 
 - **Task** - Core task entity with priority, dates, pomodoros, recurrence, threshold dates
-- **Priority** - `'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H'` (A-E with quotas 1-5, F=Infinity, G=completed, H=cancelled)
+- **Priority** - `'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H' | 'N' | 'S'` (A-E with quotas 1-5, F=Idea Pool ∞; N=Future Progress — long-term important, non-urgent, hidden by default (∞); S=Sustained Progress — one week-long project broken into subtasks (quota 1); G=completed, H=cancelled)
+- **ActivePriority** - `Exclude<Priority, 'G' | 'H' | 'N' | 'S'>` → the visible, quota-bearing A–F tiers
 - **AppData** - Combined in-memory data structure
 - **ActiveData** / **ArchiveData** / **PomodoroHistoryData** - Separated file structures
 - **Settings** - Application configuration
@@ -167,7 +190,7 @@ All types are centralized in `src/lib/types/index.ts`. Key types:
 - **UnitReview** - Bi-daily unit review data
 - **Badge** / **BadgeId** - Gamification achievement types
 - **PomodoroSession** - Timer session with interruption tracking
-- **ViewMode** - `'kanban' | 'list' | 'calendar'` (main view modes)
+- **ViewMode** - `'today' | 'kanban' | 'list' | 'calendar'` (main view modes)
 
 ### Factory Functions
 
@@ -273,6 +296,8 @@ The Highlander Rule applies - only one A-priority task per unit:
 | D | 4 | Temporary/unplanned tasks (25-75 min, 1-3 pomodoros) |
 | E | 5 | Quick tasks (<15 min, 0-1 pomodoros) |
 | F | ∞ | Idea Pool - collect ideas, unsorted tasks |
+| N | ∞ | Future Progress - long-term important, non-urgent (hidden by default) |
+| S | 1 | Sustained Progress - one week-long project, broken into subtasks |
 | G | ∞ | Completed tasks (hidden, moved here on completion) |
 | H | ∞ | Cancelled tasks (hidden, moved here on cancellation) |
 
@@ -415,10 +440,15 @@ areTaskArraysEqual(a, b); // DnD optimization helper
 
 ## Testing
 
-**Note:** No test framework is currently configured. When adding tests, consider:
+Unit testing runs on **Vitest** (`vitest.config.ts` at the repo root, `node` environment, `$lib` alias). Tests are colocated as `*.test.ts` next to the code they cover — the include glob is `src/**/*.test.ts` and `cli/**/*.test.ts`, so the pure logic in `src/lib/utils/*.ts` (parser, quotaCore, recurrence, unitCalc, cycleEngine, …) is the primary target.
 
-- Vitest for unit tests (integrates well with Vite)
-- Playwright for E2E testing
+```bash
+npm test            # vitest run (single pass, CI-friendly)
+npm run test:watch  # vitest watch mode
+npm run check       # svelte-check — Svelte + TypeScript diagnostics
+```
+
+Prefer testing the Node-safe modules (`quotaCore.ts`, `parser.ts`, `recurrence.ts`, `unitCalc.ts`) directly — they have no Svelte/Tauri dependencies. For E2E, Playwright remains the suggested future addition.
 
 ## Important Considerations
 
@@ -524,7 +554,7 @@ Theme is stored in settings and applied via CSS custom properties in `app.css`. 
 
 ### Adding a New View Mode
 
-1. Add to `ViewMode` type in `src/lib/types/index.ts` (currently: `'kanban' | 'list' | 'calendar'`)
+1. Add to `ViewMode` type in `src/lib/types/index.ts` (currently: `'today' | 'kanban' | 'list' | 'calendar'`)
 2. Create component in `src/lib/components/` (e.g., `CalendarView.svelte`)
 3. Add routing logic in `App.svelte` (switch statement on viewMode)
 4. Add navigation in `Sidebar.svelte` (icon and click handler)
@@ -547,22 +577,22 @@ Theme is stored in settings and applied via CSS custom properties in `app.css`. 
 
 | File | Purpose | Approx Lines |
 |------|---------|--------------|
-| `src/App.svelte` | Root component, layout, routing | ~785 |
-| `src/lib/stores/tasks.svelte.ts` | Central state management | ~690 |
+| `src/App.svelte` | Root component, layout, routing | ~865 |
+| `src/lib/stores/tasks.svelte.ts` | Central state management | ~1140 |
 | `src/lib/stores/ui.svelte.ts` | UI state, modals, keyboard shortcuts | ~250 |
-| `src/lib/utils/storage.ts` | Data persistence layer | ~610 |
+| `src/lib/utils/storage.ts` | Data persistence layer | ~660 |
 | `src/lib/utils/parser.ts` | Task input parsing | ~410 |
-| `src/lib/utils/motion.ts` | Animation configs, DnD types | ~190 |
-| `src/lib/utils/quota.ts` | Priority quota utilities | ~160 |
-| `src/lib/types/index.ts` | Type definitions | ~455 |
+| `src/lib/utils/quotaCore.ts` | Node-safe quota core (shared with CLI) | ~165 |
+| `src/lib/utils/cycleEngine.ts` | Dynamic cycle / merge logic | ~155 |
+| `src/lib/utils/motion.ts` | Animation configs | ~190 |
+| `src/lib/types/index.ts` | Type definitions | ~590 |
 | `src/lib/components/Sidebar.svelte` | Navigation and filters | ~1180 |
-| `src/lib/components/ListView.svelte` | List view by priority | ~190 |
-| `src/lib/components/KanbanView.svelte` | Kanban board view | ~200 |
+| `src/lib/components/ZoneRail.svelte` | S/F/N priority rail | ~815 |
+| `src/lib/components/TodayView.svelte` | Today-focused task view | ~915 |
 | `src/lib/components/CalendarView.svelte` | Monthly calendar view | ~375 |
-| `src/lib/components/TaskEditModal.svelte` | Task edit modal with form | ~200 |
 | `src/lib/components/HistoryModal.svelte` | Completed/cancelled tasks viewer | ~395 |
-| `src/lib/components/ConfirmationModal.svelte` | Reusable confirmation dialog | ~175 |
 | `src/lib/stores/gamification.svelte.ts` | Badge system | ~230 |
+| `cli/focusflow.ts` | Headless focusflow CLI | ~255 |
 | `src-tauri/src/commands.rs` | Backend IPC handlers | ~415 |
 | `src-tauri/src/watcher.rs` | File system watcher | ~80 |
 

@@ -31,13 +31,14 @@
 
 | Layer | Technology | Version |
 |-------|------------|---------|
-| Frontend | Svelte 5 (with runes) | ^5.16.0 |
-| Language | TypeScript | ^5.7.2 |
-| Build Tool | Vite | ^6.0.5 |
-| Desktop Framework | Tauri 2 | ^2.1.0 |
+| Frontend | Svelte 5 (with runes) | ^5.56.4 |
+| Language | TypeScript | ^5.9.3 |
+| Build Tool | Vite (Rolldown) | ^8.1.3 |
+| Desktop Framework | Tauri 2 | ^2.11.4 |
 | Backend | Rust (2021 edition) | - |
-| Animation | Motion | ^12.23.24 |
-| Drag & Drop | svelte-dnd-action | ^0.9.67 |
+| Animation | Motion | ^12.42.2 |
+| Drag & Drop | svelte-dnd-action | ^0.9.70 |
+| Testing | Vitest | ^4.1.9 |
 
 ### Quick Start
 
@@ -69,6 +70,16 @@ npm run tauri:dev
 ```bash
 # Build the desktop application
 npm run tauri:build
+```
+
+### Testing
+
+```bash
+# Run unit tests (Vitest)
+npm test
+
+# Type-check Svelte + TypeScript
+npm run check
 ```
 
 ### Task Input Syntax
@@ -150,13 +161,14 @@ MIT
 
 | 层级 | 技术 | 版本 |
 |------|------|------|
-| 前端 | Svelte 5（使用 runes） | ^5.16.0 |
-| 语言 | TypeScript | ^5.7.2 |
-| 构建工具 | Vite | ^6.0.5 |
-| 桌面框架 | Tauri 2 | ^2.1.0 |
+| 前端 | Svelte 5（使用 runes） | ^5.56.4 |
+| 语言 | TypeScript | ^5.9.3 |
+| 构建工具 | Vite（Rolldown） | ^8.1.3 |
+| 桌面框架 | Tauri 2 | ^2.11.4 |
 | 后端 | Rust（2021 版） | - |
-| 动画 | Motion | ^12.23.24 |
-| 拖拽 | svelte-dnd-action | ^0.9.67 |
+| 动画 | Motion | ^12.42.2 |
+| 拖拽 | svelte-dnd-action | ^0.9.70 |
+| 测试 | Vitest | ^4.1.9 |
 
 ### 快速开始
 
@@ -188,6 +200,16 @@ npm run tauri:dev
 ```bash
 # 构建桌面应用
 npm run tauri:build
+```
+
+### 测试
+
+```bash
+# 运行单元测试（Vitest）
+npm test
+
+# 类型检查 Svelte + TypeScript
+npm run check
 ```
 
 ### 任务输入语法

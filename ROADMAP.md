@@ -2,11 +2,11 @@
 
 > 来源：任务管理视角的多视角产品评审（议会综合）。本轮聚焦 P0 工具地基 + 1 项 P1 透明化。
 > P2 战略项（简化优先级档位 vs 上同步/移动）需产品定调，本轮不动；但每项改动尽量为未来保留余地。
-> 状态：**待评审，未动手**。逐项标注「验收标准」与「待定子决策」。
+> 状态：**W1–W4 + CLI 已随 commit `57b963a` 发布**。P2 战略抉择仍待定调。逐项保留「验收标准」与「待定子决策」以备回溯。
 
 ---
 
-## W1 · i18n 全量修复 (P0 · 量 S–M)
+## ✅ W1 · i18n 全量修复 (P0 · 量 S–M) — 已完成（随 57b963a 发布）
 
 **问题**：硬编码中文散落在工具与组件里，en-US 用户看到中英混杂。
 
@@ -26,7 +26,7 @@
 
 ---
 
-## W2 · 数据安全：G 归档 + 导出/导入接 UI (P0 · 量 M)
+## ✅ W2 · 数据安全：G 归档 + 导出/导入接 UI (P0 · 量 M) — 已完成（随 57b963a 发布）
 
 **问题**
 1. 已完成任务(G)永不清理——`cleanupOldTasks` 只过滤 H，G 在 `active.json` 无限堆积。
@@ -47,7 +47,7 @@
 
 ---
 
-## W3 · 截止日提醒 (P0 · 量 M)
+## ✅ W3 · 截止日提醒 (P0 · 量 M) — 已完成（随 57b963a 发布）
 
 **问题**：`tauri-plugin-notification` 仅用于番茄钟（`pomodoro.svelte.ts`/`ui.svelte.ts`），**截止日/逾期无任何提醒**。
 
@@ -63,7 +63,7 @@
 
 ---
 
-## W4 · 动态合并透明化 (P1 · 量 M–L)
+## ✅ W4 · 动态合并透明化 (P1 · 量 M–L) — 已完成（随 57b963a 发布）
 
 **问题**：`<30%` 静默合并，用户无感知（议会 Contrarian：可能纵容拖延；Empath/Architect：不可见的自动化=混乱）；且**无完成率历史、无埋点**，等于在没仪表盘下调引擎。
 
@@ -91,3 +91,20 @@
 
 ## 建议落地顺序
 W1（独立、低风险）→ W2（数据安全）→ W3（提醒）→ W4（最大、含 UX 改动）。每项完成后构建 + 浏览器实测（en-US 切换 / 导入导出 / 通知 / <30% 数据）。
+
+---
+
+## 本轮交付小结（随 57b963a 发布）
+
+- **W1–W4 全部落地**：i18n 全量修复、G 归档 + 导出/导入接入设置、截止日/逾期提醒、动态合并透明化（延续窗口徽章 + 低完成度微复盘横幅 + 完成率 sparkline）。
+- **CLI 首发**：`cli/focusflow.ts`（`add / list / done / cancel / import-reminders / agent-guide`）。`npm run cli:build` 用 esbuild 打包到 `dist-cli/focusflow.mjs`，`npm run cli` 运行；与应用共用 Node 安全的配额内核 `quotaCore.ts`。
+- **优先级扩档**：新增 N（未来推进，长期但非紧急、默认隐藏）与 S（持续推进，本周唯一、用子任务分解）两档。
+
+---
+
+## 工具链升级轮（2026-07-05）
+
+- **构建 / 框架升级**：Vite 8（Rolldown 内核，去掉 rollup 依赖与 `@rollup/rollup-darwin-arm64` pin）、`@sveltejs/vite-plugin-svelte` 7、Svelte 5.56、Tauri CLI/API 2.11、TypeScript 5.9、esbuild 0.28。
+- **引入测试与类型检查**：新增 Vitest 4（`npm test` / `npm run test:watch`；`vitest.config.ts` 用 node 环境 + `$lib` 别名，测试就近放在 `src/**/*.test.ts`）与 svelte-check（`npm run check`）。
+- **清理死代码**：删除 `ZoneContainer.svelte`、`WeekView.svelte`（`InboxPanel.svelte` 更早已移除）。
+- **修复 i18n 日期本地化 bug**（en-US 下日期不再回落中文格式）。
