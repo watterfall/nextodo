@@ -1,0 +1,252 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import {
+  parseTaskInput,
+  createTaskFromInput,
+  formatTaskDisplay,
+  calculateNextDue,
+} from './parser';
+import { createEmptyTask } from '$lib/types';
+import type { Task } from '$lib/types';
+
+// Fixed "today" for relative-date parsing: Sunday 2026-01-04, noon.
+beforeEach(() => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date(2026, 0, 4, 12, 0, 0));
+});
+
+afterEach(() => {
+  vi.useRealTimers();
+});
+
+describe('parseTaskInput — basics', () => {
+  it('defaults to F priority with plain text', () => {
+    const r = parseTaskInput('Buy milk');
+    expect(r.content).toBe('Buy milk');
+    expect(r.priority).toBe('F');
+    expect(r.projects).toEqual([]);
+    expect(r.contexts).toEqual([]);
+    expect(r.customTags).toEqual([]);
+    expect(r.dueDate).toBeNull();
+    expect(r.thresholdDate).toBeNull();
+    expect(r.estimatedPomodoros).toBe(0);
+    expect(r.recurrence).toBeNull();
+  });
+
+  it('handles empty input', () => {
+    const r = parseTaskInput('');
+    expect(r.content).toBe('');
+    expect(r.priority).toBe('F');
+  });
+
+  it('parses priority at the end', () => {
+    const r = parseTaskInput('Write report !A');
+    expect(r.priority).toBe('A');
+    expect(r.content).toBe('Write report');
+  });
+
+  it('parses priority at the start', () => {
+    const r = parseTaskInput('!B Fix bug');
+    expect(r.priority).toBe('B');
+    expect(r.content).toBe('Fix bug');
+  });
+
+  it('supports N and S priorities', () => {
+    expect(parseTaskInput('plan !N').priority).toBe('N');
+    expect(parseTaskInput('project !S').priority).toBe('S');
+  });
+
+  it('parses full-width bracket priority 【A】', () => {
+    const r = parseTaskInput('【A】 do it');
+    expect(r.priority).toBe('A');
+    expect(r.content).toBe('do it');
+  });
+
+  it('ignores an invalid priority letter (kept in content)', () => {
+    const r = parseTaskInput('!Z task');
+    expect(r.priority).toBe('F');
+    expect(r.content).toContain('!Z');
+  });
+
+  it('does not treat a letter-followed !A as priority (lookahead)', () => {
+    const r = parseTaskInput('go to !Aberdeen');
+    expect(r.priority).toBe('F');
+    expect(r.content).toContain('!Aberdeen');
+  });
+
+  it('takes the first priority but strips all priority markers', () => {
+    const r = parseTaskInput('x !A !B');
+    expect(r.priority).toBe('A');
+    expect(r.content).toBe('x');
+  });
+});
+
+describe('parseTaskInput — tags', () => {
+  it('extracts projects, contexts and custom tags', () => {
+    const r = parseTaskInput('Task +work +home @office #urgent');
+    expect(r.projects).toEqual(['work', 'home']);
+    expect(r.contexts).toEqual(['office']);
+    expect(r.customTags).toEqual(['urgent']);
+    expect(r.content).toBe('Task');
+  });
+
+  it('captures an in-range emoji tag (💻编码)', () => {
+    const r = parseTaskInput('code 💻编码');
+    expect(r.customTags).toContain('💻编码');
+    expect(r.content).toBe('code');
+  });
+});
+
+describe('parseTaskInput — pomodoros', () => {
+  it('parses 🍅N estimate', () => {
+    const r = parseTaskInput('Task 🍅3');
+    expect(r.estimatedPomodoros).toBe(3);
+    expect(r.content).toBe('Task');
+  });
+
+  it('parses pN estimate', () => {
+    const r = parseTaskInput('Read book p4');
+    expect(r.estimatedPomodoros).toBe(4);
+    expect(r.content).toBe('Read book');
+  });
+
+  it('over-eagerly matches a "p<digit>" inside a word (documents current behavior)', () => {
+    const r = parseTaskInput('step2 done');
+    expect(r.estimatedPomodoros).toBe(2);
+    expect(r.content).toBe('ste done');
+  });
+});
+
+describe('parseTaskInput — dates', () => {
+  it('parses ISO due date', () => {
+    expect(parseTaskInput('Do thing ~2026-01-15').dueDate).toBe('2026-01-15');
+  });
+
+  it('parses ~today / ~tomorrow relative to fixed now', () => {
+    expect(parseTaskInput('x ~today').dueDate).toBe('2026-01-04');
+    expect(parseTaskInput('x ~tomorrow').dueDate).toBe('2026-01-05');
+  });
+
+  it('parses the plain ~Nd relative form', () => {
+    expect(parseTaskInput('x ~3d').dueDate).toBe('2026-01-07');
+  });
+
+  it('does NOT parse the +prefixed ~+Nd form — project extraction eats "+3d" (see report)', () => {
+    const r = parseTaskInput('x ~+3d');
+    expect(r.dueDate).toBeNull();
+    expect(r.projects).toContain('3d');
+  });
+
+  it('parses threshold date thr:ISO and the plain thr:Nd form', () => {
+    expect(parseTaskInput('x thr:2026-01-10').thresholdDate).toBe('2026-01-10');
+    expect(parseTaskInput('x thr:7d').thresholdDate).toBe('2026-01-11');
+  });
+});
+
+describe('parseTaskInput — recurrence', () => {
+  it('parses a standard weekly pattern', () => {
+    const r = parseTaskInput('standup rec:1w');
+    expect(r.recurrence).toEqual({ pattern: '1w', nextDue: null });
+  });
+
+  it('parses a weekday-list custom pattern', () => {
+    const r = parseTaskInput('gym rec:mon,wed,fri');
+    expect(r.recurrence?.pattern).toBeNull();
+    expect(r.recurrence?.customPattern).toBe('mon,wed,fri');
+  });
+
+  it('loses the @day part of rec:1m@15 to context extraction (see report)', () => {
+    const r = parseTaskInput('rent rec:1m@15');
+    expect(r.recurrence?.pattern).toBe('1m');
+    expect(r.recurrence?.customPattern).toBeUndefined();
+    expect(r.contexts).toContain('15'); // "@15" was captured as a context
+  });
+});
+
+describe('parseTaskInput — combined', () => {
+  it('parses every field in one input', () => {
+    const r = parseTaskInput(
+      'Deep work !A +proj @ctx #tag 🍅5 ~2026-01-20 thr:2026-01-10 rec:1w'
+    );
+    expect(r.content).toBe('Deep work');
+    expect(r.priority).toBe('A');
+    expect(r.projects).toEqual(['proj']);
+    expect(r.contexts).toEqual(['ctx']);
+    expect(r.customTags).toEqual(['tag']);
+    expect(r.estimatedPomodoros).toBe(5);
+    expect(r.dueDate).toBe('2026-01-20');
+    expect(r.thresholdDate).toBe('2026-01-10');
+    expect(r.recurrence?.pattern).toBe('1w');
+  });
+});
+
+describe('createTaskFromInput', () => {
+  it('produces a well-formed Task', () => {
+    const task = createTaskFromInput('Ship it !B +release 🍅2');
+    expect(typeof task.id).toBe('string');
+    expect(task.completed).toBe(false);
+    expect(task.content).toBe('Ship it');
+    expect(task.priority).toBe('B');
+    expect(task.projects).toEqual(['release']);
+    expect(task.pomodoros.estimated).toBe(2);
+    expect(task.pomodoros.completed).toBe(0);
+  });
+});
+
+describe('formatTaskDisplay', () => {
+  it('renders content plus tag metadata', () => {
+    const task: Task = {
+      ...createEmptyTask('C'),
+      content: 'Task',
+      projects: ['work'],
+      contexts: ['home'],
+      customTags: ['urgent'],
+    };
+    expect(formatTaskDisplay(task)).toBe('Task +work @home #urgent');
+  });
+
+  it('renders only content when there is no metadata', () => {
+    const task: Task = { ...createEmptyTask('C'), content: 'Just text' };
+    expect(formatTaskDisplay(task)).toBe('Just text');
+  });
+});
+
+describe('calculateNextDue (parser recurrence engine)', () => {
+  it('advances standard day/week patterns', () => {
+    expect(calculateNextDue({ pattern: '1d', nextDue: null }, new Date(2026, 0, 4))).toBe('2026-01-05');
+    expect(calculateNextDue({ pattern: '2w', nextDue: null }, new Date(2026, 0, 4))).toBe('2026-01-18');
+    expect(calculateNextDue({ pattern: '1w', nextDue: null }, new Date(2026, 0, 4))).toBe('2026-01-11');
+  });
+
+  it('advances a month pattern', () => {
+    expect(calculateNextDue({ pattern: '1m', nextDue: null }, new Date(2026, 0, 15))).toBe('2026-02-15');
+  });
+
+  it('resolves a weekday custom pattern to the next matching day', () => {
+    // From Sunday (day 0) → next is Monday
+    expect(
+      calculateNextDue({ pattern: null, customPattern: 'mon,wed,fri', nextDue: null }, new Date(2026, 0, 4))
+    ).toBe('2026-01-05');
+    // From Friday (day 5) → wraps to Monday of next week
+    expect(
+      calculateNextDue({ pattern: null, customPattern: 'mon,wed,fri', nextDue: null }, new Date(2026, 0, 9))
+    ).toBe('2026-01-12');
+  });
+
+  it('resolves 1m@15 to the 15th of next month', () => {
+    expect(
+      calculateNextDue({ pattern: '1m', customPattern: '1m@15', nextDue: null }, new Date(2026, 0, 20))
+    ).toBe('2026-02-15');
+  });
+
+  it('resolves 1m@last to the last day of next month', () => {
+    expect(
+      calculateNextDue({ pattern: '1m', customPattern: '1m@last', nextDue: null }, new Date(2026, 0, 10))
+    ).toBe('2026-02-28');
+  });
+
+  it('mutates the passed-in fromDate (documents current behavior)', () => {
+    const from = new Date(2026, 0, 4);
+    calculateNextDue({ pattern: '1d', nextDue: null }, from);
+    expect(from.getDate()).toBe(5);
+  });
+});
