@@ -1017,7 +1017,7 @@ kbd {
 }
 
 /* ===========================================
-   DRAG AND DROP SYSTEM (svelte-dnd-action)
+   DRAG AND DROP SYSTEM (native HTML5 DnD — see utils/dnd.ts)
    =========================================== */
 
 /* WKWebView fix — explicitly mark draggable elements for HTML5 drag.

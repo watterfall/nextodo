@@ -125,4 +125,43 @@ describe('evaluateCycle', () => {
     expect(app.tasks[0].unitStart).toBe('2026-01-04'); // NOT moved yet
     expect(app.cycleState?.pendingReview?.periodStart).toBe('2026-01-04');
   });
+
+  it('keeps an unresolved pendingReview when the next period scores fine', () => {
+    const app = createDefaultAppData();
+    app.settings.lowCompletionPrompt = true;
+    app.cycleState = {
+      anchorStart: '2026-01-06',
+      windowEnd: '2026-01-07',
+      merged: false,
+      lastEvaluatedStart: '2025-12-01',
+      pendingReview: { periodStart: '2026-01-04', completion: 0.2 },
+    };
+    // Unit 2 finished everything, so nothing new is flagged...
+    app.tasks = [task('G', { unitStart: '2026-01-06', completed: true, originalPriority: 'A' })];
+
+    evaluateCycle(app, new Date(2026, 0, 8, 12, 0, 0)); // Thursday → new window
+    // ...but the banner the user never answered must survive, or Unit 1's
+    // unfinished tasks are stranded in a window that no longer displays.
+    expect(app.cycleState?.pendingReview?.periodStart).toBe('2026-01-04');
+  });
+});
+
+describe('Idea Pool (F) is excluded from cycle accounting', () => {
+  it('does not let parked ideas drag completion under the merge threshold', () => {
+    const done = task('G', { unitStart: '2026-01-04', completed: true, originalPriority: 'A' });
+    const ideas = Array.from({ length: 20 }, (_, i) =>
+      task('F', { id: `idea${i}`, unitStart: '2026-01-04' })
+    );
+    // Only the A task is planned work, and it is done → 100%, not 5/25.
+    expect(weightedCompletionForPeriod([done, ...ideas], '2026-01-04')).toBeCloseTo(1);
+  });
+
+  it('leaves F tasks where they are when a window rolls forward', () => {
+    const idea = task('F', { id: 'idea', unitStart: '2026-01-04' });
+    const planned = task('C', { id: 'plan', unitStart: '2026-01-04' });
+
+    const rolled = rollUnfinishedIntoWindow([idea, planned], '2026-01-04', '2026-01-06', '2026-01-07');
+    expect(rolled.find((t) => t.id === 'idea')?.unitStart).toBe('2026-01-04');
+    expect(rolled.find((t) => t.id === 'plan')?.unitStart).toBe('2026-01-06');
+  });
 });

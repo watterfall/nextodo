@@ -6,7 +6,6 @@
   import { closeEditModal, showToast, showConfirmation } from '$lib/stores/ui.svelte';
   import { getI18nStore } from '$lib/i18n';
   import { highlightSyntax } from '$lib/utils/parser';
-  import { formatRecurrence } from '$lib/utils/recurrence';
 
   interface Props {
     task: Task;

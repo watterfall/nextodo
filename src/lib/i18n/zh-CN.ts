@@ -138,6 +138,7 @@ export default {
     biweekly: '每两周',
     monthly: '每月',
     keyboardHint: '按 Ctrl+Enter 快速添加',
+    keyboardHintAction: '快速添加',
     syntaxHint: '支持语法: !A-F !S !N 或 【A】-【N】 +项目 @状态 #标签 ~日期 thr:延后日期 🍅数量',
     subtasks: '子任务',
     subtaskPlaceholder: '添加一个子任务 · 回车确认',
@@ -548,7 +549,8 @@ export default {
     restored: '已恢复',
     error: '操作失败',
     quotaExceeded: '已达到 {priority} 区配额上限',
-    highlanderRule: '只能有一个 A 级任务，已将原任务降级为 B',
+    hiddenPriority: '不能直接添加到隐藏的优先级',
+    highlanderRule: '只能有一个 A 级任务，原任务已降到还有空位的档位',
     pomodoroComplete: '完成了一个番茄钟，休息一下吧',
     breakComplete: '休息结束，准备开始下一个番茄钟',
     dataLoaded: '数据已加载',
@@ -673,6 +675,17 @@ export default {
     celebrate: {
       title: '今天完美收尾',
       subtitle: '所有计划都已完成，去享受当下吧。',
+    },
+  },
+  recurrence: {
+    pattern: {
+      '1d': '每日',
+      '2d': '每2天',
+      '3d': '每3天',
+      '1w': '每周',
+      '2w': '每两周',
+      '1m': '每月',
+      '3m': '每季度',
     },
   },
 };

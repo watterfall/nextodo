@@ -19,8 +19,8 @@
 | Build Tool | Vite (Rolldown) | ^8.1.3 |
 | Desktop Framework | Tauri 2 | ^2.11.4 |
 | Backend | Rust (2021 edition) | - |
-| Animation | Motion | ^12.42.2 |
-| Drag & Drop | svelte-dnd-action | ^0.9.70 |
+| Animation | CSS transitions + Svelte transitions (no animation library) | - |
+| Drag & Drop | Native HTML5 DnD (no library) | - |
 | Testing | Vitest | ^4.1.9 |
 
 ### Directory Structure
@@ -112,7 +112,7 @@
 | CycleEngine | `cycleEngine.ts` | Dynamic cycle / low-completion merge logic |
 | Reminders | `reminders.ts` | Daily due/overdue notification scheduling |
 | Dnd | `dnd.ts` | Native HTML5 drag-and-drop payloads |
-| Motion | `motion.ts` | Animation configs, transition helpers |
+| Motion | `motion.ts` | Animation tokens (springs/durations/easings) — hand-rolled CSS, unrelated to the `motion` npm package |
 
 ## Development Workflow
 
@@ -123,9 +123,9 @@ npm run dev              # Start Vite dev server (frontend only)
 npm run build            # Build frontend to /dist
 npm run tauri:dev        # Full development with Tauri (recommended)
 npm run tauri:build      # Production build
-npm run typecheck        # tsc --noEmit type check
+npm run typecheck        # tsc --noEmit for src/ and cli/
 npm run check            # svelte-check (Svelte + TS diagnostics)
-npm test                 # Run unit tests once (vitest run)
+npm test                 # Unit tests, run in two timezones (see Testing)
 npm run test:watch       # Run unit tests in watch mode
 npm run cli:build        # Bundle the focusflow CLI (esbuild → dist-cli/focusflow.mjs)
 npm run cli              # Run the built focusflow CLI
@@ -143,7 +143,16 @@ npm run reinstall        # Clean reinstall
 
 A headless CLI lives at `cli/focusflow.ts` for scripting and agent-driven use. Build it with `npm run cli:build` (esbuild bundles it to `dist-cli/focusflow.mjs`) and run it with `npm run cli`.
 
-Subcommands: `add`, `list`, `done`, `cancel`, `import-reminders`, `agent-guide`. The CLI shares the Node-safe quota core (`src/lib/utils/quotaCore.ts`) with the app, so priority/quota rules stay identical across both surfaces.
+Subcommands: `add`, `list`, `done`, `cancel`, `import-reminders`, `agent-guide`.
+The CLI imports the same Node-safe modules the app uses — `quotaCore.ts` (quota
+and Highlander rules), `parser.ts` (input syntax) and `recurrence.ts` (next
+occurrence on `done`) — so those behaviours match the app exactly. It does **not**
+run gamification (no XP or badges for a CLI completion) and does not touch
+`cycleState`; the app reconciles recurrence on next launch either way.
+
+The CLI is covered by `cli/focusflow.test.ts`, which builds the bundle and drives
+it as a subprocess against a temp data file, and is type-checked via
+`tsc -p cli/tsconfig.json` (wired into `npm run typecheck`).
 
 ## Code Conventions
 
@@ -266,14 +275,14 @@ Task content !A +project @context #tag 🍅3 ~2025-01-15 thr:2025-01-10 rec:1w
 
 | Syntax | Purpose | Example |
 |--------|---------|---------|
-| `!A-F` | Priority | `!A`, `!B`, `!C`, `!D`, `!E`, `!F` |
+| `!A-F`, `!N`, `!S` | Priority | `!A` … `!F`, `!N`, `!S`. Full-width `【A】` also works (CN IME) |
 | `+name` | Project tag | `+work`, `+personal` |
 | `@name` | Context tag | `@home`, `@office` |
 | `#name` | Custom tag | `#urgent`, `#review` |
 | `~date` | Due date | `~2025-01-15`, `~tomorrow`, `~+3d` |
 | `thr:date` | Threshold date (hidden until) | `thr:2025-01-10`, `thr:+7d` |
 | `rec:pattern` | Recurrence | `rec:1d`, `rec:1w`, `rec:mon,wed,fri` |
-| `🍅N` or `pN` | Estimated pomodoros | `🍅4`, `p3` |
+| `🍅N` or `pN` | Estimated pomodoros (must stand alone) | `🍅4`, `p3` — `step2` is **not** matched |
 | Emoji tags | Direct emoji classification | `⚡高能量`, `💻编码` |
 
 **Recurrence patterns:**
@@ -305,17 +314,18 @@ Use quota utilities from `src/lib/utils/quota.ts` for validation.
 
 ### Completed Task Retention
 
-Completed tasks (G priority) remain visible for a retention period based on their original priority:
+Completed tasks (G priority) stay visible, struck through, until **the end of the
+2-day unit they were completed in** — not for a per-priority number of hours. A
+task finished on the Sunday of a Sun–Mon unit stays visible through Monday
+23:59, regardless of whether it was an A or an E.
 
-| Original Priority | Retention Period |
-|-------------------|------------------|
-| A | 12 hours |
-| B | 10 hours |
-| C | 8 hours |
-| D | 6 hours |
-| E/F | 4 hours |
+Use `isWithinRetentionPeriod()` and `getRetentionRemaining()` from types to check
+retention status; they delegate to `isCompletedInCurrentUnit()` and
+`getUnitRetentionRemaining()` in `unitCalc.ts`.
 
-Use `isWithinRetentionPeriod()` and `getRetentionRemaining()` from types to check retention status.
+Separately, `cleanupOldTasks()` in `tasks.svelte.ts` moves G tasks out of
+`active.json` into cold storage 14 days after completion, and hard-deletes
+cancelled (H) tasks after 2 days.
 
 ### Bi-Daily Units
 
@@ -327,15 +337,17 @@ See `src/lib/utils/unitCalc.ts` for unit calculations.
 
 ### Drag and Drop
 
-The app uses `svelte-dnd-action` for drag-and-drop functionality. Type definitions and animation configs are in `src/lib/utils/motion.ts`:
+The app uses **native HTML5 drag-and-drop**, not a library. Payload types and the
+drag/drop helpers live in `src/lib/utils/dnd.ts`; `DropZone.svelte` wraps a drop
+target. `svelte-dnd-action` was removed — do not reintroduce `use:dndzone`.
 
 ```typescript
-import { dndzone, TRIGGERS } from 'svelte-dnd-action';
-import type { DndConsiderEvent, DndFinalizeEvent } from '$lib/utils/motion';
-import { dndConfig, flipDefaults } from '$lib/utils/motion';
+import { startTaskDrag, clearDragPayload } from '$lib/utils/dnd';
+import type { TaskDragPayload } from '$lib/utils/dnd';
+import DropZone from './DropZone.svelte';
 
-// In component
-<div use:dndzone={{ items, flipDurationMs: dndConfig.flipDurationMs }}>
+// In component: DropZone handles dragover/drop and calls back with the payload
+<DropZone onDropTask={(payload: TaskDragPayload) => handleDrop(payload)}>
 ```
 
 ### Gamification / Badges
@@ -443,12 +455,23 @@ areTaskArraysEqual(a, b); // DnD optimization helper
 Unit testing runs on **Vitest** (`vitest.config.ts` at the repo root, `node` environment, `$lib` alias). Tests are colocated as `*.test.ts` next to the code they cover — the include glob is `src/**/*.test.ts` and `cli/**/*.test.ts`, so the pure logic in `src/lib/utils/*.ts` (parser, quotaCore, recurrence, unitCalc, cycleEngine, …) is the primary target.
 
 ```bash
-npm test            # vitest run (single pass, CI-friendly)
+npm test            # runs the suite twice: local zone, then TZ=Asia/Shanghai
 npm run test:watch  # vitest watch mode
+npm run typecheck   # tsc for src/ AND cli/
 npm run check       # svelte-check — Svelte + TypeScript diagnostics
 ```
 
-Prefer testing the Node-safe modules (`quotaCore.ts`, `parser.ts`, `recurrence.ts`, `unitCalc.ts`) directly — they have no Svelte/Tauri dependencies. For E2E, Playwright remains the suggested future addition.
+**The timezone is deliberately not pinned.** `vitest.config.ts` used to force
+`TZ=UTC`, which was the one zone where the recurrence engine happened to be
+correct — east of UTC a `1d` recurrence returned the same date forever, and the
+tests passed anyway. All date handling now works on local calendar parts, and
+`npm test` runs the suite a second time under `TZ=Asia/Shanghai` to keep it that
+way. If you add date logic, never format via `toISOString()`; use
+`formatDateISO()` / `currentUnitStartLocal()`.
+
+Prefer testing the Node-safe modules (`quotaCore.ts`, `parser.ts`, `recurrence.ts`, `unitCalc.ts`) directly — they have no Svelte/Tauri dependencies. `src/lib/i18n/parity.test.ts` asserts the two locale files expose identical key sets; without it, a key missing from `en-US` silently renders Chinese, because components fall back with `t('x') || '中文'`.
+
+Not yet covered by tests: `storage.ts` (persistence, migrations, atomic writes) and the Svelte stores. For E2E, Playwright remains the suggested future addition.
 
 ## Important Considerations
 
@@ -584,7 +607,7 @@ Theme is stored in settings and applied via CSS custom properties in `app.css`. 
 | `src/lib/utils/parser.ts` | Task input parsing | ~410 |
 | `src/lib/utils/quotaCore.ts` | Node-safe quota core (shared with CLI) | ~165 |
 | `src/lib/utils/cycleEngine.ts` | Dynamic cycle / merge logic | ~155 |
-| `src/lib/utils/motion.ts` | Animation configs | ~190 |
+| `src/lib/utils/motion.ts` | Animation tokens | ~135 |
 | `src/lib/types/index.ts` | Type definitions | ~590 |
 | `src/lib/components/Sidebar.svelte` | Navigation and filters | ~1180 |
 | `src/lib/components/ZoneRail.svelte` | S/F/N priority rail | ~815 |
@@ -621,5 +644,3 @@ Key npm packages:
 | `@tauri-apps/api` | Tauri frontend bindings |
 | `@tauri-apps/plugin-fs` | File system plugin |
 | `@tauri-apps/plugin-notification` | Notification plugin |
-| `motion` | Animation library |
-| `svelte-dnd-action` | Drag-and-drop functionality |

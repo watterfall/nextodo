@@ -6,7 +6,11 @@
 
 ---
 
-## ✅ W1 · i18n 全量修复 (P0 · 量 S–M) — 已完成（随 57b963a 发布）
+## ✅ W1 · i18n 全量修复 (P0 · 量 S–M) — 首轮随 57b963a 发布，2026-08-24 补完
+
+> 注：57b963a 修掉了 `quota.ts` 的配额提示和 DnD toast，但**漏了每张任务卡上的日期与循环标签**
+> （`getRelativeDayLabel` / `formatRecurrence` 硬编码中文），en-US 用户仍能看到中文。
+> 已在「代码评审修复轮」补齐，并加了 locale 键集一致性测试防回归。
 
 **问题**：硬编码中文散落在工具与组件里，en-US 用户看到中英混杂。
 
@@ -99,6 +103,41 @@ W1（独立、低风险）→ W2（数据安全）→ W3（提醒）→ W4（最
 - **W1–W4 全部落地**：i18n 全量修复、G 归档 + 导出/导入接入设置、截止日/逾期提醒、动态合并透明化（延续窗口徽章 + 低完成度微复盘横幅 + 完成率 sparkline）。
 - **CLI 首发**：`cli/focusflow.ts`（`add / list / done / cancel / import-reminders / agent-guide`）。`npm run cli:build` 用 esbuild 打包到 `dist-cli/focusflow.mjs`，`npm run cli` 运行；与应用共用 Node 安全的配额内核 `quotaCore.ts`。
 - **优先级扩档**：新增 N（未来推进，长期但非紧急、默认隐藏）与 S（持续推进，本周唯一、用子任务分解）两档。
+
+---
+
+## 代码评审修复轮（2026-08-24）
+
+一次深度评审（含对抗验证）在 `57b963a..148d38c` 这批改动上查出 15 项问题，全部逐条复现后修复。要点：
+
+**正确性（用户可见）**
+- **循环任务在 UTC 以东永不推进**：`formatDateISO` 用 `toISOString()` 输出，但日期是按本地午夜构造的。在 `Asia/Shanghai`（应用默认 locale 所在时区）下 `rec:1d` 返回**同一天**，每日循环任务永远卡住；`1w` 差一天。已改为按本地日期分量格式化。
+- **月度循环跳月**：`setMonth(+1)` 在 1 月 31 日溢出成 3 月 3 日，整个二月被跳过。已改为钳到目标月最后一天。
+- **CLI `done` 杀死循环**：CLI 不生成下一次occurrence，而应用的启动补偿又把 G 过滤掉了，两头都不管 → 任务静默消失。CLI 现在复用 `createNextOccurrence`，补偿路径也修好了（原先因为过滤 A–F 而**永远不可达**）。
+- **配额可被撑爆**：Highlander 把旧 A 无条件降成 B，B 满了就变成 3/2 的非法状态。改为沿 B→C→D→E→F 找第一个有空位的档。
+- **未处理的微复盘被静默丢弃**：下一周期正常时 `pendingReview` 被覆盖成 null，那一期的未完成任务从此不在任何窗口里显示。
+- **灵感池拖低完成率**：F 是无上限的，却计入 30% 合并阈值——攒够 20 条灵感就能触发一次假的窗口合并，还会把整池拖进下一窗口。已限定 A–E。
+- **单元导航不可逆**：`prev` 固定 -2 天会跳过周六复盘日，导致过去的复盘无法回看。改为按单元边界推导，prev/next 严格互逆。
+- **文档里的语法本来是坏的**：`~+3d`、`thr:+7d`、`rec:1m@15`、`rec:1m@last` 全部失效——`+project`/`@context` 抽取跑在前面，把操作数吃掉了。已调整解析顺序（选择修解析器而不是删文档）。
+- **`p3` 会匹配单词内部**：`step2 done` 被解析成 2 个番茄钟 + 内容 `ste done`，静默改坏输入。已加独立 token 约束。
+
+**i18n**
+- `getRelativeDayLabel` / `formatRecurrence` 硬编码中文，en-US 用户**每张任务卡**都能看到；`quota.ts` 还有一句未翻译的英文。已全部走 i18n；`getRelativeDayLabel` 删除（`i18n.getRelativeDate` 是它的本地化重复实现）。
+- 新增 `src/lib/i18n/parity.test.ts` 断言两个 locale 键集完全一致——组件里 `t('x') || '中文'` 兜底遍地都是，缺键不会报错，只会静默漏中文。
+- 按中文子串判错误类型（`error.includes('配额')`）和对译文做 `.replace()` 字符串手术两处已改掉。
+
+**测试与门禁**
+- **摘掉 `vitest.config.ts` 的 `TZ=UTC` 钉子**——它恰好是循环引擎唯一正确的时区，等于把 bug 写成了规格。`npm test` 现在跑两遍（本地时区 + `Asia/Shanghai`）。
+- 有 6 条测试是以「documents current behavior」为名把 bug 锁进去的，已全部改成正确期望。
+- CLI 此前在**所有**门禁之外：新增 `cli/focusflow.test.ts`（构建真二进制、以子进程打临时数据文件，7 个用例），并把 `tsc -p cli/tsconfig.json` 接进 `npm run typecheck`。
+- 测试数 101 → 122。
+
+**清理**
+- 删除两个死运行时依赖：`motion` 和 `svelte-dnd-action`（全仓零 import，项目早已迁到原生 HTML5 DnD）。
+- 删除死代码：`getUnitStartString`、`motion.ts` 里的 dnd 类型再导出、KanbanView 的 `ideaPoolTasks`/`ideaPoolDimmed`（永远为空且从未渲染）、`parser.ts` 里与 `recurrence.ts` 重复的第二套循环引擎。
+- CLAUDE.md 三处失实已修：保留期机制（早已改为按 2 天单元，文档还写着按优先级算小时）、DnD 库、依赖表。
+
+**未做**：`storage.ts`（661 行，持久化 + 迁移 + 原子写）和各 store 仍然零测试——这是当前最大的测试缺口。
 
 ---
 

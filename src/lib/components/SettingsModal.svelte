@@ -19,7 +19,8 @@
   const i18n = getI18nStore();
   const t = i18n.t;
 
-  let fileInput: HTMLInputElement;
+  // $state so the bind:this assignment actually triggers reactivity
+  let fileInput = $state<HTMLInputElement | null>(null);
 
   async function handleExport() {
     try {

@@ -8,7 +8,7 @@
   import DropZone from './DropZone.svelte';
   import QuickAddRow from './QuickAddRow.svelte';
   import type { TaskDragPayload, SubtaskDragPayload } from '$lib/utils/dnd';
-  import { isToday, isOverdue, parseISODate, getRelativeDayLabel } from '$lib/utils/unitCalc';
+  import { isToday, isOverdue, parseISODate } from '$lib/utils/unitCalc';
 
   type GroupBy = 'priority' | 'project' | 'context' | 'due' | 'tag' | 'none';
   type SortDir = 'asc' | 'desc';

@@ -5,8 +5,8 @@
   import { openEditModal, getUIStore, showToast, setDraggingTask } from '$lib/stores/ui.svelte';
   import { clearDragPayload, startTaskDrag } from '$lib/utils/dnd';
   import { startPomodoro, getPomodoroStore } from '$lib/stores/pomodoro.svelte';
-  import { formatRecurrence } from '$lib/utils/recurrence';
-  import { isOverdue, getRelativeDayLabel, parseISODate } from '$lib/utils/unitCalc';
+  import { recurrenceLabelKey } from '$lib/utils/recurrence';
+  import { isOverdue, parseISODate } from '$lib/utils/unitCalc';
   import { getI18nStore } from '$lib/i18n';
 
   interface Props {
@@ -150,7 +150,7 @@
   const effectivePriority = $derived(task.completed && task.originalPriority ? task.originalPriority : task.priority);
   const config = $derived(PRIORITY_CONFIG[effectivePriority]);
   const isTaskOverdue = $derived(isActivePriority(task.priority) && isOverdue(task.dueDate));
-  const dueDateLabel = $derived(task.dueDate ? getRelativeDayLabel(parseISODate(task.dueDate)) : null);
+  const dueDateLabel = $derived(task.dueDate ? i18n.getRelativeDate(parseISODate(task.dueDate)) : null);
   const isCompleted = $derived(task.priority === 'G');
   const isCancelled = $derived(task.priority === 'H');
   // Visually de-emphasize lower-pressure zones so they do not compete with A-E
@@ -161,7 +161,7 @@
 
   // Check if task is dormant (has threshold date in the future)
   const isDormant = $derived(!isThresholdPassed(task));
-  const thresholdLabel = $derived(task.thresholdDate ? getRelativeDayLabel(parseISODate(task.thresholdDate)) : null);
+  const thresholdLabel = $derived(task.thresholdDate ? i18n.getRelativeDate(parseISODate(task.thresholdDate)) : null);
 
   // Check if task is scheduled too far in advance for its priority
   // A: current cycle only, B: +1 cycle (4 days), C: within a week, D/E: no restriction
@@ -346,7 +346,7 @@
       {/if}
       {#if task.recurrence?.pattern}
         <span class="recurrence">
-          {formatRecurrence(task.recurrence.pattern)}
+          {i18n.t(recurrenceLabelKey(task.recurrence.pattern))}
         </span>
       {/if}
     </div>

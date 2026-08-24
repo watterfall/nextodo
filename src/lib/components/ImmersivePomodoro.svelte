@@ -102,6 +102,8 @@
   class:mouse-active={mouseActive}
   onmousemove={handleMouseMove}
   role="dialog"
+  aria-modal="true"
+  tabindex="-1"
   aria-label="Immersive focus"
 >
   <!-- Animated mesh gradient background -->
@@ -429,7 +431,10 @@
     stroke: rgba(255, 255, 255, 0.06);
   }
 
-  [data-theme="light"] .progress-bg {
+  /* data-theme lives on <html>, outside this component's scope — without
+     :global() Svelte scopes the ancestor away and the light override never
+     applied, leaving the ring track near-invisible in light mode. */
+  :global([data-theme='light']) .progress-bg {
     stroke: rgba(0, 0, 0, 0.08);
   }
 

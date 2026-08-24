@@ -102,8 +102,14 @@ export async function initializeData(): Promise<void> {
     // (roll unfinished A-E tasks forward) when the prior period was under-completed.
     const cycleResult = evaluateCycle(appData);
 
-    // Process recurring tasks
-    const newRecurringTasks = processRecurringTasks(appData.tasks.filter(t => isActivePriority(t.priority)));
+    // Process recurring tasks. This is the catch-up net for completions that did
+    // not go through completeTask() — chiefly the CLI, which writes active.json
+    // directly. It must include G (completed) tasks: getTasksNeedingRecurrence
+    // keys on `completed`, and every completion also sets priority 'G', so
+    // filtering to A-F here made this branch permanently unreachable.
+    const newRecurringTasks = processRecurringTasks(
+      appData.tasks.filter(t => t.priority !== 'H')
+    );
     let dataChanged = newRecurringTasks.length > 0 || cycleResult.changed || normalized;
     if (dataChanged) {
       appData.tasks = [...appData.tasks, ...newRecurringTasks];
@@ -180,13 +186,24 @@ async function persist(filesToSave: ('active' | 'pomodoro_history')[] = ['active
 }
 
 // Task operations
-export async function addTask(input: string, force = false): Promise<{ success: boolean; error?: string }> {
+/**
+ * Result of an add attempt. `quotaExceeded` lets callers detect a quota refusal
+ * structurally — matching on the localized `error` text broke the moment the
+ * user switched language.
+ */
+export interface AddTaskResult {
+  success: boolean;
+  error?: string;
+  quotaExceeded?: boolean;
+}
+
+export async function addTask(input: string, force = false): Promise<AddTaskResult> {
   const task = createTaskFromInput(input);
 
   // Validate quota
   const quotaError = task.priority === 'A' ? null : validateQuota(appData.tasks, task.priority);
   if (quotaError && !force) {
-    return { success: false, error: quotaError };
+    return { success: false, error: quotaError, quotaExceeded: true };
   }
 
   // Apply Highlander rule for A priority
@@ -200,10 +217,10 @@ export async function addTask(input: string, force = false): Promise<{ success: 
   return { success: true };
 }
 
-export async function addTaskDirect(task: Task, force = false): Promise<{ success: boolean; error?: string }> {
+export async function addTaskDirect(task: Task, force = false): Promise<AddTaskResult> {
   const quotaError = task.priority === 'A' ? null : validateQuota(appData.tasks, task.priority);
   if (quotaError && !force) {
-    return { success: false, error: quotaError };
+    return { success: false, error: quotaError, quotaExceeded: true };
   }
 
   if (task.priority === 'A') {

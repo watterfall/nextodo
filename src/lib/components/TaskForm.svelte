@@ -143,7 +143,7 @@
     let result = await addTask(taskString);
 
     // If failed due to quota (e.g. typed !A explicitly), prompt and retry force
-    if (!result.success && result.error && (result.error.includes(t('error.quotaExceeded')) || result.error.includes('quota') || result.error.includes('配额'))) {
+    if (!result.success && result.error && result.quotaExceeded) {
         if (confirm(result.error + '\n' + t('action.continueAnyway') + '?')) {
              result = await addTask(taskString, true);
         }
@@ -587,7 +587,7 @@
 
       <div class="form-footer">
         <span class="keyboard-hint">
-          <kbd>Ctrl</kbd>+<kbd>Enter</kbd> {t('taskForm.keyboardHint').replace('按 Ctrl+Enter', '').replace('Press Ctrl+Enter to', '')}
+          <kbd>Ctrl</kbd>+<kbd>Enter</kbd> {t('taskForm.keyboardHintAction')}
         </span>
         <span class="destination-hint">
           → {PRIORITY_CONFIG[selectedPriority].name}

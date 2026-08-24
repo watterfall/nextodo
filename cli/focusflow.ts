@@ -13,6 +13,7 @@ import { join, dirname } from 'node:path';
 import { execFileSync } from 'node:child_process';
 
 import { createTaskFromInput } from '$lib/utils/parser';
+import { createNextOccurrence } from '$lib/utils/recurrence';
 import { applyHighlanderRule, canAddTask } from '$lib/utils/quotaCore';
 import { createDefaultActiveData } from '$lib/types';
 import type { ActiveData, Task, Priority } from '$lib/types';
@@ -142,12 +143,21 @@ function cmdResolve(kind: 'done' | 'cancel', positional: string[], path: string)
   const task = findTask(data.tasks, query);
   if (!task) fail(`${kind}: no active task matches "${query}"`);
 
+  // Mirror the app: completing a recurring task regenerates it, cancelling does
+  // not, and only completion sets `completed`. Cancelled tasks keep it false so
+  // both surfaces write the same record shape.
+  const next = kind === 'done' ? createNextOccurrence(task) : null;
+
   task.originalPriority = task.priority;
   task.priority = kind === 'done' ? 'G' : 'H';
-  task.completed = true;
+  task.completed = kind === 'done';
   task.completedAt = new Date().toISOString();
+
+  if (next) data.tasks.push(next);
   save(path, data);
+
   console.log(`${kind === 'done' ? 'completed' : 'cancelled'}: ${task.content}`);
+  if (next) console.log(`  next occurrence: ~${next.dueDate}`);
 }
 
 function cmdAgentGuide(): void {

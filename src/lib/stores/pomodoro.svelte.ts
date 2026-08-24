@@ -90,7 +90,6 @@ export function recordInterruption(reason?: string): void {
     if (reason) {
       currentInterruptionReasons = [...currentInterruptionReasons, reason];
     }
-    console.log('Interruption recorded:', interruptionCount, reason);
   }
 }
 

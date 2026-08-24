@@ -21,7 +21,7 @@ export function validateQuota(tasks: Task[], priority: Priority): string | null 
   }
 
   if (!isActivePriority(priority)) {
-    return 'Cannot add directly to a hidden priority';
+    return t('message.hiddenPriority');
   }
 
   if (canAddTask(tasks, priority)) {

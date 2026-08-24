@@ -55,18 +55,29 @@ export function canAddTask(tasks: Task[], priority: Priority): boolean {
   return remaining[priority] > 0;
 }
 
+// Tiers an unseated A can fall back to, best first. F (Idea Pool) is the final
+// stop because it is the only unbounded lane — reaching it means B-E are full.
+const DEMOTION_LADDER: ActivePriority[] = ['B', 'C', 'D', 'E', 'F'];
+
 /**
- * Apply Highlander Rule: when adding an A task, demote existing A to B
- * Returns modified tasks array
+ * Apply Highlander Rule: when adding an A task, demote the incumbent A.
+ *
+ * The incumbent lands in the highest tier that still has room, not
+ * unconditionally in B — a board already holding B×2 would otherwise end up at
+ * B×3 against a quota of 2, which every quota reader then reports as full.
  */
 export function applyHighlanderRule(tasks: Task[], newTask: Task): Task[] {
   if (newTask.priority !== 'A') {
     return tasks;
   }
 
+  const remaining = getRemainingQuota(tasks);
+
   return tasks.map(task => {
     if (task.id !== newTask.id && task.priority === 'A' && !task.completed) {
-      return { ...task, priority: 'B' as Priority };
+      const target = DEMOTION_LADDER.find(p => remaining[p] > 0) ?? 'F';
+      remaining[target]--; // reserve the slot in case of multiple incumbents
+      return { ...task, priority: target as Priority };
     }
     return task;
   });

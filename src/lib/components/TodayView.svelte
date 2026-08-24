@@ -330,60 +330,6 @@
     font-weight: 500;
   }
 
-  .inbox-toggle {
-    width: 40px;
-    height: 40px;
-    border-radius: var(--radius-md);
-    background: var(--card-bg);
-    border: 1px solid var(--border-hairline);
-    color: var(--text-muted);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    position: relative;
-    box-shadow: var(--elevation-1);
-    transition: all var(--transition-fast);
-    flex-shrink: 0;
-  }
-
-  .inbox-toggle:hover {
-    color: var(--text-primary);
-    background: var(--card-hover-bg);
-    box-shadow: var(--elevation-2);
-    transform: translateY(-1px);
-  }
-
-  .inbox-toggle.active {
-    background: var(--primary-bg);
-    color: var(--primary);
-    border-color: var(--border-subtle);
-  }
-
-  .inbox-toggle svg {
-    width: 18px;
-    height: 18px;
-  }
-
-  .count-badge {
-    position: absolute;
-    top: -4px;
-    right: -4px;
-    background: var(--primary);
-    color: white;
-    font-size: 10px;
-    font-weight: 700;
-    min-width: 18px;
-    height: 18px;
-    padding: 0 4px;
-    border-radius: 9px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border: 2px solid var(--bg-primary);
-    line-height: 1;
-  }
-
   /* ===== Hero row ===== */
   .hero-row {
     display: grid;
@@ -780,103 +726,6 @@
     opacity: 0.68;
   }
 
-  /* ===== Idea Pool ("relief valve" — friendly, no pressure) =====
-     Per philosophy: F priority is NOT "lowest" — it's the place where ideas
-     are welcome without commitment. Warm typography, sentence case, no shouting. */
-  .inspiration {
-    margin-top: var(--space-md);
-    padding: var(--space-lg) var(--space-md);
-    border-top: 1px solid var(--border-hairline);
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-md);
-    background: linear-gradient(
-      to bottom,
-      rgba(252, 196, 25, 0.03),
-      transparent 80%
-    );
-    border-radius: var(--radius-md);
-  }
-
-  .inspiration-head {
-    display: flex;
-    align-items: baseline;
-    gap: 10px;
-  }
-
-  .inspiration-icon {
-    font-size: 16px;
-    line-height: 1;
-  }
-
-  .inspiration-title {
-    font-size: var(--text-base);
-    font-weight: 500;
-    color: var(--text-secondary);
-    /* Sentence case + no uppercase — feels conversational, not corporate */
-    text-transform: none;
-    letter-spacing: 0.01em;
-  }
-
-  .inspiration-chips {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-
-  .inspiration-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 12px;
-    background: var(--card-bg);
-    border: 1px solid var(--border-hairline);
-    border-radius: var(--radius-full);
-    font-size: var(--text-sm);
-    color: var(--text-secondary);
-    cursor: default;
-    transition: all var(--transition-fast);
-    max-width: 240px;
-  }
-
-  .inspiration-chip:hover {
-    color: var(--text-primary);
-    background: var(--card-hover-bg);
-    border-color: var(--border-subtle);
-    transform: translateY(-1px);
-    box-shadow: var(--elevation-1);
-  }
-
-  .chip-arrow {
-    color: var(--text-muted);
-    font-size: var(--text-xs);
-  }
-
-  .chip-text {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  /* ===== Inbox drawer ===== */
-  .inbox-drawer {
-    position: absolute;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    width: 340px;
-    background: var(--bg-secondary);
-    border-left: 1px solid var(--border-hairline);
-    transform: translateX(100%);
-    transition: transform 0.3s var(--ease-out-expo);
-    z-index: 10;
-  }
-
-  .inbox-drawer.open {
-    transform: translateX(0);
-    box-shadow: var(--elevation-3);
-  }
-
   /* ===== Responsive ===== */
   @media (max-width: 820px) {
     .today-content {
@@ -907,10 +756,6 @@
       padding-top: 0;
       flex: 1;
       margin-left: var(--space-lg);
-    }
-
-    .inbox-drawer {
-      width: 100%;
     }
   }
 </style>

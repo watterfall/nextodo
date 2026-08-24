@@ -1,6 +1,10 @@
 import type { Task, Priority, Recurrence, RecurrencePattern } from '$lib/types';
 import { createEmptyTask } from '$lib/types';
 
+// The recurrence engine lives in ./recurrence — re-exported here so existing
+// `from './parser'` importers keep working against one implementation.
+export { calculateNextDue } from './recurrence';
+
 interface ParsedTask {
   content: string;
   priority: Priority;
@@ -57,6 +61,31 @@ export function parseTaskInput(input: string): ParsedTask {
     content = content.replace(/\s+/g, ' ').trim();
   }
 
+  // Prefixed fields FIRST. `+project` / `@context` / `#tag` match any
+  // non-space run, so running them earlier ate the operand out of `~+3d`,
+  // `thr:+7d` and `rec:1m@15` — the token was consumed as a project or context
+  // and the documented syntax silently did nothing.
+  // Extract threshold date (thr:date)
+  const thresholdMatch = content.match(/thr:(\S+)/i);
+  if (thresholdMatch) {
+    thresholdDate = parseDateString(thresholdMatch[1]);
+    content = content.replace(/thr:\S+/gi, '').trim();
+  }
+
+  // Extract recurrence pattern (rec:pattern)
+  const recurrenceMatch = content.match(/rec:(\S+)/i);
+  if (recurrenceMatch) {
+    recurrence = parseRecurrence(recurrenceMatch[1]);
+    content = content.replace(/rec:\S+/gi, '').trim();
+  }
+
+  // Extract due date (~date)
+  const dueDateMatch = content.match(/~(\S+)/);
+  if (dueDateMatch) {
+    dueDate = parseDateString(dueDateMatch[1]);
+    content = content.replace(/~\S+/g, '').trim();
+  }
+
   // Extract projects (+project)
   const projectMatches = content.matchAll(/\+(\S+)/g);
   for (const match of projectMatches) {
@@ -78,11 +107,14 @@ export function parseTaskInput(input: string): ParsedTask {
   }
   content = content.replace(/#\S+/g, '').trim();
 
-  // Extract pomodoros (🍅3 or p3) - MUST happen BEFORE emoji tags to prevent 🍅3 from being captured as a tag
-  const pomodoroMatch = content.match(/(?:🍅|p)(\d+)/);
+  // Extract pomodoros (🍅3 or p3). Must run BEFORE emoji tags so 🍅3 is not
+  // captured as a tag. The token must stand alone: an unanchored /p\d+/ matched
+  // inside ordinary words, so "step2 done" silently became "ste done" with a
+  // 2-pomodoro estimate.
+  const pomodoroMatch = content.match(/(^|\s)(?:🍅|p)(\d+)(?=\s|$)/);
   if (pomodoroMatch) {
-    estimatedPomodoros = parseInt(pomodoroMatch[1], 10);
-    content = content.replace(/(?:🍅|p)\d+/g, '').trim();
+    estimatedPomodoros = parseInt(pomodoroMatch[2], 10);
+    content = content.replace(/(^|\s)(?:🍅|p)\d+(?=\s|$)/g, '$1').trim();
   }
 
   // Extract emoji tags (⚡高能量, 💻编码, etc.)
@@ -91,27 +123,6 @@ export function parseTaskInput(input: string): ParsedTask {
     customTags.push(match[1]);
   }
   content = content.replace(/([\u{1F300}-\u{1F9FF}][\u4e00-\u9fa5\w]+)/gu, '').trim();
-
-  // Extract threshold date (thr:date)
-  const thresholdMatch = content.match(/thr:(\S+)/i);
-  if (thresholdMatch) {
-    thresholdDate = parseDateString(thresholdMatch[1]);
-    content = content.replace(/thr:\S+/gi, '').trim();
-  }
-
-  // Extract recurrence pattern (rec:pattern)
-  const recurrenceMatch = content.match(/rec:(\S+)/i);
-  if (recurrenceMatch) {
-    recurrence = parseRecurrence(recurrenceMatch[1]);
-    content = content.replace(/rec:\S+/gi, '').trim();
-  }
-
-  // Extract due date (~date)
-  const dueDateMatch = content.match(/~(\S+)/);
-  if (dueDateMatch) {
-    dueDate = parseDateString(dueDateMatch[1]);
-    content = content.replace(/~\S+/g, '').trim();
-  }
 
   // Clean up extra spaces
   content = content.replace(/\s+/g, ' ').trim();
@@ -342,87 +353,3 @@ function escapeHtml(text: string): string {
   return div.innerHTML;
 }
 
-/**
- * Calculate next due date based on recurrence pattern
- */
-export function calculateNextDue(recurrence: Recurrence, fromDate?: Date): string | null {
-  if (!recurrence) return null;
-
-  const base = fromDate || new Date();
-  base.setHours(0, 0, 0, 0);
-
-  // Handle custom weekday patterns
-  if (recurrence.customPattern && !recurrence.pattern) {
-    const weekdays = recurrence.customPattern.split(',');
-    const weekdayMap: Record<string, number> = {
-      'sun': 0, 'mon': 1, 'tue': 2, 'wed': 3, 'thu': 4, 'fri': 5, 'sat': 6
-    };
-
-    const targetDays = weekdays.map(d => weekdayMap[d]).sort((a, b) => a - b);
-    const currentDay = base.getDay();
-
-    // Find next matching day
-    let nextDay = targetDays.find(d => d > currentDay);
-    if (nextDay === undefined) {
-      // Wrap to next week
-      nextDay = targetDays[0];
-      base.setDate(base.getDate() + (7 - currentDay + nextDay));
-    } else {
-      base.setDate(base.getDate() + (nextDay - currentDay));
-    }
-
-    return formatDate(base);
-  }
-
-  // Handle standard patterns
-  switch (recurrence.pattern) {
-    case '1d':
-      base.setDate(base.getDate() + 1);
-      break;
-    case '2d':
-      base.setDate(base.getDate() + 2);
-      break;
-    case '3d':
-      base.setDate(base.getDate() + 3);
-      break;
-    case '1w':
-      base.setDate(base.getDate() + 7);
-      break;
-    case '2w':
-      base.setDate(base.getDate() + 14);
-      break;
-    case '1m':
-      base.setMonth(base.getMonth() + 1);
-      // Handle monthly with specific day
-      if (recurrence.customPattern) {
-        const dayMatch = recurrence.customPattern.match(/@(\d+|last)$/);
-        if (dayMatch) {
-          if (dayMatch[1] === 'last') {
-            // Last day of month
-            base.setMonth(base.getMonth() + 1, 0);
-          } else {
-            base.setDate(parseInt(dayMatch[1], 10));
-          }
-        }
-      }
-      break;
-    case '3m':
-      base.setMonth(base.getMonth() + 3);
-      // Handle quarterly with specific day
-      if (recurrence.customPattern) {
-        const dayMatch = recurrence.customPattern.match(/@(\d+|last)$/);
-        if (dayMatch) {
-          if (dayMatch[1] === 'last') {
-            base.setMonth(base.getMonth() + 1, 0);
-          } else {
-            base.setDate(parseInt(dayMatch[1], 10));
-          }
-        }
-      }
-      break;
-    default:
-      return null;
-  }
-
-  return formatDate(base);
-}

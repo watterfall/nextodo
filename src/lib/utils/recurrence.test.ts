@@ -3,7 +3,7 @@ import {
   calculateNextDue,
   createNextOccurrence,
   parseRecurrencePattern,
-  formatRecurrence,
+  recurrenceLabelKey,
   getTasksNeedingRecurrence,
   processRecurringTasks,
   hasRecurrence,
@@ -17,19 +17,60 @@ function task(priority: Priority, overrides: Partial<Task> = {}): Task {
 
 const rec = (pattern: Recurrence['pattern']): Recurrence => ({ pattern, nextDue: null });
 
-describe('calculateNextDue (string + pattern)', () => {
-  it('advances each standard interval (TZ=UTC deterministic)', () => {
-    expect(calculateNextDue('2026-01-04', '1d')).toBe('2026-01-05');
-    expect(calculateNextDue('2026-01-04', '2d')).toBe('2026-01-06');
-    expect(calculateNextDue('2026-01-04', '3d')).toBe('2026-01-07');
-    expect(calculateNextDue('2026-01-04', '1w')).toBe('2026-01-11');
-    expect(calculateNextDue('2026-01-04', '2w')).toBe('2026-01-18');
-    expect(calculateNextDue('2026-01-15', '1m')).toBe('2026-02-15');
-    expect(calculateNextDue('2026-01-15', '3m')).toBe('2026-04-15');
+const from = (iso: string) => {
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(y, m - 1, d);
+};
+
+describe('calculateNextDue', () => {
+  it('advances each standard interval', () => {
+    expect(calculateNextDue(rec('1d'), from('2026-01-04'))).toBe('2026-01-05');
+    expect(calculateNextDue(rec('2d'), from('2026-01-04'))).toBe('2026-01-06');
+    expect(calculateNextDue(rec('3d'), from('2026-01-04'))).toBe('2026-01-07');
+    expect(calculateNextDue(rec('1w'), from('2026-01-04'))).toBe('2026-01-11');
+    expect(calculateNextDue(rec('2w'), from('2026-01-04'))).toBe('2026-01-18');
+    expect(calculateNextDue(rec('1m'), from('2026-01-15'))).toBe('2026-02-15');
+    expect(calculateNextDue(rec('3m'), from('2026-01-15'))).toBe('2026-04-15');
   });
 
-  it('returns null for a null pattern', () => {
-    expect(calculateNextDue('2026-01-04', null)).toBeNull();
+  // Regression: the old engine formatted via toISOString() while parsing local
+  // midnight, so east of UTC a '1d' step returned the SAME day forever.
+  it('advances by exactly one calendar day in the local zone', () => {
+    for (const day of ['2026-01-04', '2026-03-15', '2026-06-30', '2026-12-31']) {
+      const next = calculateNextDue(rec('1d'), from(day))!;
+      const diffDays = Math.round((from(next).getTime() - from(day).getTime()) / 86400000);
+      expect(diffDays).toBe(1);
+    }
+  });
+
+  // Regression: bare setMonth(+1) on Jan 31 produced "Feb 31" → Mar 3.
+  it('clamps a monthly step to the last day of a shorter target month', () => {
+    expect(calculateNextDue(rec('1m'), from('2026-01-31'))).toBe('2026-02-28');
+    expect(calculateNextDue(rec('1m'), from('2026-03-31'))).toBe('2026-04-30');
+    expect(calculateNextDue(rec('1m'), from('2024-01-31'))).toBe('2024-02-29'); // leap year
+  });
+
+  it('resolves weekday lists and day-of-month selectors', () => {
+    const weekly = { pattern: null, customPattern: 'mon,wed,fri', nextDue: null } as Recurrence;
+    expect(calculateNextDue(weekly, from('2026-01-04'))).toBe('2026-01-05'); // Sun → Mon
+    expect(calculateNextDue(weekly, from('2026-01-09'))).toBe('2026-01-12'); // Fri → next Mon
+
+    const fifteenth = { pattern: '1m', customPattern: '1m@15', nextDue: null } as Recurrence;
+    expect(calculateNextDue(fifteenth, from('2026-01-20'))).toBe('2026-02-15');
+
+    const last = { pattern: '1m', customPattern: '1m@last', nextDue: null } as Recurrence;
+    expect(calculateNextDue(last, from('2026-01-10'))).toBe('2026-02-28');
+  });
+
+  it('does not mutate the date it was given', () => {
+    const base = from('2026-01-04');
+    calculateNextDue(rec('1w'), base);
+    expect(base.getDate()).toBe(4);
+  });
+
+  it('returns null for a null recurrence or empty pattern', () => {
+    expect(calculateNextDue(null, from('2026-01-04'))).toBeNull();
+    expect(calculateNextDue(rec(null), from('2026-01-04'))).toBeNull();
   });
 });
 
@@ -75,12 +116,11 @@ describe('parseRecurrencePattern', () => {
   });
 });
 
-describe('formatRecurrence', () => {
-  it('renders labels and empty string for null', () => {
-    expect(formatRecurrence('1d')).toBe('每日');
-    expect(formatRecurrence('1w')).toBe('每周');
-    expect(formatRecurrence('3m')).toBe('每季度');
-    expect(formatRecurrence(null)).toBe('');
+describe('recurrenceLabelKey', () => {
+  it('returns an i18n key, never literal text', () => {
+    expect(recurrenceLabelKey('1d')).toBe('recurrence.pattern.1d');
+    expect(recurrenceLabelKey('3m')).toBe('recurrence.pattern.3m');
+    expect(recurrenceLabelKey(null)).toBe('');
   });
 });
 
@@ -113,6 +153,8 @@ describe('hasRecurrence', () => {
   it('is true only when a concrete pattern is set', () => {
     expect(hasRecurrence(task('C', { recurrence: rec('1w') }))).toBe(true);
     expect(hasRecurrence(task('C', { recurrence: null }))).toBe(false);
-    expect(hasRecurrence(task('C', { recurrence: { pattern: null, customPattern: 'mon', nextDue: null } }))).toBe(false);
+    // A weekday list sets only customPattern, and is still a real recurrence.
+    expect(hasRecurrence(task('C', { recurrence: { pattern: null, customPattern: 'mon', nextDue: null } }))).toBe(true);
+    expect(hasRecurrence(task('C', { recurrence: { pattern: null, customPattern: '', nextDue: null } }))).toBe(false);
   });
 });

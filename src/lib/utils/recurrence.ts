@@ -1,52 +1,100 @@
-import type { Task, RecurrencePattern } from '$lib/types';
+import type { Task, Recurrence, RecurrencePattern } from '$lib/types';
 import { formatDateISO, parseISODate } from './unitCalc';
 
+const WEEKDAY_MAP: Record<string, number> = {
+  sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6
+};
+
+const DAY_STEPS: Record<string, number> = {
+  '1d': 1, '2d': 2, '3d': 3, '1w': 7, '2w': 14
+};
+
 /**
- * Calculate next due date based on recurrence pattern
+ * Add whole months, clamping to the last valid day of the target month.
+ *
+ * A bare setMonth(+1) on Jan 31 produces "Feb 31", which normalizes to Mar 3 —
+ * skipping February entirely for a monthly task.
  */
-export function calculateNextDue(currentDue: string, pattern: RecurrencePattern): string | null {
-  if (!pattern) return null;
+function addMonthsClamped(date: Date, months: number): void {
+  const day = date.getDate();
+  date.setDate(1); // park on a day every month has, so the month step can't overflow
+  date.setMonth(date.getMonth() + months);
+  const lastDayOfTarget = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+  date.setDate(Math.min(day, lastDayOfTarget));
+}
 
-  const date = parseISODate(currentDue);
+/** Apply a trailing `@15` / `@last` day-of-month selector, if the pattern has one. */
+function applyDayOfMonthSelector(date: Date, customPattern: string | undefined | null): void {
+  const match = customPattern?.match(/@(\d+|last)$/);
+  if (!match) return;
 
-  switch (pattern) {
-    case '1d':
-      date.setDate(date.getDate() + 1);
-      break;
-    case '2d':
-      date.setDate(date.getDate() + 2);
-      break;
-    case '3d':
-      date.setDate(date.getDate() + 3);
-      break;
-    case '1w':
-      date.setDate(date.getDate() + 7);
-      break;
-    case '2w':
-      date.setDate(date.getDate() + 14);
-      break;
-    case '1m':
-      date.setMonth(date.getMonth() + 1);
-      break;
-    case '3m':
-      date.setMonth(date.getMonth() + 3);
-      break;
-    default:
-      return null;
+  if (match[1] === 'last') {
+    date.setMonth(date.getMonth() + 1, 0); // day 0 of next month = last day of this one
+    return;
+  }
+  const lastDayOfTarget = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+  date.setDate(Math.min(parseInt(match[1], 10), lastDayOfTarget));
+}
+
+/**
+ * Calculate the next due date for a recurrence.
+ *
+ * This is the single recurrence engine for the app — `parser.ts` re-exports it.
+ * It supports the standard intervals, weekday lists (`mon,wed,fri`) and the
+ * monthly/quarterly day selectors (`1m@15`, `1m@last`). Dates are formatted from
+ * local calendar parts, and `fromDate` is never mutated.
+ */
+export function calculateNextDue(recurrence: Recurrence | null, fromDate?: Date): string | null {
+  if (!recurrence) return null;
+
+  const base = fromDate ? new Date(fromDate) : new Date();
+  base.setHours(0, 0, 0, 0);
+
+  // Weekday list (`mon,wed,fri`) — only when no fixed interval is set.
+  if (recurrence.customPattern && !recurrence.pattern) {
+    const targetDays = recurrence.customPattern
+      .split(',')
+      .map(d => WEEKDAY_MAP[d.trim().toLowerCase()])
+      .filter(d => d !== undefined)
+      .sort((a, b) => a - b);
+    if (targetDays.length === 0) return null;
+
+    const currentDay = base.getDay();
+    const nextDay = targetDays.find(d => d > currentDay);
+    base.setDate(
+      base.getDate() +
+        (nextDay === undefined ? 7 - currentDay + targetDays[0] : nextDay - currentDay)
+    );
+    return formatDateISO(base);
   }
 
-  return formatDateISO(date);
+  const pattern = recurrence.pattern;
+  if (!pattern) return null;
+
+  if (pattern in DAY_STEPS) {
+    base.setDate(base.getDate() + DAY_STEPS[pattern]);
+  } else if (pattern === '1m' || pattern === '3m') {
+    addMonthsClamped(base, pattern === '1m' ? 1 : 3);
+    applyDayOfMonthSelector(base, recurrence.customPattern);
+  } else {
+    return null;
+  }
+
+  return formatDateISO(base);
 }
 
 /**
  * Create next occurrence of a recurring task when completed
  */
 export function createNextOccurrence(task: Task): Task | null {
-  if (!task.recurrence?.pattern || !task.dueDate) {
+  const recurrence = task.recurrence;
+  if (!recurrence || !hasRecurrence(task) || !task.dueDate) {
     return null;
   }
 
-  const nextDue = calculateNextDue(task.dueDate, task.recurrence.pattern);
+  // Pass the whole recurrence so `customPattern` (weekday lists, `@15`, `@last`)
+  // survives into the next occurrence instead of being dropped.
+  const nextDue = calculateNextDue(recurrence, parseISODate(task.dueDate));
   if (!nextDue) return null;
 
   return {
@@ -58,7 +106,7 @@ export function createNextOccurrence(task: Task): Task | null {
     unitStart: nextDue,
     dueDate: nextDue,
     recurrence: {
-      ...task.recurrence,
+      ...recurrence,
       nextDue
     },
     pomodoros: {
@@ -99,22 +147,14 @@ export function parseRecurrencePattern(input: string): RecurrencePattern {
 }
 
 /**
- * Format recurrence pattern for display
+ * i18n key for a recurrence pattern's display label.
+ *
+ * Returns a key rather than text because this module is Node-safe (the CLI
+ * imports it) and cannot reach the Svelte i18n store. Callers render it with
+ * `t(...)`; hardcoding the labels here leaked Chinese onto every en-US card.
  */
-export function formatRecurrence(pattern: RecurrencePattern): string {
-  if (!pattern) return '';
-
-  const labels: Record<string, string> = {
-    '1d': '每日',
-    '2d': '每2天',
-    '3d': '每3天',
-    '1w': '每周',
-    '2w': '每两周',
-    '1m': '每月',
-    '3m': '每季度'
-  };
-
-  return labels[pattern] || pattern;
+export function recurrenceLabelKey(pattern: RecurrencePattern): string {
+  return pattern ? `recurrence.pattern.${pattern}` : '';
 }
 
 /**
@@ -123,7 +163,7 @@ export function formatRecurrence(pattern: RecurrencePattern): string {
 export function getTasksNeedingRecurrence(tasks: Task[]): Task[] {
   return tasks.filter(task =>
     task.completed &&
-    task.recurrence?.pattern &&
+    hasRecurrence(task) &&
     task.dueDate
   );
 }
@@ -138,11 +178,13 @@ export function processRecurringTasks(tasks: Task[]): Task[] {
   for (const task of needsProcessing) {
     const nextTask = createNextOccurrence(task);
     if (nextTask) {
-      // Check if next occurrence already exists
+      // Check if the next occurrence already exists — completed ones count too.
+      // Ignoring completed matches would re-create an occurrence the user has
+      // already finished, every time the app starts.
       const exists = tasks.some(t =>
+        t.id !== task.id &&
         t.content === nextTask.content &&
-        t.dueDate === nextTask.dueDate &&
-        !t.completed
+        t.dueDate === nextTask.dueDate
       );
 
       if (!exists) {
@@ -155,8 +197,11 @@ export function processRecurringTasks(tasks: Task[]): Task[] {
 }
 
 /**
- * Check if task has active recurrence
+ * Check if task has active recurrence.
+ *
+ * A weekday list (`rec:mon,wed,fri`) sets only `customPattern`, so keying on
+ * `pattern` alone would treat a documented recurrence form as non-recurring.
  */
 export function hasRecurrence(task: Task): boolean {
-  return !!task.recurrence?.pattern;
+  return !!(task.recurrence?.pattern || task.recurrence?.customPattern);
 }

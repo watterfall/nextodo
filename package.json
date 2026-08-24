@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc -p cli/tsconfig.json",
     "preview": "vite preview",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
@@ -15,7 +15,7 @@
     "cli": "node dist-cli/focusflow.mjs",
     "clean": "rm -rf node_modules package-lock.json",
     "reinstall": "npm run clean && npm install",
-    "test": "vitest run",
+    "test": "vitest run && TZ=Asia/Shanghai vitest run",
     "test:watch": "vitest",
     "check": "svelte-check --tsconfig ./tsconfig.json"
   },
@@ -25,9 +25,7 @@
   "dependencies": {
     "@tauri-apps/api": "^2.11.1",
     "@tauri-apps/plugin-fs": "^2.5.1",
-    "@tauri-apps/plugin-notification": "^2.3.3",
-    "motion": "^12.42.2",
-    "svelte-dnd-action": "^0.9.70"
+    "@tauri-apps/plugin-notification": "^2.3.3"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^7.1.2",

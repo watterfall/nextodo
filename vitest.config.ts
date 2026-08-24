@@ -1,9 +1,10 @@
 import { defineConfig } from 'vitest/config';
 import { fileURLToPath, URL } from 'node:url';
 
-// Pin the timezone so date-formatting logic (some of which mixes local parsing
-// with UTC output) is deterministic regardless of the machine's local zone.
-process.env.TZ = 'UTC';
+// NOTE: the timezone is deliberately NOT pinned here. Date handling in this repo
+// works on local calendar parts, so the suite must pass in any zone. `npm test`
+// runs it a second time under TZ=Asia/Shanghai (east of UTC) to keep it that way
+// — pinning TZ=UTC previously hid a bug where daily recurrences never advanced.
 
 export default defineConfig({
   resolve: {
@@ -14,6 +15,5 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['src/**/*.test.ts', 'cli/**/*.test.ts'],
-    env: { TZ: 'UTC' },
   },
 });

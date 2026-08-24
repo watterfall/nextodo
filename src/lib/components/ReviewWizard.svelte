@@ -550,17 +550,6 @@
     background: var(--primary-hover);
   }
 
-  .btn-text {
-    margin-top: 16px;
-    color: var(--text-muted);
-    font-size: 13px;
-  }
-
-  .btn-text:hover {
-    color: var(--text-primary);
-    text-decoration: underline;
-  }
-
   @keyframes float {
     0%, 100% { transform: translateY(0); }
     50% { transform: translateY(-10px); }

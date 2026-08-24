@@ -138,6 +138,7 @@ export default {
     biweekly: 'Biweekly',
     monthly: 'Monthly',
     keyboardHint: 'Press Ctrl+Enter to add quickly',
+    keyboardHintAction: 'to add quickly',
     syntaxHint: 'Syntax: !A-F !S !N or 【A】-【N】 +project @context #tag ~date thr:defer',
     subtasks: 'Subtasks',
     subtaskPlaceholder: 'Add a subtask · press Enter',
@@ -475,12 +476,10 @@ export default {
 
   // View modes
   view: {
-    zones: 'Zones',
     today: 'Today',
     kanban: 'Kanban',
     list: 'List',
     calendar: 'Calendar',
-    hybrid: 'Hybrid',
   },
 
   // List view (sleek-inspired groupable list)
@@ -550,7 +549,8 @@ export default {
     restored: 'Restored',
     error: 'Operation failed',
     quotaExceeded: '{priority} zone quota exceeded',
-    highlanderRule: 'Only one A-priority task allowed. Previous A demoted to B.',
+    hiddenPriority: 'Cannot add directly to a hidden priority',
+    highlanderRule: 'Only one A-priority task allowed. The previous A moved to the highest tier with room.',
     pomodoroComplete: 'Pomodoro complete! Take a break.',
     breakComplete: 'Break complete. Ready for next session.',
     dataLoaded: 'Data loaded',
@@ -675,6 +675,17 @@ export default {
     celebrate: {
       title: 'A perfect close',
       subtitle: 'Everything planned is done. Enjoy the moment.',
+    },
+  },
+  recurrence: {
+    pattern: {
+      '1d': 'Daily',
+      '2d': 'Every 2 days',
+      '3d': 'Every 3 days',
+      '1w': 'Weekly',
+      '2w': 'Every 2 weeks',
+      '1m': 'Monthly',
+      '3m': 'Quarterly',
     },
   },
 };

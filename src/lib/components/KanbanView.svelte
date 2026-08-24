@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Task, Priority, ActivePriority } from '$lib/types';
+  import type { Task, Priority } from '$lib/types';
   import { PRIORITY_CONFIG, getRetentionRemaining } from '$lib/types';
   import TaskCard from './TaskCard.svelte';
   import ZoneRail from './ZoneRail.svelte';
@@ -24,10 +24,13 @@
   const i18n = getI18nStore();
   const t = i18n.t;
 
-  // Main priorities (A-E with quotas). F/N/S live in the persistent
-  // ReservoirPanel above the view to avoid duplication.
-  const mainPriorities: ActivePriority[] = ['A', 'B', 'C', 'D', 'E'];
-  const priorities: ActivePriority[] = ['A', 'B', 'C', 'D', 'E'];
+  // The quota-bearing columns this view renders. F/N/S live in the persistent
+  // ZoneRail beside the view, so they are deliberately not columns here.
+  // Every per-column map below is keyed by this list, which keeps the types
+  // honest instead of carrying inert G/H/N/S buckets that can never be read.
+  const priorities = ['A', 'B', 'C', 'D', 'E'] as const;
+  type ColumnPriority = (typeof priorities)[number];
+
   const counts = $derived(countActiveByPriority(tasks.tasks));
 
   // Focus mode check
@@ -36,7 +39,7 @@
   // Derived view onto tasks per priority (no local mirror needed —
   // native DnD doesn't require items array bookkeeping).
   const columnItems = $derived.by(() => {
-    const r: Record<Priority, Task[]> = { A: [], B: [], C: [], D: [], E: [], F: [], G: [], H: [], N: [], S: [] };
+    const r = { A: [], B: [], C: [], D: [], E: [] } as Record<ColumnPriority, Task[]>;
     for (const p of priorities) {
       r[p] = (tasks.tasksByPriority[p] ?? []).filter(t => !t.completed);
     }
@@ -57,14 +60,9 @@
     return { success: true, toast: t('message.promotedTo', { priority, name: t(`priority.${priority}`) }) };
   }
 
-  // Idea Pool (F zone) derived values
-  // Use columnItems for F zone as well to support DnD
-  const ideaPoolTasks = $derived(columnItems['F']);
-  const ideaPoolDimmed = $derived(isFocusMode && !hasActiveTaskInColumn('F'));
-
-  // Recently completed tasks display state (per priority)
-  let showRecentlyCompleted = $state<Record<Priority, boolean>>({
-    A: true, B: true, C: true, D: true, E: true, F: true, G: false, H: false, N: false, S: false
+  // Recently completed tasks display state (per rendered column)
+  let showRecentlyCompleted = $state<Record<ColumnPriority, boolean>>({
+    A: true, B: true, C: true, D: true, E: true
   });
 
   // Format retention time remaining
@@ -98,7 +96,7 @@
   }
 
   // Keyboard navigation state
-  let focusedPriority = $state<ActivePriority | null>(null);
+  let focusedPriority = $state<ColumnPriority | null>(null);
   let focusedTaskIndex = $state<number>(-1);
   let focusedTaskId = $state<string | null>(null);
 
@@ -232,7 +230,7 @@
 <div class="kanban-container" onclick={handleContainerClick}>
   <!-- Main priority columns (A-E) as horizontal kanban columns. F lives in ReservoirPanel. -->
   <div class="kanban-main expanded">
-    {#each mainPriorities as priority}
+    {#each priorities as priority}
       {@const config = PRIORITY_CONFIG[priority]}
       {@const activeTasks = tasks.tasksByPriority[priority].filter(t => !t.completed)}
       {@const completedTasks = getCompletedForPriority(priority)}
@@ -465,15 +463,6 @@
     outline: none;
   }
 
-  .empty-column-spacer {
-    min-height: 40px;
-    flex: 1;
-  }
-
-  .pool-empty-spacer {
-    min-height: 40px;
-  }
-
   /* Recently completed tasks section */
   .recently-completed-section {
     padding: 10px;
@@ -627,111 +616,10 @@
     opacity: 0.9;
   }
 
-  /* Idea Pool Panel (F zone) - fixed on right, toggleable */
-  .idea-pool-panel {
-    width: 260px;
-    flex-shrink: 0;
-    display: flex;
-    flex-direction: column;
-    background: var(--card-bg);
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-lg);
-    overflow: hidden;
-    transition: all 0.3s ease;
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-  }
-
-  .idea-pool-panel.collapsed {
-    width: 52px;
-  }
-
-  .idea-pool-panel.focus-dimmed {
-    opacity: 0.3;
-    filter: grayscale(0.4) blur(0.5px);
-    pointer-events: none;
-  }
-
-  .pool-header {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 12px 14px;
-    border-bottom: 1px solid var(--border-subtle);
-    flex-shrink: 0;
-    cursor: pointer;
-    transition: background 0.15s;
-  }
-
-  .pool-header:hover {
-    background: var(--hover-bg);
-  }
-
-  .pool-badge {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 26px;
-    height: 26px;
-    border-radius: 6px;
-    font-size: 13px;
-    flex-shrink: 0;
-  }
-
-  .pool-title {
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--text-primary);
-    flex: 1;
-  }
-
-  .pool-count {
-    padding: 3px 10px;
-    font-size: 12px;
-    font-weight: 600;
-    background: var(--primary-bg);
-    color: var(--primary);
-    border-radius: var(--radius-full);
-  }
-
-  .toggle-icon {
-    width: 16px;
-    height: 16px;
-    color: var(--text-muted);
-    transition: transform 0.2s;
-    flex-shrink: 0;
-  }
-
-  .toggle-icon.rotated {
-    transform: rotate(180deg);
-  }
-
-  .pool-tasks {
-    flex: 1;
-    overflow-y: auto;
-    padding: 10px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    min-height: 60px;
-  }
-
-  .pool-task-item {
-    opacity: 0.85;
-    transition: opacity 0.15s;
-  }
-
-  .pool-task-item:hover {
-    opacity: 1;
-  }
-
   /* Responsive adjustments */
   @media (max-width: 1200px) {
     :global(.priority-column) {
       min-width: 160px;
-    }
-    .idea-pool-panel {
-      width: 220px;
     }
   }
 
@@ -754,17 +642,6 @@
       max-width: unset;
       min-height: 150px;
       max-height: 250px;
-    }
-
-    .idea-pool-panel {
-      width: 100%;
-      flex-shrink: 0;
-      max-height: 200px;
-    }
-
-    .idea-pool-panel.collapsed {
-      width: 100%;
-      max-height: 52px;
     }
   }
 </style>

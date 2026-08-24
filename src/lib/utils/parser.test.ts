@@ -109,10 +109,15 @@ describe('parseTaskInput — pomodoros', () => {
     expect(r.content).toBe('Read book');
   });
 
-  it('over-eagerly matches a "p<digit>" inside a word (documents current behavior)', () => {
+  it('does not match a "p<digit>" inside a word', () => {
     const r = parseTaskInput('step2 done');
-    expect(r.estimatedPomodoros).toBe(2);
-    expect(r.content).toBe('ste done');
+    expect(r.estimatedPomodoros).toBe(0);
+    expect(r.content).toBe('step2 done');
+  });
+
+  it('parses a standalone estimate at the start of the input', () => {
+    expect(parseTaskInput('p3 write it').estimatedPomodoros).toBe(3);
+    expect(parseTaskInput('p3 write it').content).toBe('write it');
   });
 });
 
@@ -130,15 +135,18 @@ describe('parseTaskInput — dates', () => {
     expect(parseTaskInput('x ~3d').dueDate).toBe('2026-01-07');
   });
 
-  it('does NOT parse the +prefixed ~+Nd form — project extraction eats "+3d" (see report)', () => {
+  it('parses the +prefixed ~+Nd form without leaking it into projects', () => {
     const r = parseTaskInput('x ~+3d');
-    expect(r.dueDate).toBeNull();
-    expect(r.projects).toContain('3d');
+    expect(r.dueDate).toBe('2026-01-07');
+    expect(r.projects).toEqual([]);
   });
 
-  it('parses threshold date thr:ISO and the plain thr:Nd form', () => {
+  it('parses threshold date thr:ISO and both relative forms', () => {
     expect(parseTaskInput('x thr:2026-01-10').thresholdDate).toBe('2026-01-10');
     expect(parseTaskInput('x thr:7d').thresholdDate).toBe('2026-01-11');
+    const plus = parseTaskInput('x thr:+7d');
+    expect(plus.thresholdDate).toBe('2026-01-11');
+    expect(plus.projects).toEqual([]);
   });
 });
 
@@ -154,11 +162,17 @@ describe('parseTaskInput — recurrence', () => {
     expect(r.recurrence?.customPattern).toBe('mon,wed,fri');
   });
 
-  it('loses the @day part of rec:1m@15 to context extraction (see report)', () => {
+  it('keeps the @day part of rec:1m@15 instead of leaking it into contexts', () => {
     const r = parseTaskInput('rent rec:1m@15');
     expect(r.recurrence?.pattern).toBe('1m');
-    expect(r.recurrence?.customPattern).toBeUndefined();
-    expect(r.contexts).toContain('15'); // "@15" was captured as a context
+    expect(r.recurrence?.customPattern).toBe('1m@15');
+    expect(r.contexts).toEqual([]);
+  });
+
+  it('keeps the @last selector of rec:1m@last', () => {
+    const r = parseTaskInput('rent rec:1m@last');
+    expect(r.recurrence?.customPattern).toBe('1m@last');
+    expect(r.contexts).toEqual([]);
   });
 });
 
@@ -244,9 +258,9 @@ describe('calculateNextDue (parser recurrence engine)', () => {
     ).toBe('2026-02-28');
   });
 
-  it('mutates the passed-in fromDate (documents current behavior)', () => {
+  it('leaves the passed-in fromDate untouched', () => {
     const from = new Date(2026, 0, 4);
     calculateNextDue({ pattern: '1d', nextDue: null }, from);
-    expect(from.getDate()).toBe(5);
+    expect(from.getDate()).toBe(4);
   });
 });

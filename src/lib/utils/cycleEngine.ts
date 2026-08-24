@@ -1,5 +1,5 @@
 import type { AppData, Task, Priority } from '$lib/types';
-import { PRIORITY_CONFIG, isActivePriority } from '$lib/types';
+import { PRIORITY_CONFIG } from '$lib/types';
 import { getUnitForDate, parseISODate } from './unitCalc';
 
 // A 2-day period whose priority-weighted completion falls below this ratio is
@@ -15,12 +15,21 @@ function priorityWeight(p: Priority): number {
   return 6 - quota;
 }
 
+// The quota-bearing, plannable tiers. Deliberately excludes F: the Idea Pool is
+// unbounded, so counting parked ideas as "planned work" would drag completion
+// under the merge threshold and roll the whole pool into the next window.
+const PLANNED_PRIORITIES = new Set<Priority>(['A', 'B', 'C', 'D', 'E']);
+
+function isPlannedPriority(p: Priority | null | undefined): boolean {
+  return !!p && PLANNED_PRIORITIES.has(p);
+}
+
 // Effective A-E priority for cycle accounting. Completed tasks (G) keep the
 // priority they had before completion; open tasks use their current priority.
 // Returns null for anything that isn't an A-E task.
 function effectiveActivePriority(task: Task): Priority | null {
   const p = task.priority === 'G' ? task.originalPriority : task.priority;
-  return p && isActivePriority(p) ? p : null;
+  return isPlannedPriority(p) ? (p as Priority) : null;
 }
 
 // Local YYYY-MM-DD (avoids the UTC day-shift that toISOString can introduce).
@@ -101,7 +110,11 @@ export function evaluateCycle(appData: AppData, now: Date = new Date()): CycleEv
 
   // A new work period has begun. Score the period that just ended (once).
   let merged = false;
-  let pendingReview: { periodStart: string; completion: number } | null = null;
+  // Carry any unresolved micro-review forward. Overwriting it with the freshly
+  // computed value (null unless THIS period scored low) would drop the banner
+  // for a period the user never answered, stranding its unfinished tasks in a
+  // window that is no longer displayed.
+  let pendingReview = state.pendingReview ?? null;
 
   if (state.lastEvaluatedStart !== state.anchorStart) {
     const completion = weightedCompletionForPeriod(appData.tasks, state.anchorStart);
@@ -120,7 +133,14 @@ export function evaluateCycle(appData: AppData, now: Date = new Date()): CycleEv
         appData.tasks = rollUnfinishedIntoWindow(appData.tasks, state.anchorStart, calStart, calEnd);
         merged = true;
       } else {
-        // Prompt mode: defer the merge until the user resolves the micro-review banner.
+        // Prompt mode: defer the merge until the user resolves the micro-review
+        // banner. Only one banner can show, so an older unresolved review is
+        // rolled forward now rather than being dropped with its tasks stranded.
+        if (pendingReview && pendingReview.periodStart !== state.anchorStart) {
+          appData.tasks = rollUnfinishedIntoWindow(
+            appData.tasks, pendingReview.periodStart, calStart, calEnd
+          );
+        }
         pendingReview = { periodStart: state.anchorStart, completion: completion as number };
       }
     }
@@ -145,7 +165,7 @@ export function rollUnfinishedIntoWindow(
   windowEnd: string
 ): Task[] {
   return tasks.map(task => {
-    if (isActivePriority(task.priority) && !task.completed && taskPeriodKey(task) === periodStart) {
+    if (isPlannedPriority(task.priority) && !task.completed && taskPeriodKey(task) === periodStart) {
       return {
         ...task,
         unitStart: windowStart,

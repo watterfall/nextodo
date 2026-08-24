@@ -36,8 +36,8 @@
 | Build Tool | Vite (Rolldown) | ^8.1.3 |
 | Desktop Framework | Tauri 2 | ^2.11.4 |
 | Backend | Rust (2021 edition) | - |
-| Animation | Motion | ^12.42.2 |
-| Drag & Drop | svelte-dnd-action | ^0.9.70 |
+| Animation | CSS + Svelte transitions (no library) | - |
+| Drag & Drop | Native HTML5 DnD (no library) | - |
 | Testing | Vitest | ^4.1.9 |
 
 ### Quick Start
@@ -166,8 +166,8 @@ MIT
 | 构建工具 | Vite（Rolldown） | ^8.1.3 |
 | 桌面框架 | Tauri 2 | ^2.11.4 |
 | 后端 | Rust（2021 版） | - |
-| 动画 | Motion | ^12.42.2 |
-| 拖拽 | svelte-dnd-action | ^0.9.70 |
+| 动画 | CSS + Svelte 过渡（无第三方库） | - |
+| 拖拽 | 原生 HTML5 拖放（无第三方库） | - |
 | 测试 | Vitest | ^4.1.9 |
 
 ### 快速开始

@@ -10,7 +10,6 @@ import {
   getFlexibleDueDateStatus,
   formatDateShort,
   parseISODate,
-  getRelativeDayLabel,
   isToday,
   isOverdue,
   isThisWeek,
@@ -66,16 +65,26 @@ describe('getCurrentUnit / currentUnitStartLocal', () => {
 });
 
 describe('navigateUnit', () => {
-  it('steps forward and backward two days between work units', () => {
+  it('steps between adjacent work units', () => {
     const u1 = getUnitForDate(new Date(2026, 0, 4));
     expect(navigateUnit(u1, 'next').unitNumber).toBe(2);
-    expect(navigateUnit(u1, 'prev').unitNumber).toBe(3); // prior week Thu-Fri
+    // Backwards from Unit 1 is the prior week's Saturday review, not Unit 3 —
+    // a fixed -2 step used to jump over it, making past reviews unreachable.
+    expect(navigateUnit(u1, 'prev').isReviewDay).toBe(true);
   });
 
-  it('steps one day off the review day', () => {
+  it('steps on and off the review day', () => {
     const sat = getUnitForDate(new Date(2026, 0, 10));
     expect(navigateUnit(sat, 'next').unitNumber).toBe(1); // next Sunday
-    expect(navigateUnit(sat, 'prev').unitNumber).toBe(3); // previous Friday
+    expect(navigateUnit(sat, 'prev').unitNumber).toBe(3); // previous Thu-Fri
+  });
+
+  it('prev and next are exact inverses across the whole week', () => {
+    for (const day of [4, 5, 6, 7, 8, 9, 10]) {
+      const unit = getUnitForDate(new Date(2026, 0, day));
+      const roundTrip = navigateUnit(navigateUnit(unit, 'next'), 'prev');
+      expect(roundTrip.startDate.getTime()).toBe(unit.startDate.getTime());
+    }
   });
 });
 
@@ -137,15 +146,6 @@ describe('date helpers', () => {
     expect(isThisWeek('2026-01-07')).toBe(true);
     expect(isThisWeek('2026-01-11')).toBe(false);
     expect(isThisWeek(null)).toBe(false);
-  });
-
-  it('getRelativeDayLabel gives friendly zh labels', () => {
-    expect(getRelativeDayLabel(new Date(2026, 0, 4))).toBe('今天');
-    expect(getRelativeDayLabel(new Date(2026, 0, 5))).toBe('明天');
-    expect(getRelativeDayLabel(new Date(2026, 0, 6))).toBe('后天');
-    expect(getRelativeDayLabel(new Date(2026, 0, 3))).toBe('昨天');
-    expect(getRelativeDayLabel(new Date(2026, 0, 2))).toBe('前天');
-    expect(getRelativeDayLabel(new Date(2026, 0, 7))).toBe('本周三'); // Jan 7 is a Wednesday
   });
 });
 

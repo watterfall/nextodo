@@ -69,14 +69,6 @@ export function getCurrentUnit(): UnitInfo {
 }
 
 /**
- * Get the unit start date as ISO string
- */
-export function getUnitStartString(date: Date = new Date()): string {
-  const unit = getUnitForDate(date);
-  return unit.startDate.toISOString().split('T')[0];
-}
-
-/**
  * Unit start as a LOCAL YYYY-MM-DD (uses local date parts, not toISOString, so it
  * doesn't shift a day across the UTC boundary). This is the canonical `unitStart`
  * value for tasks — they belong to the unit's start, not their creation day.
@@ -90,15 +82,13 @@ export function currentUnitStartLocal(date: Date = new Date()): string {
  * Navigate to adjacent unit
  */
 export function navigateUnit(currentUnit: UnitInfo, direction: 'prev' | 'next'): UnitInfo {
-  const offset = direction === 'next' ? 2 : -2;
-  const newDate = new Date(currentUnit.startDate);
-
-  if (currentUnit.isReviewDay) {
-    // From Saturday, go to Friday (prev) or Sunday (next)
-    newDate.setDate(newDate.getDate() + (direction === 'next' ? 1 : -1));
-  } else {
-    newDate.setDate(newDate.getDate() + offset);
-  }
+  // Step to the day just outside this unit's boundary: one day before its start,
+  // or one day after its end. That day always belongs to the adjacent unit, so
+  // prev and next are exact inverses and neither skips Saturday's review day —
+  // a fixed ±2 offset stepped over it going backwards, making past reviews
+  // unreachable from the unit navigator.
+  const newDate = new Date(direction === 'next' ? currentUnit.endDate : currentUnit.startDate);
+  newDate.setDate(newDate.getDate() + (direction === 'next' ? 1 : -1));
 
   return getUnitForDate(newDate);
 }
@@ -252,10 +242,17 @@ export function formatDateShort(date: Date): string {
 }
 
 /**
- * Format date as YYYY-MM-DD
+ * Format date as YYYY-MM-DD, using the local calendar date.
+ *
+ * Must NOT go through toISOString(): callers build Dates with local-midnight
+ * constructors (see parseISODate), so a UTC conversion shifts the day backwards
+ * for every zone east of UTC — which silently froze daily recurrences.
  */
 export function formatDateISO(date: Date): string {
-  return date.toISOString().split('T')[0];
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 /**
@@ -265,50 +262,6 @@ export function parseISODate(dateStr: string): Date {
   return new Date(dateStr + 'T00:00:00');
 }
 
-/**
- * Get relative day label with friendly text
- * Uses soft/friendly labels like "tomorrow", "day after tomorrow", "this week"
- */
-export function getRelativeDayLabel(date: Date): string {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  const target = new Date(date);
-  target.setHours(0, 0, 0, 0);
-
-  const diffDays = Math.round((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-
-  // Past dates
-  if (diffDays < 0) {
-    if (diffDays === -1) return '昨天';
-    if (diffDays === -2) return '前天';
-    if (diffDays >= -7) return `${Math.abs(diffDays)}天前`;
-    return formatDateShort(date);
-  }
-
-  // Future dates - use friendly labels
-  if (diffDays === 0) return '今天';
-  if (diffDays === 1) return '明天';
-  if (diffDays === 2) return '后天';
-
-  // Within current cycle (2 days) - very subtle
-  // Days 3-7: show "this week" style
-  if (diffDays <= 7) {
-    const dayNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
-    const dayOfWeek = target.getDay();
-    return `本${dayNames[dayOfWeek]}`;
-  }
-
-  // Next week
-  if (diffDays <= 14) {
-    const dayNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
-    const dayOfWeek = target.getDay();
-    return `下${dayNames[dayOfWeek]}`;
-  }
-
-  // Beyond 2 weeks - show date
-  return formatDateShort(date);
-}
 
 /**
  * Check if a date is today

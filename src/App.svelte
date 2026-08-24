@@ -201,22 +201,10 @@
   </div>
 {:else}
   <Sidebar
-    onOpenSettings={() => {
-      console.log('App: Opening settings');
-      isSettingsOpen = true;
-    }}
-    onOpenReview={() => {
-      console.log('App: Opening review');
-      isReviewOpen = true;
-    }}
-    onOpenHistory={() => {
-      console.log('App: Opening history');
-      isHistoryOpen = true;
-    }}
-    onOpenBadges={() => {
-      console.log('App: Opening badges');
-      setBadgesOpen(true);
-    }}
+    onOpenSettings={() => { isSettingsOpen = true; }}
+    onOpenReview={() => { isReviewOpen = true; }}
+    onOpenHistory={() => { isHistoryOpen = true; }}
+    onOpenBadges={() => { setBadgesOpen(true); }}
   />
 
   <main class="main-content">
@@ -451,8 +439,14 @@
   {/if}
 
   <!-- Task Edit Modal -->
+  <!-- Keyed on task id: the modal seeds its form fields from `task` once, at
+       init. Closing normally clears editingTask so the component unmounts, but
+       any future path that switches straight from task A to task B would
+       otherwise show A's values in B's form. -->
   {#if ui.editingTask}
-    <TaskEditModal task={ui.editingTask} />
+    {#key ui.editingTask.id}
+      <TaskEditModal task={ui.editingTask} />
+    {/key}
   {/if}
 
   <!-- Confirmation Modal -->

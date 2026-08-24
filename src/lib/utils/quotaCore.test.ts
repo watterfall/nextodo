@@ -96,6 +96,30 @@ describe('applyHighlanderRule', () => {
     expect(result.find((t) => t.id === 'b1')?.priority).toBe('B');
   });
 
+  it('demotes past a full tier instead of overfilling it', () => {
+    // B is at its quota of 2, so the unseated A must land in C, not B×3.
+    const existingA = task('A', { id: 'a1' });
+    const board = [existingA, task('B', { id: 'b1' }), task('B', { id: 'b2' })];
+
+    const result = applyHighlanderRule(board, task('A', { id: 'new' }));
+    expect(result.find((t) => t.id === 'a1')?.priority).toBe('C');
+    expect(result.filter((t) => t.priority === 'B')).toHaveLength(2);
+  });
+
+  it('falls back to the unbounded Idea Pool when B-E are all full', () => {
+    const existingA = task('A', { id: 'a1' });
+    const full = [
+      existingA,
+      ...Array.from({ length: 2 }, (_, i) => task('B', { id: `b${i}` })),
+      ...Array.from({ length: 3 }, (_, i) => task('C', { id: `c${i}` })),
+      ...Array.from({ length: 4 }, (_, i) => task('D', { id: `d${i}` })),
+      ...Array.from({ length: 5 }, (_, i) => task('E', { id: `e${i}` })),
+    ];
+
+    const result = applyHighlanderRule(full, task('A', { id: 'new' }));
+    expect(result.find((t) => t.id === 'a1')?.priority).toBe('F');
+  });
+
   it('does not touch the new task itself', () => {
     const newA = task('A', { id: 'new' });
     const result = applyHighlanderRule([newA], newA);

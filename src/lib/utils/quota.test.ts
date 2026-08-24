@@ -32,8 +32,9 @@ describe('validateQuota', () => {
     expect(msg).toContain('message.quotaFull');
   });
 
-  it('rejects adding directly to a hidden priority', () => {
-    expect(validateQuota([], 'G')).toBe('Cannot add directly to a hidden priority');
+  it('rejects adding directly to a hidden priority, via a translated message', () => {
+    // Was an untranslated English literal — every other refusal goes through t().
+    expect(validateQuota([], 'G')).toContain('message.hiddenPriority');
   });
 
   it('validates the sustained (S) single-slot rule', () => {
