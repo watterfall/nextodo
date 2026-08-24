@@ -11,11 +11,9 @@
   import UnitNav from '$lib/components/UnitNav.svelte';
   import ReviewPanel from '$lib/components/ReviewPanel.svelte';
   import SettingsModal from '$lib/components/SettingsModal.svelte';
-  import Confetti from '$lib/components/Confetti.svelte';
   import ImmersivePomodoro from '$lib/components/ImmersivePomodoro.svelte';
   import HistoryModal from '$lib/components/HistoryModal.svelte';
   import InboxPanel from '$lib/components/InboxPanel.svelte';
-  import BadgesModal from '$lib/components/BadgesModal.svelte';
   import TaskEditModal from '$lib/components/TaskEditModal.svelte';
   import ConfirmationModal from '$lib/components/ConfirmationModal.svelte';
   import OldestOpenRow from '$lib/components/OldestOpenRow.svelte';
@@ -38,7 +36,6 @@
     closeSearch,
     exitImmersiveMode,
     setViewMode,
-    setBadgesOpen,
     setDraggingTask
   } from '$lib/stores/ui.svelte';
   import {
@@ -52,7 +49,6 @@
     toggleTheme
   } from '$lib/stores/settings.svelte';
   import { initReviews } from '$lib/stores/reviews.svelte';
-  import { initGamification, getGamificationStore } from '$lib/stores/gamification.svelte';
   import { saveAppData, setupFileWatcher } from '$lib/utils/storage';
   import { initI18n, getI18nStore } from '$lib/i18n';
   import type { Priority, ViewMode } from '$lib/types';
@@ -66,22 +62,13 @@
   const pomodoro = getPomodoroStore();
   const settings = getSettingsStore();
 
-  let showConfetti = $state(false);
   let searchInput = $state('');
-
-  // Scoring is off by default and follows the setting live, so flipping it in
-  // Settings takes effect without a reload.
-  const gamificationOn = $derived(tasks.appData.settings.gamificationEnabled === true);
-  $effect(() => {
-    getGamificationStore().setEnabled(gamificationOn);
-  });
   let isInitialized = $state(false);
   let unlistenFileWatcher: (() => void) | null = null;
   let isSettingsOpen = $state(false);
   let isReviewOpen = $state(false);
   let isHistoryOpen = $state(false);
   let isInboxOpen = $state(false);
-  // isBadgesOpen moved to ui store for better control
 
   // Surface todo.txt write-back problems. Completing a task always succeeds
   // locally; if the shared file could not be updated the user has to hear about
@@ -128,14 +115,6 @@
     // Initialize reviews
     initReviews(tasks.appData.reviews);
 
-    // Initialize gamification with persist callback
-    const gamification = getGamificationStore();
-    initGamification(tasks.appData.gamification, async () => {
-      const data = tasks.appData;
-      data.gamification = gamification.getData();
-      await saveAppData(data);
-    }, tasks.appData.settings.gamificationEnabled);
-
     // Initialize keyboard shortcuts
     initKeyboardShortcuts();
 
@@ -173,11 +152,6 @@
     // Listen for pomodoro complete events
     window.addEventListener('pomodoro-complete', ((e: CustomEvent) => {
       incrementPomodoro(e.detail.taskId);
-      // Celebration is part of the scoreboard, so it follows the same switch.
-      if (tasks.appData.settings.gamificationEnabled) {
-        showConfetti = true;
-        setTimeout(() => showConfetti = false, 100);
-      }
     }) as EventListener);
 
     // Window-level safety net: guarantees the global drag flag is reset even
@@ -238,7 +212,6 @@
     onOpenReview={() => { isReviewOpen = true; }}
     onOpenHistory={() => { isHistoryOpen = true; }}
     onOpenInbox={() => { isInboxOpen = true; }}
-    onOpenBadges={() => { setBadgesOpen(true); }}
   />
 
   <main class="main-content">
@@ -324,22 +297,6 @@
           </button>
         </div>
 
-        <!-- Badges Button (Subtle) — only exists when scoring is switched on -->
-        {#if gamificationOn}
-          <button
-            class="icon-btn badges-btn"
-            class:active={ui.isBadgesOpen}
-            onclick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              setBadgesOpen(!ui.isBadgesOpen);
-            }}
-            title={t('nav.badges') || '成就'}
-          >
-            <span class="icon">🏅</span>
-          </button>
-        {/if}
-
         <!-- Theme Toggle -->
         <button class="theme-toggle" onclick={toggleTheme} title={t('settings.theme')}>
           {#if getThemeIcon() === 'dark'}
@@ -386,13 +343,6 @@
         <span>{t('inbox.pendingExport', { count: tasks.pendingExport.length })}</span>
         <span class="pending-export-cta">{t('inbox.exportNow')} →</span>
       </button>
-    {/if}
-
-    <!-- Badges Inline Section (Visible when badges open) -->
-    {#if ui.isBadgesOpen && gamificationOn}
-      <div class="badges-inline-container">
-        <BadgesModal onClose={() => setBadgesOpen(false)} isInline={true} />
-      </div>
     {/if}
 
     <!-- The oldest unfinished task, in every view. It sits outside the view
@@ -555,9 +505,6 @@
     </div>
   {/if}
 
-  <!-- Confetti -->
-  <Confetti active={showConfetti} />
-
   <!-- Immersive Pomodoro Mode -->
   {#if ui.isImmersiveMode}
     <ImmersivePomodoro onClose={exitImmersiveMode} />
@@ -674,17 +621,6 @@
     flex-shrink: 0;
   }
 
-    .badges-inline-container {
-      padding: 0 20px 16px;
-      flex-shrink: 0;
-      animation: slideDown 0.2s ease-out;
-    }
-
-    @keyframes slideDown {
-      from { opacity: 0; transform: translateY(-10px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-
   .content-layout {
     flex: 1;
     overflow: hidden;
@@ -756,10 +692,6 @@
   .icon-btn:hover {
     background: var(--hover-bg);
     opacity: 1;
-  }
-
-  .icon-btn .icon {
-    font-size: 16px;
   }
 
   .icon-btn.active {

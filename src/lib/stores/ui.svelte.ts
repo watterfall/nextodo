@@ -24,7 +24,6 @@ let confirmationData = $state<ConfirmationData | null>(null);
 
 // Immersive mode
 let isImmersiveMode = $state(false);
-let isBadgesOpen = $state(false);
 
 // Global drag state — true whenever ANY task is being dragged anywhere in the
 // app. EdgeDock and other peripheral drop zones use this to surface themselves
@@ -158,10 +157,6 @@ export function toggleImmersiveMode(): void {
   isImmersiveMode = !isImmersiveMode;
 }
 
-export function setBadgesOpen(open: boolean): void {
-  isBadgesOpen = open;
-}
-
 // Callback for focusing new task input
 let focusNewTaskCallback: (() => void) | null = null;
 
@@ -266,7 +261,6 @@ export function getUIStore() {
     get editingTask() { return editingTask; },
     get isImmersiveMode() { return isImmersiveMode; },
     get confirmationData() { return confirmationData; },
-    get isBadgesOpen() { return isBadgesOpen; },
     get isDraggingTask() { return isDraggingTask; },
     get dragSourcePriority() { return dragSourcePriority; }
   };

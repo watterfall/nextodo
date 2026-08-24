@@ -475,17 +475,6 @@
 
           <div class="setting-row">
             <div class="setting-info">
-              <span class="setting-label">{t('settings.gamification')}</span>
-              <span class="setting-desc">{t('settings.gamificationDesc')}</span>
-            </div>
-            <div class="theme-buttons">
-              <button class="theme-btn" class:active={settings.gamificationEnabled === true} onclick={() => updateSettings({ gamificationEnabled: true })}>{t('settings.on')}</button>
-              <button class="theme-btn" class:active={settings.gamificationEnabled !== true} onclick={() => updateSettings({ gamificationEnabled: false })}>{t('settings.off')}</button>
-            </div>
-          </div>
-
-          <div class="setting-row">
-            <div class="setting-info">
               <span class="setting-label">{t('settings.data.backup')}</span>
               <span class="setting-desc">{t('settings.data.backupDesc')}</span>
             </div>

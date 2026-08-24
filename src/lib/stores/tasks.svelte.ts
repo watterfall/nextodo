@@ -19,7 +19,6 @@ import { maybeNotifyDueTasks } from '$lib/utils/reminders';
 import { ageDistribution, cycleTimeMedian, estimationFactor, samplesUntilReady } from '$lib/utils/flowMetrics';
 import { getCurrentUnit, isToday, isOverdue, isThisWeek, currentUnitStartLocal, parseISODate, formatDateISO } from '$lib/utils/unitCalc';
 import { t } from '$lib/i18n';
-import { getGamificationStore } from './gamification.svelte';
 
 // Main app state
 let appData = $state<AppData>(createDefaultAppData());
@@ -166,7 +165,6 @@ export async function reloadData(fileType: string): Promise<void> {
           reviews: activeData.reviews || [],
           customTagGroups: activeData.customTagGroups || appData.customTagGroups,
           settings: activeData.settings || appData.settings,
-          gamification: activeData.gamification || appData.gamification,
           cycleState: activeData.cycleState ?? appData.cycleState,
           cycleHistory: activeData.cycleHistory ?? appData.cycleHistory
         };
@@ -313,12 +311,6 @@ export async function completeTask(taskId: string): Promise<void> {
   // Create next occurrence before modifying the task
   if (taskToComplete) {
     nextRecurringTask = createNextOccurrence(taskToComplete, completedOn);
-  }
-
-  // Record task completion for gamification (before modifying priority)
-  if (taskToComplete) {
-    const gamification = getGamificationStore();
-    gamification.recordTaskCompletion(taskToComplete);
   }
 
   // Move task to G (completed) priority, preserving original priority for retention display
@@ -610,10 +602,6 @@ export async function evolveTask(taskId: string, newContent?: string): Promise<{
     evolvedFrom: taskId // Track lineage
   };
 
-  // Record gamification for completing the original task
-  const gamification = getGamificationStore();
-  gamification.recordTaskCompletion(originalTask);
-
   // Complete the original task
   appData.tasks = appData.tasks.map(task => {
     if (task.id === taskId) {
@@ -835,10 +823,6 @@ export async function incrementPomodoro(taskId: string): Promise<void> {
     }
     return task;
   });
-
-  // Record pomodoro completion for gamification
-  const gamification = getGamificationStore();
-  gamification.recordPomodoro();
 
   await persist();
 }

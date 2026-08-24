@@ -5,7 +5,6 @@
   import { getUIStore, setViewMode, toggleSidebar, setSidebarCollapsed } from '$lib/stores/ui.svelte';
   import { isActivePriority } from '$lib/types';
   import { fade, slide, scale } from 'svelte/transition';
-  import confetti from '$lib/components/Confetti.svelte';
 
   const tasks = getTasksStore();
   const pomodoroStore = getPomodoroStore();

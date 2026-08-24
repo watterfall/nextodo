@@ -225,7 +225,6 @@ export function getSettingsStore() {
     get unitBoundaryFlexHours() { return settings.unitBoundaryFlexHours; },
     get dueReminders() { return settings.dueReminders; },
     get lowCompletionPrompt() { return settings.lowCompletionPrompt; },
-    get pomodoroWorkByPriority() { return settings.pomodoroWorkByPriority; },
-    get gamificationEnabled() { return settings.gamificationEnabled; }
+    get pomodoroWorkByPriority() { return settings.pomodoroWorkByPriority; }
   };
 }

@@ -194,45 +194,23 @@ export interface CustomTagGroups {
 // Theme type
 export type Theme = 'dark' | 'light' | 'system';
 
-// Gamification types
+// There used to be a gamification block here — XP, levels, badges, a streak
+// counter — and it is gone on purpose, not merely switched off.
 //
-// `currentStreak` / `longestStreak` used to live here. They are gone, and not
-// because of taste: habit-formation data shows a single missed day is
+// It optimised for the opposite of what the rest of the app does. The quota
+// caps what you may promise; a per-completion score pays you for finishing
+// many small things, which is exactly the behaviour the quota exists to
+// prevent, and when two mechanisms disagree the visible one wins. The streak
+// was worse than useless: habit-formation data shows a single missed day is
 // statistically invisible to the automaticity curve, while a streak counter
-// turns that same missed day into a reason to abandon the whole thing. The
-// counter models the opposite of what actually happens. (They were also dead
-// code — nothing ever incremented them, so the "3-day streak" badge could
-// never unlock.) `perfectDays`, `earlyBirdCount` and `nightOwlCount` went the
-// same way: never written, or written and never read.
-export interface GamificationStats {
-  totalTasksCompleted: number;
-  totalPomodoros: number;
-  totalACompleted: number;
-}
-
-export interface BadgeData {
-  id: string;
-  unlocked: boolean;
-  unlockedAt?: string;
-}
-
-export interface GamificationData {
-  stats: GamificationStats;
-  xp: number;
-  badges: BadgeData[];
-}
-
-export function createDefaultGamificationData(): GamificationData {
-  return {
-    stats: {
-      totalTasksCompleted: 0,
-      totalPomodoros: 0,
-      totalACompleted: 0
-    },
-    xp: 0,
-    badges: []
-  };
-}
+// turns that same day into a reason to abandon the whole thing.
+//
+// What replaced it is `flowMetrics.ts` — age, cycle time, calibration. Those
+// cannot be driven up by doing more small things, because the only way to
+// improve them is to actually finish work.
+//
+// `storage.ts` strips any leftover `gamification` block on load; see
+// docs/EVIDENCE-REVIEW.md §2.1.
 
 // Language type
 export type Language = 'zh-CN' | 'en-US';
@@ -282,15 +260,6 @@ export interface Settings {
   // NEW: when a 2-day period ends under-completed, prompt a micro-review instead
   // of silently merging into the next period
   lowCompletionPrompt: boolean;
-  // XP, levels, badges and the completion animation. Off by default.
-  //
-  // The quota system and the XP system optimise for opposite things: one caps
-  // what you may promise, the other pays you per completion, and the fastest
-  // way to earn is to do many small tasks — precisely what the quota exists to
-  // prevent. When two mechanisms disagree, the visible one wins, so the
-  // scoreboard has to be the one that is off unless asked for. Existing XP and
-  // badges are kept, just not shown.
-  gamificationEnabled: boolean;
 }
 
 // Dynamic 2-day cycle state. The active work window normally equals the calendar
@@ -323,7 +292,6 @@ export interface ActiveData {
   reviews: UnitReview[];
   customTagGroups: CustomTagGroups;
   settings: Settings;
-  gamification?: GamificationData;
   cycleState?: CycleState;
   cycleHistory?: CycleHistoryEntry[];
   // Tasks bound for the todo.txt candidate pool that have not been written out
@@ -356,7 +324,6 @@ export interface AppData {
   customTagGroups: CustomTagGroups;
   pomodoroHistory: PomodoroSession[];
   settings: Settings;
-  gamification?: GamificationData;
   cycleState?: CycleState;
   cycleHistory?: CycleHistoryEntry[];
   // Tasks bound for the todo.txt candidate pool that have not been written out
@@ -533,8 +500,7 @@ export function createDefaultSettings(): Settings {
     unitBoundaryFlexHours: 12, // Default: half day flexibility
     density: 'comfortable',
     dueReminders: true,
-    lowCompletionPrompt: true,
-    gamificationEnabled: false
+    lowCompletionPrompt: true
   };
 }
 
@@ -549,8 +515,7 @@ export function createDefaultActiveData(): ActiveData {
       energy: ['⚡高能量', '😴低能量', '☕中等'],
       type: ['📞电话', '💻编码', '✍️写作', '🤝会议']
     },
-    settings: createDefaultSettings(),
-    gamification: createDefaultGamificationData()
+    settings: createDefaultSettings()
   };
 }
 
@@ -584,8 +549,7 @@ export function createDefaultAppData(): AppData {
       type: ['📞电话', '💻编码', '✍️写作', '🤝会议']
     },
     pomodoroHistory: [],
-    settings: createDefaultSettings(),
-    gamification: createDefaultGamificationData()
+    settings: createDefaultSettings()
   };
 }
 

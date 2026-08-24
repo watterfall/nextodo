@@ -18,10 +18,9 @@
     onOpenReview?: () => void;
     onOpenHistory?: () => void;
     onOpenInbox?: () => void;
-    onOpenBadges?: () => void;
   }
 
-  let { onOpenSettings, onOpenReview, onOpenHistory, onOpenInbox, onOpenBadges }: Props = $props();
+  let { onOpenSettings, onOpenReview, onOpenHistory, onOpenInbox }: Props = $props();
 
   const tasks = getTasksStore();
   const ui = getUIStore();

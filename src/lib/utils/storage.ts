@@ -2,7 +2,6 @@ import type { AppData, ActiveData, ArchiveData, PomodoroHistoryData, Task } from
 import {
   createDefaultAppData,
   createDefaultActiveData,
-  createDefaultGamificationData,
   createDefaultPomodoroHistoryData,
   createDefaultSettings
 } from '$lib/types';
@@ -229,7 +228,6 @@ function loadFromLocalStorage(): AppData {
       },
       pomodoroHistory: pomodoro.sessions || [],
       settings: upgraded.settings,
-      gamification: migrateGamification(active.gamification),
       cycleState: active.cycleState,
       cycleHistory: active.cycleHistory,
       pendingExport: upgraded.pendingExport
@@ -253,7 +251,6 @@ function saveToLocalStorage(data: AppData): void {
       reviews: data.reviews,
       customTagGroups: data.customTagGroups,
       settings: data.settings,
-      gamification: data.gamification,
       cycleState: data.cycleState,
       cycleHistory: data.cycleHistory,
       pendingExport: data.pendingExport
@@ -333,7 +330,6 @@ async function loadFromTauri(): Promise<AppData> {
       },
       pomodoroHistory: pomodoro.sessions || [],
       settings: upgraded.settings,
-      gamification: migrateGamification(active.gamification),
       cycleState: active.cycleState,
       cycleHistory: active.cycleHistory,
       pendingExport: upgraded.pendingExport
@@ -362,7 +358,6 @@ async function saveToTauri(data: AppData, filesToSave: PersistedFileType[] = ['a
       reviews: data.reviews,
       customTagGroups: data.customTagGroups,
       settings: data.settings,
-      gamification: data.gamification,
       cycleState: data.cycleState,
       cycleHistory: data.cycleHistory,
       pendingExport: data.pendingExport
@@ -473,43 +468,7 @@ function migrateTasks(tasks: Task[]): Task[] {
 // permissive — it carries unknown keys through so a downgrade cannot destroy
 // something a newer build wrote — but a key we have actually removed is dead
 // weight that would otherwise sit in the file forever.
-const REMOVED_SETTINGS = ['eZoneAgingDays', 'showFutureTasks'];
-
-// Badges that no longer exist. Both were unreachable for their whole life —
-// nothing ever incremented the stats their conditions read — so an unlock
-// record for either is meaningless, not history worth keeping.
-const REMOVED_BADGES = new Set(['consistency_is_key', 'sustainable_worker']);
-
-/**
- * Normalise the gamification block on load.
- *
- * This has to happen HERE rather than in the gamification store, even though
- * the store also knows the current shape. The store only writes through its own
- * persist callback, which runs when something is scored — and scoring is off by
- * default now, so on a normal install that callback never fires and the store's
- * tidying never reaches disk. Running it on the load path means the cleanup
- * rides out on the next ordinary save, whatever caused it.
- */
-function migrateGamification(raw: any): AppData['gamification'] {
-  const defaults = createDefaultGamificationData();
-  if (!raw) return defaults;
-
-  const stats = raw.stats ?? {};
-  return {
-    // Field by field, so retired counters (currentStreak, longestStreak,
-    // perfectDays, earlyBirdCount, nightOwlCount) drop out instead of being
-    // carried forward by a spread forever.
-    stats: {
-      totalTasksCompleted: stats.totalTasksCompleted ?? 0,
-      totalPomodoros: stats.totalPomodoros ?? 0,
-      totalACompleted: stats.totalACompleted ?? 0
-    },
-    xp: typeof raw.xp === 'number' ? raw.xp : 0,
-    badges: Array.isArray(raw.badges)
-      ? raw.badges.filter((b: any) => b && !REMOVED_BADGES.has(b.id))
-      : []
-  };
-}
+const REMOVED_SETTINGS = ['eZoneAgingDays', 'showFutureTasks', 'gamificationEnabled'];
 
 /**
  * Migrate settings to add new fields
@@ -532,10 +491,6 @@ function migrateSettings(settings: any): AppData['settings'] {
     unitBoundaryFlexHours: settings?.unitBoundaryFlexHours ?? defaults.unitBoundaryFlexHours,
     dueReminders: settings?.dueReminders ?? defaults.dueReminders,
     lowCompletionPrompt: settings?.lowCompletionPrompt ?? defaults.lowCompletionPrompt,
-    // Existing installs land on `false` too. Upgrading someone into a running
-    // scoreboard they never asked for is exactly the nudge this switch exists
-    // to remove; their earned XP and badges stay on disk either way.
-    gamificationEnabled: settings?.gamificationEnabled ?? defaults.gamificationEnabled,
     pomodoroWorkByPriority: {
       ...defaults.pomodoroWorkByPriority,
       ...(settings?.pomodoroWorkByPriority ?? {})
@@ -609,7 +564,6 @@ function migrateData(data: any): AppData {
     customTagGroups: data.customTagGroups,
     pomodoroHistory: data.pomodoroHistory,
     settings: data.settings,
-    gamification: migrateGamification(data.gamification),
     cycleState: data.cycleState,
     cycleHistory: data.cycleHistory,
     pendingExport: pendingExport.length > 0 ? pendingExport : undefined
