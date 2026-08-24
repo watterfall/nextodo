@@ -4,6 +4,7 @@ import {
   getRemainingQuota,
   canAddTask,
   applyHighlanderRule,
+  demotionTargetFor,
   getQuotaSummary,
   suggestPriority,
   canPromote,
@@ -118,6 +119,41 @@ describe('applyHighlanderRule', () => {
 
     const result = applyHighlanderRule(full, task('A', { id: 'new' }));
     expect(result.find((t) => t.id === 'a1')?.priority).toBe('F');
+  });
+
+  it('unseats an incumbent S the same way it unseats an incumbent A', () => {
+    // S is single-slot like A. Adding a second one must demote the incumbent,
+    // not be refused — S used to be the one tier where the add was rejected.
+    const existingS = task('S', { id: 's1' });
+    const result = applyHighlanderRule([existingS, task('C', { id: 'c1' })], task('S', { id: 'new' }));
+    expect(result.find((t) => t.id === 's1')?.priority).toBe('B');
+  });
+
+  it('leaves the other single-slot tier alone', () => {
+    // Adding an S must not disturb the day's A, and vice versa.
+    const board = [task('A', { id: 'a1' }), task('S', { id: 's1' })];
+    expect(applyHighlanderRule(board, task('S', { id: 'new' })).find((t) => t.id === 'a1')?.priority).toBe('A');
+    expect(applyHighlanderRule(board, task('A', { id: 'new' })).find((t) => t.id === 's1')?.priority).toBe('S');
+  });
+
+  it('ignores tiers that are not single-slot', () => {
+    const board = [task('C', { id: 'c1' })];
+    expect(applyHighlanderRule(board, task('C', { id: 'new' })).find((t) => t.id === 'c1')?.priority).toBe('C');
+  });
+
+  it('shares its demotion target with the S (sustained) Highlander', () => {
+    // Both A and S are single-slot. demotionTargetFor is the one place that
+    // decides where an unseated incumbent lands, so the two rules cannot drift.
+    expect(demotionTargetFor([])).toBe('B');
+    expect(demotionTargetFor([task('B', { id: 'b1' }), task('B', { id: 'b2' })])).toBe('C');
+    expect(
+      demotionTargetFor([
+        ...Array.from({ length: 2 }, (_, i) => task('B', { id: `b${i}` })),
+        ...Array.from({ length: 3 }, (_, i) => task('C', { id: `c${i}` })),
+        ...Array.from({ length: 4 }, (_, i) => task('D', { id: `d${i}` })),
+        ...Array.from({ length: 5 }, (_, i) => task('E', { id: `e${i}` })),
+      ])
+    ).toBe('F');
   });
 
   it('does not touch the new task itself', () => {

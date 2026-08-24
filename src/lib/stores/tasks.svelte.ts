@@ -1,7 +1,7 @@
 import type { Task, Subtask, Priority, FilterState, UnitInfo, AppData, ActiveData, PomodoroHistoryData } from '$lib/types';
 import { createEmptyTask, createDefaultAppData, isThresholdPassed, calculateEZoneAge, isActivePriority, isCountedPriority, isFuturePriority, isSustainedPriority, isOperablePriority, createSubtask, ACTIVE_PRIORITIES, isWithinRetentionPeriod } from '$lib/types';
 import { loadAppData, saveAppData, reloadFile, archiveTasks } from '$lib/utils/storage';
-import { applyHighlanderRule, canAddTask, validateQuota } from '$lib/utils/quota';
+import { applyHighlanderRule, canAddTask, validateQuota, demotionTargetFor, isSingleSlotPriority } from '$lib/utils/quota';
 import { createTaskFromInput } from '$lib/utils/parser';
 import { processRecurringTasks, createNextOccurrence } from '$lib/utils/recurrence';
 import { evaluateCycle, rollUnfinishedIntoWindow } from '$lib/utils/cycleEngine';
@@ -200,16 +200,15 @@ export interface AddTaskResult {
 export async function addTask(input: string, force = false): Promise<AddTaskResult> {
   const task = createTaskFromInput(input);
 
-  // Validate quota
-  const quotaError = task.priority === 'A' ? null : validateQuota(appData.tasks, task.priority);
+  // Single-slot tiers (A, S) are exempt from the quota check: Highlander unseats
+  // the incumbent instead of refusing the add. Special-casing only A left S as
+  // the one tier where a second task was rejected outright.
+  const quotaError = isSingleSlotPriority(task.priority) ? null : validateQuota(appData.tasks, task.priority);
   if (quotaError && !force) {
     return { success: false, error: quotaError, quotaExceeded: true };
   }
 
-  // Apply Highlander rule for A priority
-  if (task.priority === 'A') {
-    appData.tasks = applyHighlanderRule(appData.tasks, task);
-  }
+  appData.tasks = applyHighlanderRule(appData.tasks, task);
 
   appData.tasks = [...appData.tasks, task];
   await persist();
@@ -218,14 +217,12 @@ export async function addTask(input: string, force = false): Promise<AddTaskResu
 }
 
 export async function addTaskDirect(task: Task, force = false): Promise<AddTaskResult> {
-  const quotaError = task.priority === 'A' ? null : validateQuota(appData.tasks, task.priority);
+  const quotaError = isSingleSlotPriority(task.priority) ? null : validateQuota(appData.tasks, task.priority);
   if (quotaError && !force) {
     return { success: false, error: quotaError, quotaExceeded: true };
   }
 
-  if (task.priority === 'A') {
-    appData.tasks = applyHighlanderRule(appData.tasks, task);
-  }
+  appData.tasks = applyHighlanderRule(appData.tasks, task);
 
   appData.tasks = [...appData.tasks, task];
   await persist();
@@ -593,23 +590,16 @@ export async function activateFutureTask(
     return { success: false, error: 'Invalid target priority' };
   }
 
-  // S Highlander: if activating into S and another S exists, demote it to B first.
-  // Surface a quota failure (e.g. B is full) before mutating anything else.
-  if (isSustainedPriority(targetPriority)) {
-    const existingS = appData.tasks.find(t => t.id !== taskId && t.priority === 'S' && !t.completed);
-    if (existingS) {
-      const demote = await changePriority(existingS.id, 'B', true);
-      if (!demote.success) {
-        return { success: false, error: demote.error || t('zone.demoteFailed') };
-      }
-    }
-  }
-
-  // Quota check — skip A (Highlander handles it) and S (handled above).
-  // canAddTask understands all priority types; pass full task list so S/N are counted correctly.
+  // Quota check — skip A and S; both are single-slot and changePriority's
+  // Highlander demotes the incumbent instead of refusing the move.
   const otherTasks = appData.tasks.filter(t => t.id !== taskId);
   if (targetPriority !== 'A' && !isSustainedPriority(targetPriority) && !canAddTask(otherTasks, targetPriority)) {
     return { success: false, error: t('message.quotaExceeded', { priority: targetPriority }) };
+  }
+
+  // S Highlander lives in changePriority so every path behaves the same.
+  if (isSustainedPriority(targetPriority)) {
+    return changePriority(taskId, targetPriority, true);
   }
 
   // Apply Highlander rule if activating to A
@@ -693,7 +683,7 @@ export function needsPriorityChangeConfirmation(task: Task, newPriority: Priorit
   return { needsConfirmation: false };
 }
 
-export async function changePriority(taskId: string, newPriority: Priority, skipConfirmation = false): Promise<{ success: boolean; error?: string; needsConfirmation?: boolean; confirmationReason?: string }> {
+export async function changePriority(taskId: string, newPriority: Priority, skipConfirmation = false): Promise<{ success: boolean; error?: string; needsConfirmation?: boolean; confirmationReason?: string; demotedIncumbent?: { name: string; to: Priority } | null }> {
   const task = appData.tasks.find(t => t.id === taskId);
   if (!task) {
     return { success: false, error: 'Task not found' };
@@ -718,11 +708,31 @@ export async function changePriority(taskId: string, newPriority: Priority, skip
     }
   }
 
+  const otherTasks = appData.tasks.filter(t => t.id !== taskId);
+
+  // S is single-slot like A, so it gets the same Highlander treatment: the
+  // incumbent is demoted rather than the move being refused. Previously this
+  // path returned a quota error while the ZoneRail drop and activateFutureTask
+  // paths silently demoted to 'B' — three behaviours for one rule.
+  let demotedIncumbent: { name: string; to: Priority } | null = null;
+  if (isSustainedPriority(newPriority)) {
+    const incumbent = otherTasks.find(t => t.priority === 'S' && !t.completed);
+    if (incumbent) {
+      const target = demotionTargetFor(otherTasks.filter(t => t.id !== incumbent.id));
+      appData.tasks = appData.tasks.map(item =>
+        item.id === incumbent.id
+          ? { ...item, priority: target, lastPriorityChangeAt: new Date().toISOString() }
+          : item
+      );
+      demotedIncumbent = { name: incumbent.content, to: target };
+    }
+  }
+
   // Check quota for new priority — pass full task list so canAddTask can correctly
   // count S (Sustained, quota 1) and N (Future, unlimited); the A-F branch
   // internally filters by isActivePriority via getRemainingQuota.
-  const otherTasks = appData.tasks.filter(t => t.id !== taskId);
-  if (newPriority !== 'A' && !canAddTask(otherTasks, newPriority)) {
+  // A and S are skipped: both are single-slot and handled by Highlander above.
+  if (newPriority !== 'A' && !isSustainedPriority(newPriority) && !canAddTask(otherTasks, newPriority)) {
     return { success: false, error: t('message.quotaExceeded', { priority: newPriority }) };
   }
 
@@ -730,7 +740,7 @@ export async function changePriority(taskId: string, newPriority: Priority, skip
     priority: newPriority,
     lastPriorityChangeAt: new Date().toISOString()
   });
-  return { success: true };
+  return { success: true, demotedIncumbent };
 }
 
 export async function incrementPomodoro(taskId: string): Promise<void> {

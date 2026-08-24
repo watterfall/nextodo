@@ -448,7 +448,11 @@
       </svg>
       {i18n.t('taskCard.editDetails')}
     </button>
-    {#if isActivePriority(task.priority)}
+    <!-- isOperablePriority, not isActivePriority: N and S are completable and
+         cancellable too (handleCheck/handleCancel and the hover action bar all
+         gate on operable), so gating this menu on A-F left those two tiers with
+         no way to finish or remove a task. -->
+    {#if isOperablePriority(task.priority)}
       <button class="ctx-action" onclick={() => { ctxMenuOpen = false; handleCheck(); }}>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <polyline points="20 6 9 17 4 12"></polyline>

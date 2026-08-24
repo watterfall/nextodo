@@ -14,7 +14,7 @@ import { execFileSync } from 'node:child_process';
 
 import { createTaskFromInput } from '$lib/utils/parser';
 import { createNextOccurrence } from '$lib/utils/recurrence';
-import { applyHighlanderRule, canAddTask } from '$lib/utils/quotaCore';
+import { applyHighlanderRule, canAddTask, isSingleSlotPriority } from '$lib/utils/quotaCore';
 import { createDefaultActiveData } from '$lib/types';
 import type { ActiveData, Task, Priority } from '$lib/types';
 
@@ -97,12 +97,12 @@ function cmdAdd(positional: string[], flags: Record<string, string | boolean>, p
   const data = load(path);
   const task = createTaskFromInput(text);
 
-  // A is exempt — Highlander demotes any existing A, so it always has room.
-  if (task.priority !== 'A' && !canAddTask(data.tasks, task.priority)) {
+  // Single-slot tiers (A, S) are exempt — Highlander demotes the incumbent, so
+  // there is always room.
+  if (!isSingleSlotPriority(task.priority) && !canAddTask(data.tasks, task.priority)) {
     console.error(`focusflow: warning — ${task.priority} zone is over quota (added anyway).`);
   }
-  let tasks = data.tasks;
-  if (task.priority === 'A') tasks = applyHighlanderRule(tasks, task);
+  const tasks = applyHighlanderRule(data.tasks, task);
   tasks.push(task);
   data.tasks = tasks;
   save(path, data);

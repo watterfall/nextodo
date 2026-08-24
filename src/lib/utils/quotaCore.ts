@@ -55,26 +55,47 @@ export function canAddTask(tasks: Task[], priority: Priority): boolean {
   return remaining[priority] > 0;
 }
 
-// Tiers an unseated A can fall back to, best first. F (Idea Pool) is the final
-// stop because it is the only unbounded lane — reaching it means B-E are full.
+// Tiers an unseated single-slot task can fall back to, best first. F (Idea Pool)
+// is the final stop because it is the only unbounded lane — reaching it means
+// B-E are all full.
 const DEMOTION_LADDER: ActivePriority[] = ['B', 'C', 'D', 'E', 'F'];
 
 /**
- * Apply Highlander Rule: when adding an A task, demote the incumbent A.
+ * Where an incumbent A or S should land when it is unseated.
+ *
+ * Shared so every "only one of these may exist" path demotes the same way.
+ * Hardcoding 'B' overfills it when B is already at quota.
+ */
+export function demotionTargetFor(tasks: Task[]): ActivePriority {
+  const remaining = getRemainingQuota(tasks);
+  return DEMOTION_LADDER.find(p => remaining[p] > 0) ?? 'F';
+}
+
+// Tiers that hold exactly one task. Adding a second one unseats the incumbent
+// rather than being refused — A is the day's single core challenge, S the week's
+// single sustained project. They are the same rule, so they share the code path.
+const SINGLE_SLOT_PRIORITIES: Priority[] = ['A', 'S'];
+
+export function isSingleSlotPriority(priority: Priority): boolean {
+  return SINGLE_SLOT_PRIORITIES.includes(priority);
+}
+
+/**
+ * Apply Highlander Rule: adding into a single-slot tier demotes the incumbent.
  *
  * The incumbent lands in the highest tier that still has room, not
  * unconditionally in B — a board already holding B×2 would otherwise end up at
  * B×3 against a quota of 2, which every quota reader then reports as full.
  */
 export function applyHighlanderRule(tasks: Task[], newTask: Task): Task[] {
-  if (newTask.priority !== 'A') {
+  if (!isSingleSlotPriority(newTask.priority)) {
     return tasks;
   }
 
   const remaining = getRemainingQuota(tasks);
 
   return tasks.map(task => {
-    if (task.id !== newTask.id && task.priority === 'A' && !task.completed) {
+    if (task.id !== newTask.id && task.priority === newTask.priority && !task.completed) {
       const target = DEMOTION_LADDER.find(p => remaining[p] > 0) ?? 'F';
       remaining[target]--; // reserve the slot in case of multiple incumbents
       return { ...task, priority: target as Priority };

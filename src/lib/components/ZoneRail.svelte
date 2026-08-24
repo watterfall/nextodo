@@ -12,7 +12,7 @@
     removeSubtask,
     promoteSubtask
   } from '$lib/stores/tasks.svelte';
-  import { showToast, openEditModal, getUIStore, setDraggingTask } from '$lib/stores/ui.svelte';
+  import { showToast, getUIStore, setDraggingTask } from '$lib/stores/ui.svelte';
   import { getI18nStore } from '$lib/i18n';
   import { clearDragPayload, startSubtaskDrag, type TaskDragPayload, type SubtaskDragPayload } from '$lib/utils/dnd';
 
@@ -40,16 +40,16 @@
   // ============================================================
   async function handleTaskDrop(target: ZoneKey, payload: TaskDragPayload) {
     if (payload.fromPriority === target) return null;
-    // S Highlander: replace existing S — bail early if demotion fails (e.g. B quota full)
-    if (target === 'S' && sTask && sTask.id !== payload.taskId) {
-      const demote = await changePriority(sTask.id, 'B' as Priority, true);
-      if (!demote.success) {
-        return { success: false, error: demote.error || t('zone.demoteFailed') };
-      }
-      showToast(t('zone.demotedToB', { name: sTask.content }), 'info');
-    }
+    // S is single-slot; changePriority applies the Highlander demotion itself
+    // and reports which task was unseated and where it landed.
     const result = await changePriority(payload.taskId, target as Priority, true);
     if (!result.success) return { success: false, error: result.error || t('zone.moveFailed') };
+    if (result.demotedIncumbent) {
+      showToast(
+        t('zone.demotedTo', { name: result.demotedIncumbent.name, priority: result.demotedIncumbent.to }),
+        'info'
+      );
+    }
     return { success: true, toast: t('zone.movedTo', { priority: target, name: t(`priority.${target}`) }) };
   }
 
@@ -174,10 +174,12 @@
           <div class="zone-quick-add"><QuickAddRow priority="S" /></div>
         {:else}
           <div class="featured">
-            <!-- svelte-ignore a11y_no_static_element_interactions -->
-            <h3 class="featured-title" ondblclick={() => openEditModal(sTask)} title={t('rail.doubleClickEdit')}>
-              {sTask.content}
-            </h3>
+            <!-- Rendered through TaskCard exactly like the F and N zones, so the
+                 S task gets the same complete / edit / cancel / re-prioritise
+                 affordances. It previously had bespoke markup with no checkbox,
+                 no cancel and edit hidden behind an undiscoverable double-click,
+                 which made S the one tier a user could not finish or remove. -->
+            <TaskCard task={sTask} compact={true} />
             {#if (sTask.subtasks ?? []).length > 0}
               <ul class="subtasks">
                 {#each sTask.subtasks! as sub (sub.id)}
@@ -569,28 +571,12 @@
   /* ============================================================
      S featured card
      ============================================================ */
+  /* Plain grouping container: the TaskCard inside brings its own card chrome,
+     so a second background + border here would read as a card inside a card. */
   .featured {
     display: flex;
     flex-direction: column;
     gap: 8px;
-    padding: 8px;
-    background: var(--card-bg);
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-sm);
-  }
-
-  .featured-title {
-    margin: 0;
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--text-primary);
-    cursor: pointer;
-    line-height: 1.35;
-    padding: 2px;
-  }
-
-  .featured-title:hover {
-    color: var(--priority-s-color, #20c997);
   }
 
   .subtasks {

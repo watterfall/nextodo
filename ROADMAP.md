@@ -141,6 +141,20 @@ W1（独立、低风险）→ W2（数据安全）→ W3（提醒）→ W4（最
 
 ---
 
+## S（持续推进）一致性修复（2026-08-24）
+
+用户反馈「S 和其他类别不统一，也无法删除和修改」。核对后确认，S 是唯一一个用户无法完成或移除的档位，成因有三层：
+
+- **S 不走 TaskCard**。F 和 N 在 ZoneRail 里都渲染 `<TaskCard compact />`，唯独 S 用一整套手写 markup：只有一个 `<h3>` 标题，**没有勾选框（无法完成）、没有取消按钮（无法删除）、没有右键菜单（无法改优先级）**，编辑只能靠标题上没有任何视觉提示的双击。已改为和 F/N 一样渲染 TaskCard，子任务列表和添加行保留在下方。
+- **右键菜单把 N/S 挡在门外**。同一个 TaskCard 里，悬浮操作栏的取消用 `isOperablePriority`（含 N/S），右键菜单的「标记完成 / 取消任务」却用 `isActivePriority`（仅 A–F）。同一组件内两套判断，导致 N 也拿不到这两个操作。已统一为 `isOperablePriority`。
+- **S 的「唯一一个」规则有三套实现**。A 是单槽档位，加第二个会自动把旧的降级；S 同样是单槽，却在不同路径上有三种行为：ZoneRail 拖放和 `activateFutureTask` 硬编码降级到 B（B 满了就报错失败），`changePriority` 直接拒绝，`addTask` / CLI `add` 也直接拒绝。已收敛为一条规则：`applyHighlanderRule` 现在同时处理 A 和 S，降级目标由共享的 `demotionTargetFor` 沿 B→C→D→E→F 找第一个有空位的档。
+
+顺带修掉：`zone.demotedToB` 文案把「B」写死（现在按实际落点显示），`zone.demoteFailed` 随失败路径消失，`rail.doubleClickEdit` 成为死键已删除。
+
+浏览器实测确认：S 任务现在有勾选框，右键菜单含「编辑详情 / 标记完成 / 取消任务」，取消后 S 区正确回到空态；把一个 D 任务移入 S 时，原 S 项目被挤到 B 而不是报错。测试 123 → 126，另加 1 个 CLI 端到端用例。
+
+---
+
 ## 工具链升级轮（2026-07-05）
 
 - **构建 / 框架升级**：Vite 8（Rolldown 内核，去掉 rollup 依赖与 `@rollup/rollup-darwin-arm64` pin）、`@sveltejs/vite-plugin-svelte` 7、Svelte 5.56、Tauri CLI/API 2.11、TypeScript 5.9、esbuild 0.28。

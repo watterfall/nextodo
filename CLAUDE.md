@@ -231,7 +231,9 @@ countActiveByPriority(tasks: Task[]): Record<Priority, number>
 getRemainingQuota(tasks: Task[]): Record<Priority, number>
 canAddTask(tasks: Task[], priority: Priority): boolean
 validateQuota(tasks: Task[], priority: Priority): string | null
-applyHighlanderRule(tasks: Task[], newTask: Task): Task[]
+applyHighlanderRule(tasks: Task[], newTask: Task): Task[]  // handles A and S
+isSingleSlotPriority(priority: Priority): boolean          // A or S
+demotionTargetFor(tasks: Task[]): ActivePriority           // first tier with room
 ```
 
 ## Data Architecture
@@ -295,7 +297,12 @@ Task content !A +project @context #tag 🍅3 ~2025-01-15 thr:2025-01-10 rec:1w
 
 ### Priority Quotas
 
-The Highlander Rule applies - only one A-priority task per unit:
+**Single-slot tiers.** A (the unit's core challenge) and S (the week's
+sustained project) each hold exactly one task. Adding a second one does NOT fail:
+`applyHighlanderRule` unseats the incumbent and moves it to the highest tier
+that still has room (B → C → D → E → F). Both tiers go through the same code
+path, so treat them identically at every call site — skip the quota check for
+either, and let Highlander place the loser.
 
 | Priority | Quota | Description |
 |----------|-------|-------------|
