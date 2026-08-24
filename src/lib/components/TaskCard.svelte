@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Task, Priority } from '$lib/types';
-  import { PRIORITY_CONFIG, isThresholdPassed, isActivePriority, isFuturePriority, isSustainedPriority, isOperablePriority, subtaskProgress } from '$lib/types';
-  import { completeTask, uncompleteTask, cancelTask, changePriority, evolveTask, toggleFilterAttribute, isFilterActive, activateFutureTask } from '$lib/stores/tasks.svelte';
+  import { PRIORITY_CONFIG, isThresholdPassed, isActivePriority, isOperablePriority } from '$lib/types';
+  import { getTasksStore, completeTask, uncompleteTask, cancelTask, changePriority, evolveTask, toggleFilterAttribute, isFilterActive } from '$lib/stores/tasks.svelte';
   import { openEditModal, getUIStore, showToast, setDraggingTask } from '$lib/stores/ui.svelte';
   import { clearDragPayload, startTaskDrag } from '$lib/utils/dnd';
   import { startPomodoro, getPomodoroStore } from '$lib/stores/pomodoro.svelte';
@@ -19,6 +19,7 @@
 
   let { task, compact = false, showPriority = false, isFocused = false, kanbanMode = false }: Props = $props();
 
+  const tasks = getTasksStore();
   const ui = getUIStore();
   const pomodoro = getPomodoroStore();
   const i18n = getI18nStore();
@@ -40,7 +41,7 @@
   let ctxMenuOpen = $state(false);
   let ctxMenuX = $state(0);
   let ctxMenuY = $state(0);
-  const ctxPriorityOptions: Priority[] = ['A', 'S', 'B', 'C', 'D', 'E', 'F', 'N'];
+  const ctxPriorityOptions: Priority[] = ['A', 'B', 'C', 'D', 'E'];
 
   function handleContextMenu(e: MouseEvent) {
     e.preventDefault();
@@ -91,16 +92,6 @@
       return { display: emoji, isEmoji: true };
     }
     return { display: text, isEmoji: false };
-  }
-
-  async function handleActivate() {
-    // Activate N task to F (inbox) by default — user can then reprioritize.
-    const result = await activateFutureTask(task.id, 'F');
-    if (result.success) {
-      showToast(i18n.t('message.taskActivated', { priority: 'F' }) || '任务已激活', 'success');
-    } else if (result.error) {
-      showToast(result.error, 'error');
-    }
   }
 
   function handleCheck() {
@@ -160,11 +151,11 @@
   const dueDateLabel = $derived(task.dueDate ? i18n.getRelativeDate(parseISODate(task.dueDate)) : null);
   const isCompleted = $derived(task.priority === 'G');
   const isCancelled = $derived(task.priority === 'H');
-  // Visually de-emphasize lower-pressure zones so they do not compete with A-E
-  const isLowPressure = $derived(task.priority === 'F' || task.priority === 'N');
-  const isFuture = $derived(task.priority === 'N');
-  const isSustained = $derived(task.priority === 'S');
-  const subProgress = $derived(subtaskProgress(task));
+  // Tasks tagged with the week's focus project get a subtle accent — the visual
+  // role the S tier used to play, now driven by a +project tag.
+  const isFocusProject = $derived(
+    !!tasks.settings.focusProject && task.projects.includes(tasks.settings.focusProject)
+  );
 
   // Check if task is dormant (has threshold date in the future)
   const isDormant = $derived(!isThresholdPassed(task));
@@ -203,9 +194,7 @@
   class:hovered={isHovered}
   class:keyboard-focused={isFocused}
   class:just-completed={justCompleted}
-  class:low-pressure={isLowPressure}
-  class:future-progress={isFuture}
-  class:sustained-progress={isSustained}
+  class:focus-project={isFocusProject}
   style:--priority-color={config.color}
   style:--priority-bg={config.bgColor}
   style:--priority-border={config.borderColor}
@@ -328,17 +317,6 @@
     {/if}
   </div>
 
-  {#if subProgress.total > 0 && !isCompleted && !isCancelled}
-    <!-- Subtask progress bar — surfaces breakdown completion at a glance.
-         Compact (single bar + count), most useful on S Sustained tasks. -->
-    <div class="subtask-progress" title={i18n.t('taskCard.subtasksDone', { done: subProgress.done, total: subProgress.total })}>
-      <div class="progress-track">
-        <div class="progress-fill" style:width="{Math.round(subProgress.ratio * 100)}%"></div>
-      </div>
-      <span class="progress-count">{subProgress.done}/{subProgress.total}</span>
-    </div>
-  {/if}
-
   {#if !compact && !kanbanMode && (task.dueDate || task.recurrence || task.thresholdDate)}
     <div class="task-footer">
       {#if task.thresholdDate && isDormant}
@@ -388,13 +366,6 @@
           <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
         </svg>
       </button>
-      {#if isFuturePriority(task.priority)}
-        <button class="action-btn activate" onclick={handleActivate} title={i18n.t('action.activate') || '激活到当前周期'}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
-          </svg>
-        </button>
-      {/if}
       {#if isActivePriority(task.priority)}
         <button class="action-btn evolve" onclick={handleEvolve} title={i18n.t('message.evolveTaskHint') || '完成并演化'}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -586,86 +557,12 @@
     z-index: 10;
   }
 
-  /* Low-pressure zones (F idea pool, N future progress) — quieter visual weight
-     so they do not compete with A-E daily flow. Reduce opacity, slightly lighter
-     text. Restore on hover so they remain fully accessible. */
-  .task-card.low-pressure {
-    opacity: 0.78;
-    background: var(--card-bg);
-  }
-
-  .task-card.low-pressure .task-text {
-    font-weight: 400;
-    color: var(--text-secondary);
-  }
-
-  .task-card.low-pressure::before {
-    opacity: 0.55;
-  }
-
-  .task-card.low-pressure:hover,
-  .task-card.low-pressure.keyboard-focused {
-    opacity: 1;
-  }
-
-  .task-card.low-pressure:hover .task-text,
-  .task-card.low-pressure.keyboard-focused .task-text {
-    color: var(--text-primary);
-  }
-
-  /* Future-progress (N) — subtle dashed border hint that this is "in the queue" */
-  .task-card.future-progress {
-    border-style: dashed;
-    border-color: var(--priority-n-border, rgba(116, 143, 252, 0.22));
-  }
-
-  .task-card.future-progress:hover {
-    border-style: solid;
-  }
-
-  /* Sustained (S) — left edge accent in S color, denotes "持续推进" */
-  .task-card.sustained-progress {
-    border-left: 2px solid var(--priority-s-color, #20c997);
+  /* The week's focus project — a left-edge accent, the visual role the S tier
+     used to have. Driven by a +project tag now, so any number of tasks can
+     carry it and each keeps its own priority. */
+  .task-card.focus-project {
+    border-left: 2px solid var(--focus-project-color, #20c997);
     padding-left: 14px;
-  }
-
-  /* Subtask progress strip — slim, sits below content */
-  .subtask-progress {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-top: 8px;
-    padding: 0 2px;
-  }
-
-  .progress-track {
-    flex: 1;
-    height: 4px;
-    background: var(--bg-tertiary, rgba(128, 128, 128, 0.15));
-    border-radius: 2px;
-    overflow: hidden;
-  }
-
-  .progress-fill {
-    height: 100%;
-    background: var(--priority-s-color, #20c997);
-    border-radius: 2px;
-    transition: width 0.3s var(--ease-out-expo, cubic-bezier(0.16, 1, 0.3, 1));
-  }
-
-  .progress-count {
-    font-size: 10px;
-    font-weight: 600;
-    color: var(--text-muted);
-    font-family: var(--font-mono);
-    font-variant-numeric: tabular-nums;
-    min-width: 28px;
-    text-align: right;
-  }
-
-  .action-btn.activate:hover {
-    color: var(--priority-n-color, #748ffc);
-    background: var(--priority-n-bg, rgba(116, 143, 252, 0.12));
   }
 
   .task-card.completed {

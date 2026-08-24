@@ -61,7 +61,7 @@
   let pomodoroShortBreak = $state(settings.pomodoroShortBreak);
   let pomodoroLongBreak = $state(settings.pomodoroLongBreak);
   let autoArchiveDays = $state(settings.autoArchiveDays);
-  let eZoneAgingDays = $state(settings.eZoneAgingDays);
+  let focusProject = $state(settings.focusProject ?? '');
   let unitBoundaryFlexHours = $state(settings.unitBoundaryFlexHours ?? 12);
   let showMethodology = $state(false);
 
@@ -72,7 +72,7 @@
       pomodoroShortBreak = settings.pomodoroShortBreak;
       pomodoroLongBreak = settings.pomodoroLongBreak;
       autoArchiveDays = settings.autoArchiveDays;
-      eZoneAgingDays = settings.eZoneAgingDays;
+      focusProject = settings.focusProject ?? '';
       unitBoundaryFlexHours = settings.unitBoundaryFlexHours ?? 12;
     }
   });
@@ -88,7 +88,7 @@
       pomodoroShortBreak,
       pomodoroLongBreak,
       autoArchiveDays,
-      eZoneAgingDays,
+      focusProject: focusProject.trim() || null,
       unitBoundaryFlexHours,
     });
     onClose();
@@ -302,18 +302,17 @@
 
           <div class="setting-row">
             <div class="setting-info">
-              <span class="setting-label">{t('settings.eZoneAging')}</span>
-              <span class="setting-desc">{t('settings.eZoneAgingDesc')}</span>
+              <span class="setting-label">{t('settings.focusProject')}</span>
+              <span class="setting-desc">{t('settings.focusProjectDesc')}</span>
             </div>
             <div class="input-group">
+              <span class="input-prefix">+</span>
               <input
-                type="number"
-                class="setting-input"
-                bind:value={eZoneAgingDays}
-                min="1"
-                max="30"
+                type="text"
+                class="setting-input setting-input-text"
+                bind:value={focusProject}
+                placeholder={t('settings.focusProjectPlaceholder')}
               />
-              <span class="input-suffix">{t('settings.days')}</span>
             </div>
           </div>
 

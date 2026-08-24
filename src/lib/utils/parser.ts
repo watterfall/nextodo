@@ -1,5 +1,5 @@
 import type { Task, Priority, Recurrence } from '$lib/types';
-import { createEmptyTask } from '$lib/types';
+import { createEmptyTask, DEFAULT_PRIORITY } from '$lib/types';
 import { parseRecurrence } from './recurrence';
 
 // The recurrence engine lives in ./recurrence — re-exported here so existing
@@ -26,7 +26,7 @@ interface ParsedTask {
  * - +project for projects
  * - @context for contexts
  * - #tag for custom tags
- * - !A !B !C !D !E !F !N !S for priority (or 【A】…【S】 with Chinese full-width brackets)
+ * - !A .. !E for priority (or 【A】…【E】 with Chinese full-width brackets)
  * - ~2024-12-01 or ~tomorrow or ~today for due date
  * - thr:2024-12-01 or thr:+3d for threshold date
  * - rec:1d rec:1w rec:mon,wed,fri rec:1m@15 for recurrence
@@ -34,7 +34,7 @@ interface ParsedTask {
  */
 export function parseTaskInput(input: string): ParsedTask {
   let content = input.trim();
-  let priority: Priority = 'F';
+  let priority: Priority = DEFAULT_PRIORITY;
   const projects: string[] = [];
   const contexts: string[] = [];
   const customTags: string[] = [];
@@ -46,8 +46,8 @@ export function parseTaskInput(input: string): ParsedTask {
   // Extract priority — prefer !X, fall back to 【X】 (Chinese full-width brackets, easier
   // to type on CN IME). The bracket form requires anchor at start/end or surrounding
   // whitespace so that pasted content like "见【A】部分" does not silently reassign priority.
-  const bracketPriority = /(^|\s)【\s*([ABCDEFNS])\s*】(\s|$)/i;
-  let priorityMatch = content.match(/!([ABCDEFNS])(?![A-Za-z])/i);
+  const bracketPriority = /(^|\s)【\s*([ABCDE])\s*】(\s|$)/i;
+  let priorityMatch = content.match(/!([ABCDE])(?![A-Za-z])/i);
   let usedBracketForm = false;
   if (!priorityMatch) {
     const m = content.match(bracketPriority);
@@ -58,7 +58,7 @@ export function parseTaskInput(input: string): ParsedTask {
   }
   if (priorityMatch) {
     priority = priorityMatch[1].toUpperCase() as Priority;
-    content = content.replace(/!([ABCDEFNS])(?![A-Za-z])/gi, '');
+    content = content.replace(/!([ABCDE])(?![A-Za-z])/gi, '');
     if (usedBracketForm) {
       content = content.replace(new RegExp(bracketPriority.source, 'gi'), ' ');
     }
@@ -287,8 +287,8 @@ export function highlightSyntax(input: string): string {
   let html = escapeHtml(input);
 
   // Highlight priority — both !X and 【X】 forms
-  html = html.replace(/!([ABCDEFNS])(?![A-Za-z])/gi, '<span class="syntax-priority">!$1</span>');
-  html = html.replace(/【\s*([ABCDEFNS])\s*】/gi, '<span class="syntax-priority">【$1】</span>');
+  html = html.replace(/!([ABCDE])(?![A-Za-z])/gi, '<span class="syntax-priority">!$1</span>');
+  html = html.replace(/【\s*([ABCDE])\s*】/gi, '<span class="syntax-priority">【$1】</span>');
 
   // Projects / contexts / tags use the same whitespace boundary as the parser,
   // so the preview cannot highlight something that will not actually be

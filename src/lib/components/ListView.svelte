@@ -1,13 +1,12 @@
 <script lang="ts">
-  import { changePriority, getTasksStore, promoteSubtask } from '$lib/stores/tasks.svelte';
+  import { changePriority, getTasksStore } from '$lib/stores/tasks.svelte';
   import { getI18nStore } from '$lib/i18n';
   import { slide } from 'svelte/transition';
   import { PRIORITY_CONFIG, type Priority, type Task, isActivePriority } from '$lib/types';
   import TaskCard from './TaskCard.svelte';
-  import ZoneRail from './ZoneRail.svelte';
   import DropZone from './DropZone.svelte';
   import QuickAddRow from './QuickAddRow.svelte';
-  import type { TaskDragPayload, SubtaskDragPayload } from '$lib/utils/dnd';
+  import type { TaskDragPayload } from '$lib/utils/dnd';
   import { isToday, isOverdue, parseISODate } from '$lib/utils/unitCalc';
 
   type GroupBy = 'priority' | 'project' | 'context' | 'due' | 'tag' | 'none';
@@ -175,12 +174,6 @@
     return { success: true, toast: t('message.movedTo', { priority, name: t(`priority.${priority}`) }) };
   }
 
-  async function handleDropSubtaskInGroup(priority: Priority, payload: SubtaskDragPayload) {
-    const result = await promoteSubtask(payload.parentTaskId, payload.subtaskId, priority);
-    if (!result.success) return { success: false, error: result.error || t('message.promoteFailed') };
-    return { success: true, toast: t('message.promotedTo', { priority, name: t(`priority.${priority}`) }) };
-  }
-
   function toggleCollapsed(key: string) {
     collapsed[key] = !collapsed[key];
   }
@@ -251,7 +244,6 @@
               color={PRIORITY_CONFIG[priority].color}
               class="list-priority-drop-zone"
               onTaskDrop={(p) => handleDropTaskInGroup(priority, p)}
-              onSubtaskDrop={(p) => handleDropSubtaskInGroup(priority, p)}
             >
               <header
                 class="group-header"
@@ -329,7 +321,6 @@
 
     <!-- S/F/N rail on the right — vertical stack, spatially adjacent for easy DnD -->
     <aside class="rail-column">
-      <ZoneRail orientation="vertical" />
     </aside>
   </div>
 </div>

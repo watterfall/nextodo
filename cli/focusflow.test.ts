@@ -159,15 +159,15 @@ describe('focusflow CLI', () => {
     expect(read().tasks).toHaveLength(1);
   });
 
-  it('replaces the incumbent S instead of refusing a second one', () => {
-    run('add', 'rewrite the exporter !S');
-    run('add', 'migrate the database !S');
+  it('replaces the incumbent A instead of refusing a second one', () => {
+    run('add', 'rewrite the exporter !A');
+    run('add', 'migrate the database !A');
 
     const tasks = read().tasks;
-    const sustained = tasks.filter((t) => t.priority === 'S');
-    expect(sustained).toHaveLength(1);
-    expect(sustained[0].content).toBe('migrate the database');
-    // The unseated one is demoted, not dropped — same as the A Highlander.
+    const core = tasks.filter((t) => t.priority === 'A');
+    expect(core).toHaveLength(1);
+    expect(core[0].content).toBe('migrate the database');
+    // The unseated one is demoted, not dropped.
     expect(tasks.find((t) => t.content === 'rewrite the exporter')?.priority).toBe('B');
   });
 

@@ -138,9 +138,24 @@ export function setAutoArchiveDays(days: number): void {
   updateSettings({ autoArchiveDays: Math.max(1, Math.min(365, days)) });
 }
 
-// E zone aging days
-export function setEZoneAgingDays(days: number): void {
-  updateSettings({ eZoneAgingDays: Math.max(1, Math.min(30, days)) });
+// Path of the todo.txt candidate pool shared with sleek.
+export function setTodoFilePath(path: string | null): void {
+  updateSettings({ todoFilePath: path });
+}
+
+// Optional companion done.txt that sleek archives completed lines into.
+export function setDoneFilePath(path: string | null): void {
+  updateSettings({ doneFilePath: path });
+}
+
+// Whether pulling a task may append its origin marker to the source line.
+export function setWriteBackOrigin(enabled: boolean): void {
+  updateSettings({ writeBackOrigin: enabled });
+}
+
+// The `+project` tag of the week's one sustained project.
+export function setFocusProject(project: string | null): void {
+  updateSettings({ focusProject: project?.trim() || null });
 }
 
 // Tag groups
@@ -202,8 +217,10 @@ export function getSettingsStore() {
     get pomodoroShortBreak() { return settings.pomodoroShortBreak; },
     get pomodoroLongBreak() { return settings.pomodoroLongBreak; },
     get autoArchiveDays() { return settings.autoArchiveDays; },
-    get eZoneAgingDays() { return settings.eZoneAgingDays; },
-    get showFutureTasks() { return settings.showFutureTasks; },
+    get todoFilePath() { return settings.todoFilePath; },
+    get doneFilePath() { return settings.doneFilePath; },
+    get writeBackOrigin() { return settings.writeBackOrigin; },
+    get focusProject() { return settings.focusProject; },
     get density() { return settings.density; },
     get unitBoundaryFlexHours() { return settings.unitBoundaryFlexHours; },
     get dueReminders() { return settings.dueReminders; },

@@ -7,7 +7,7 @@ import {
   parseRecurrence,
   highlightSyntax,
 } from './parser';
-import { createEmptyTask } from '$lib/types';
+import { createEmptyTask, DEFAULT_PRIORITY } from '$lib/types';
 import type { Task } from '$lib/types';
 
 // Fixed "today" for relative-date parsing: Sunday 2026-01-04, noon.
@@ -21,10 +21,10 @@ afterEach(() => {
 });
 
 describe('parseTaskInput — basics', () => {
-  it('defaults to F priority with plain text', () => {
+  it('defaults to the standard tier with plain text', () => {
     const r = parseTaskInput('Buy milk');
     expect(r.content).toBe('Buy milk');
-    expect(r.priority).toBe('F');
+    expect(r.priority).toBe(DEFAULT_PRIORITY);
     expect(r.projects).toEqual([]);
     expect(r.contexts).toEqual([]);
     expect(r.customTags).toEqual([]);
@@ -37,7 +37,7 @@ describe('parseTaskInput — basics', () => {
   it('handles empty input', () => {
     const r = parseTaskInput('');
     expect(r.content).toBe('');
-    expect(r.priority).toBe('F');
+    expect(r.priority).toBe(DEFAULT_PRIORITY);
   });
 
   it('parses priority at the end', () => {
@@ -52,9 +52,14 @@ describe('parseTaskInput — basics', () => {
     expect(r.content).toBe('Fix bug');
   });
 
-  it('supports N and S priorities', () => {
-    expect(parseTaskInput('plan !N').priority).toBe('N');
-    expect(parseTaskInput('project !S').priority).toBe('S');
+  it('leaves a letter that is no longer a tier in the content', () => {
+    // F, N and S were tiers once. They are not any more, so !F must behave like
+    // any other unknown letter rather than silently landing somewhere.
+    for (const letter of ['F', 'N', 'S']) {
+      const r = parseTaskInput(`plan !${letter}`);
+      expect(r.priority, letter).toBe(DEFAULT_PRIORITY);
+      expect(r.content, letter).toContain(`!${letter}`);
+    }
   });
 
   it('parses full-width bracket priority 【A】', () => {
@@ -65,13 +70,13 @@ describe('parseTaskInput — basics', () => {
 
   it('ignores an invalid priority letter (kept in content)', () => {
     const r = parseTaskInput('!Z task');
-    expect(r.priority).toBe('F');
+    expect(r.priority).toBe(DEFAULT_PRIORITY);
     expect(r.content).toContain('!Z');
   });
 
   it('does not treat a letter-followed !A as priority (lookahead)', () => {
     const r = parseTaskInput('go to !Aberdeen');
-    expect(r.priority).toBe('F');
+    expect(r.priority).toBe(DEFAULT_PRIORITY);
     expect(r.content).toContain('!Aberdeen');
   });
 

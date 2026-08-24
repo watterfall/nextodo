@@ -146,22 +146,30 @@ describe('evaluateCycle', () => {
   });
 });
 
-describe('Idea Pool (F) is excluded from cycle accounting', () => {
-  it('does not let parked ideas drag completion under the merge threshold', () => {
+describe('only planned work counts toward the cycle', () => {
+  it('ignores cancelled tasks when scoring a period', () => {
+    // A cancelled task is not unfinished work — counting it would drag the
+    // period under the merge threshold and trigger a rollover nobody asked for.
     const done = task('G', { unitStart: '2026-01-05', completed: true, originalPriority: 'A' });
-    const ideas = Array.from({ length: 20 }, (_, i) =>
-      task('F', { id: `idea${i}`, unitStart: '2026-01-05' })
+    const cancelled = Array.from({ length: 20 }, (_, i) =>
+      task('H', { id: `drop${i}`, unitStart: '2026-01-05' })
     );
-    // Only the A task is planned work, and it is done → 100%, not 5/25.
-    expect(weightedCompletionForPeriod([done, ...ideas], '2026-01-05')).toBeCloseTo(1);
+    expect(weightedCompletionForPeriod([done, ...cancelled], '2026-01-05')).toBeCloseTo(1);
   });
 
-  it('leaves F tasks where they are when a window rolls forward', () => {
-    const idea = task('F', { id: 'idea', unitStart: '2026-01-05' });
+  it('rolls forward only open A-E tasks', () => {
+    const cancelled = task('H', { id: 'drop', unitStart: '2026-01-05' });
+    const done = task('G', { id: 'done', unitStart: '2026-01-05', completed: true });
     const planned = task('C', { id: 'plan', unitStart: '2026-01-05' });
 
-    const rolled = rollUnfinishedIntoWindow([idea, planned], '2026-01-05', '2026-01-07', '2026-01-08');
-    expect(rolled.find((t) => t.id === 'idea')?.unitStart).toBe('2026-01-05');
+    const rolled = rollUnfinishedIntoWindow(
+      [cancelled, done, planned],
+      '2026-01-05',
+      '2026-01-07',
+      '2026-01-08'
+    );
+    expect(rolled.find((t) => t.id === 'drop')?.unitStart).toBe('2026-01-05');
+    expect(rolled.find((t) => t.id === 'done')?.unitStart).toBe('2026-01-05');
     expect(rolled.find((t) => t.id === 'plan')?.unitStart).toBe('2026-01-07');
   });
 });

@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Priority } from '$lib/types';
-  import { PRIORITY_CONFIG } from '$lib/types';
+  import { PRIORITY_CONFIG, DEFAULT_PRIORITY } from '$lib/types';
   import { addTask, getTasksStore } from '$lib/stores/tasks.svelte';
   import { showToast } from '$lib/stores/ui.svelte';
   import { highlightSyntax } from '$lib/utils/parser';
@@ -28,7 +28,7 @@
   let commandIndex = $state(0);          // currently highlighted option
   let triggerChar = $state<string>('');  // '!' | '【' | '+' | '@' | '#'
 
-  const ALL_PRIORITIES: Priority[] = ['A', 'S', 'B', 'C', 'D', 'E', 'F', 'N'];
+  const ALL_PRIORITIES: Priority[] = ['A', 'B', 'C', 'D', 'E'];
 
   const priorityOptions = $derived<CommandOption[]>(
     ALL_PRIORITIES.map(p => ({
@@ -156,7 +156,7 @@
   }
 
   let {
-    defaultPriority = 'F',
+    defaultPriority = DEFAULT_PRIORITY,
     onSubmit,
     onCancel,
     autoFocus = false,

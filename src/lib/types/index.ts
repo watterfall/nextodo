@@ -1,14 +1,18 @@
 import { isCompletedInCurrentUnit, getUnitRetentionRemaining, currentUnitStartLocal } from '$lib/utils/unitCalc';
 
-// Priority levels
-// A-E are work priorities with quotas, F is the Idea Pool (unlimited)
-// S is "Sustained Progress" — week-long important projects with subtasks
-// N is "Future Progress" — long-term important but non-urgent
-// G is for completed tasks, H is for cancelled tasks (both hidden by default)
-export type Priority = 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H' | 'N' | 'S';
-export type ActivePriority = Exclude<Priority, 'G' | 'H' | 'N' | 'S'>;
-export type FuturePriority = Extract<Priority, 'N'>;
-export type SustainedPriority = Extract<Priority, 'S'>;
+// Priority levels.
+//
+// A-E are the quota-bearing tiers of the current 2-day unit. G marks a
+// completed task and H a cancelled one; neither is a tier you can put work in.
+//
+// There used to be three more: F (Idea Pool), N (Future Progress) and
+// S (Sustained Progress). They are gone, because the candidate pool now lives
+// in a sleek todo.txt instead of in this app — an unsorted idea is simply a
+// line that has not been pulled into a unit, "later" is todo.txt's `t:`
+// threshold date or `h:1`, and the week's one sustained project is a
+// `+project` tag. See docs/SLEEK-INTEROP.md §6.
+export type Priority = 'A' | 'B' | 'C' | 'D' | 'E' | 'G' | 'H';
+export type ActivePriority = Exclude<Priority, 'G' | 'H'>;
 export type HiddenPriority = Extract<Priority, 'G' | 'H'>;
 export type ActivePriorityCounts = Record<ActivePriority, number>;
 
@@ -34,15 +38,17 @@ export interface Recurrence {
   nextDue: string | null;
 }
 
-// Lightweight subtask — embedded inside a parent Task. Used most commonly by
-// Sustained (S) tasks for breaking a week-long project into checkable steps.
-// Subtasks are intentionally minimal: no priority/dates/pomodoros — they are
-// bullets you tick off, not standalone tasks.
-export interface Subtask {
-  id: string;
-  content: string;
-  completed: boolean;
-  completedAt?: string | null;
+// Where a task came from, when it was pulled out of a todo.txt candidate pool.
+//
+// todo.txt has no stable identity — the line IS the record — so the verbatim
+// source line is kept and matched again at write-back time. See
+// docs/SLEEK-INTEROP.md §5.
+export interface TaskSource {
+  /** Absolute path of the todo.txt this task was pulled from. */
+  file: string;
+  /** The source line, exactly as it read when the task was pulled. */
+  raw: string;
+  pulledAt: string;
 }
 
 // Task interface - with Threshold Date support
@@ -66,8 +72,8 @@ export interface Task {
     completed: number;
   };
   notes: string;
-  // NEW: Embedded subtasks for breakdown — most useful on S (Sustained) tasks
-  subtasks?: Subtask[];
+  // Set when this task was pulled from a todo.txt candidate pool.
+  source?: TaskSource;
   // NEW: Unit override for flexible unit control
   unitOverride?: {
     extendedUntil?: string;
@@ -173,10 +179,19 @@ export interface Settings {
   sidebarCollapsed: boolean;
   // NEW: Auto archive settings
   autoArchiveDays: number;
-  // NEW: E zone aging warning days
-  eZoneAgingDays: number;
-  // NEW: Show threshold tasks in separate view
-  showFutureTasks: boolean;
+  // Absolute path of the todo.txt that holds the candidate pool — the same file
+  // sleek edits. Null until the user picks one.
+  todoFilePath: string | null;
+  // Optional companion done.txt. sleek archives completed lines there, so a
+  // source line that has vanished from todoFilePath is looked for here before
+  // the write-back gives up.
+  doneFilePath: string | null;
+  // Whether pulling a task may append its @主 / @被 marker to the source line.
+  // Off makes the pull strictly read-only.
+  writeBackOrigin: boolean;
+  // The `+project` tag of the week's one sustained project, or null. This is
+  // what the S tier used to be: a constraint on attention, not a priority.
+  focusProject: string | null;
   // NEW: Flexible unit boundary hours (extend/shorten unit by this many hours)
   // Default: 12 hours - tasks can spill over half a day
   unitBoundaryFlexHours: number;
@@ -222,6 +237,11 @@ export interface ActiveData {
   gamification?: GamificationData;
   cycleState?: CycleState;
   cycleHistory?: CycleHistoryEntry[];
+  // Tasks bound for the todo.txt candidate pool that have not been written out
+  // yet — see docs/SLEEK-INTEROP.md §10. They live here so that removing the
+  // F / N tiers can never destroy data just because no todo.txt was configured
+  // at migration time.
+  pendingExport?: Task[];
 }
 
 // Archive data file structure (cold data) - DEPRECATED, kept for migration
@@ -250,6 +270,11 @@ export interface AppData {
   gamification?: GamificationData;
   cycleState?: CycleState;
   cycleHistory?: CycleHistoryEntry[];
+  // Tasks bound for the todo.txt candidate pool that have not been written out
+  // yet — see docs/SLEEK-INTEROP.md §10. They live here so that removing the
+  // F / N tiers can never destroy data just because no todo.txt was configured
+  // at migration time.
+  pendingExport?: Task[];
 }
 
 // Priority configuration
@@ -314,15 +339,6 @@ export const PRIORITY_CONFIG: Record<Priority, PriorityConfig> = {
     borderColor: 'var(--priority-e-border, rgba(81, 207, 102, 0.2))',
     pomodoroRange: { min: 0, max: 1, recommended: 0 }  // <15 min = 0-1 pomodoros
   },
-  F: {
-    name: '灵感收集',
-    quota: Infinity,
-    description: '收集想法、待分类任务',
-    color: 'var(--priority-f-color, #5c636a)',
-    bgColor: 'var(--priority-f-bg, rgba(92, 99, 106, 0.08))',
-    borderColor: 'var(--priority-f-border, rgba(92, 99, 106, 0.2))',
-    pomodoroRange: { min: 0, max: Infinity, recommended: 0 }  // No constraints
-  },
   G: {
     name: '已完成',
     quota: Infinity,
@@ -339,24 +355,6 @@ export const PRIORITY_CONFIG: Record<Priority, PriorityConfig> = {
     color: 'var(--priority-h-color, #868e96)',
     bgColor: 'var(--priority-h-bg, rgba(134, 142, 150, 0.08))',
     borderColor: 'var(--priority-h-border, rgba(134, 142, 150, 0.2))',
-    pomodoroRange: { min: 0, max: Infinity, recommended: 0 }
-  },
-  N: {
-    name: '未来推进',
-    quota: Infinity,
-    description: '重要但长期的推进任务，默认隐藏不打扰',
-    color: 'var(--priority-n-color, #748ffc)',
-    bgColor: 'var(--priority-n-bg, rgba(116, 143, 252, 0.08))',
-    borderColor: 'var(--priority-n-border, rgba(116, 143, 252, 0.22))',
-    pomodoroRange: { min: 0, max: Infinity, recommended: 0 }
-  },
-  S: {
-    name: '持续推进',
-    quota: 1,
-    description: '本周唯一的持续推进项目，用子任务分解执行',
-    color: 'var(--priority-s-color, #20c997)',
-    bgColor: 'var(--priority-s-bg, rgba(32, 201, 151, 0.1))',
-    borderColor: 'var(--priority-s-border, rgba(32, 201, 151, 0.28))',
     pomodoroRange: { min: 0, max: Infinity, recommended: 0 }
   }
 };
@@ -394,8 +392,13 @@ export type ViewMode = 'today' | 'kanban' | 'list' | 'calendar';
 // Pomodoro state
 export type PomodoroState = 'idle' | 'work' | 'shortBreak' | 'longBreak';
 
+// The tier a task lands in when nothing more specific is known. It used to be
+// F (Idea Pool); with the candidate pool moved to todo.txt there is no
+// unsorted tier left, so an unqualified new task is an ordinary standard task.
+export const DEFAULT_PRIORITY: ActivePriority = 'C';
+
 // Create empty task
-export function createEmptyTask(priority: Priority = 'F'): Task {
+export function createEmptyTask(priority: Priority = DEFAULT_PRIORITY): Task {
   const now = new Date().toISOString();
   return {
     id: crypto.randomUUID(),
@@ -430,8 +433,10 @@ export function createDefaultSettings(): Settings {
     autoBackup: true,
     sidebarCollapsed: false,
     autoArchiveDays: 7,
-    eZoneAgingDays: 3,
-    showFutureTasks: false,
+    todoFilePath: null,
+    doneFilePath: null,
+    writeBackOrigin: true,
+    focusProject: null,
     unitBoundaryFlexHours: 12, // Default: half day flexibility
     density: 'comfortable',
     dueReminders: true,
@@ -442,7 +447,7 @@ export function createDefaultSettings(): Settings {
 // Create default active data
 export function createDefaultActiveData(): ActiveData {
   return {
-    version: '4.0',
+    version: '5.0',
     lastModified: new Date().toISOString(),
     tasks: [],
     reviews: [],
@@ -476,7 +481,7 @@ export function createDefaultPomodoroHistoryData(): PomodoroHistoryData {
 // Create default app data (combined)
 export function createDefaultAppData(): AppData {
   return {
-    version: '4.0',
+    version: '5.0',
     lastModified: new Date().toISOString(),
     tasks: [],
     reviews: [],
@@ -502,22 +507,6 @@ export function isThresholdPassed(task: Task): boolean {
   return threshold <= today;
 }
 
-// Calculate F zone (Idea Pool) aging (how many units the task has been in F zone)
-export function calculateFZoneAge(task: Task, unitDays: number = 7): number {
-  if (task.priority !== 'F') return 0;
-
-  const created = new Date(task.createdAt);
-  const now = new Date();
-  const diffDays = Math.floor((now.getTime() - created.getTime()) / (1000 * 60 * 60 * 24));
-
-  return Math.floor(diffDays / unitDays);
-}
-
-// Backward compatibility alias
-export function calculateEZoneAge(task: Task, unitDays: number = 7): number {
-  return calculateFZoneAge(task, unitDays);
-}
-
 // A completed task stays visible (struck-through in its original zone) until the
 // 2-day unit it was completed in ends. Once the current unit advances past that
 // unit, the task is hidden. Tied to the unit cycle rather than a fixed duration.
@@ -533,44 +522,32 @@ export function getRetentionRemaining(task: Task): { hours: number; minutes: num
   return getUnitRetentionRemaining(task.completedAt);
 }
 
-// Active priorities (shown in main views)
-export const ACTIVE_PRIORITIES: ActivePriority[] = ['A', 'B', 'C', 'D', 'E', 'F'];
-
-// Future priorities (collapsed, separate entry; not shown in daily views)
-export const FUTURE_PRIORITIES: FuturePriority[] = ['N'];
-
-// Sustained priorities (week-long ongoing projects with subtasks)
-export const SUSTAINED_PRIORITIES: SustainedPriority[] = ['S'];
+// The quota-bearing tiers of the current unit, in order.
+export const ACTIVE_PRIORITIES: ActivePriority[] = ['A', 'B', 'C', 'D', 'E'];
 
 // Hidden priorities (completed/cancelled)
 export const HIDDEN_PRIORITIES: HiddenPriority[] = ['G', 'H'];
 
-// Check if a task is in an active (daily-visible) priority
+// Check if a task sits in a tier the user can put work in (A-E).
 export function isActivePriority(priority: Priority): priority is ActivePriority {
   return (ACTIVE_PRIORITIES as readonly Priority[]).includes(priority);
 }
 
-// Check if a task is in a future (long-horizon, default-hidden) priority
-export function isFuturePriority(priority: Priority): priority is FuturePriority {
-  return (FUTURE_PRIORITIES as readonly Priority[]).includes(priority);
-}
-
-// Check if a task is in a sustained (weekly ongoing) priority
-export function isSustainedPriority(priority: Priority): priority is SustainedPriority {
-  return (SUSTAINED_PRIORITIES as readonly Priority[]).includes(priority);
-}
-
-// Check if a task can be operated on (complete/cancel/edit) — active OR future OR sustained
+// Check if a task can be operated on (complete / cancel / edit / re-prioritise).
+//
+// This used to be broader than isActivePriority because N and S sat outside the
+// A-F range while still being real, workable tasks — and several call sites
+// gated on the wrong one, leaving those two tiers with no way to finish a task.
+// With N and S gone the two predicates coincide; the name is kept because the
+// intent it expresses (may the user act on this?) is not the same question as
+// "does this tier have a quota".
 export function isOperablePriority(priority: Priority): boolean {
-  return isActivePriority(priority) || isFuturePriority(priority) || isSustainedPriority(priority);
+  return isActivePriority(priority);
 }
 
 // Check if a task should be COUNTED in cross-cutting aggregations such as
 // sidebar project/context/tag badges — i.e. any task that lives in the user's
-// working set (not yet completed or cancelled). Currently equivalent to
-// isOperablePriority, kept as a separate predicate so the two intents
-// (UI permission vs. counting) can evolve independently without one site
-// silently changing the other's semantics.
+// working set (not yet completed or cancelled).
 export function isCountedPriority(priority: Priority): boolean {
   return !isHiddenPriority(priority);
 }
@@ -578,27 +555,4 @@ export function isCountedPriority(priority: Priority): boolean {
 // Check if a task is completed (G) or cancelled (H)
 export function isHiddenPriority(priority: Priority): priority is HiddenPriority {
   return (HIDDEN_PRIORITIES as readonly Priority[]).includes(priority);
-}
-
-// ============================================================================
-// Subtask helpers
-// ============================================================================
-
-// Get subtask completion ratio for a task (0..1). Returns 0 if no subtasks.
-export function subtaskProgress(task: Task): { done: number; total: number; ratio: number } {
-  const subs = task.subtasks ?? [];
-  const total = subs.length;
-  if (total === 0) return { done: 0, total: 0, ratio: 0 };
-  const done = subs.filter(s => s.completed).length;
-  return { done, total, ratio: done / total };
-}
-
-// Create a new subtask record
-export function createSubtask(content: string): Subtask {
-  return {
-    id: crypto.randomUUID(),
-    content: content.trim(),
-    completed: false,
-    completedAt: null
-  };
 }

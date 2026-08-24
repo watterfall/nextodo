@@ -25,8 +25,8 @@ export function createReview(
     return taskDate >= start && taskDate <= end;
   });
 
-  const planned: ActivePriorityCounts = { A: 0, B: 0, C: 0, D: 0, E: 0, F: 0 };
-  const completed: ActivePriorityCounts = { A: 0, B: 0, C: 0, D: 0, E: 0, F: 0 };
+  const planned: ActivePriorityCounts = { A: 0, B: 0, C: 0, D: 0, E: 0 };
+  const completed: ActivePriorityCounts = { A: 0, B: 0, C: 0, D: 0, E: 0 };
   let pomodorosTotal = 0;
 
   for (const task of unitTasks) {
@@ -92,7 +92,7 @@ export function getCompletionRate(review: UnitReview): number {
 
 // Get priority completion rates
 export function getPriorityRates(review: UnitReview): ActivePriorityCounts {
-  const rates: ActivePriorityCounts = { A: 0, B: 0, C: 0, D: 0, E: 0, F: 0 };
+  const rates: ActivePriorityCounts = { A: 0, B: 0, C: 0, D: 0, E: 0 };
 
   for (const priority of ACTIVE_PRIORITIES) {
     const planned = review.stats.planned[priority];

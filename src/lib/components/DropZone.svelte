@@ -1,11 +1,6 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
-  import {
-    getTaskDragPayload,
-    getSubtaskDragPayload,
-    type TaskDragPayload,
-    type SubtaskDragPayload
-  } from '$lib/utils/dnd';
+  import { getTaskDragPayload, type TaskDragPayload } from '$lib/utils/dnd';
   import { getUIStore, showToast } from '$lib/stores/ui.svelte';
 
   interface Props {
@@ -14,8 +9,6 @@
      * Return null/undefined if the drop should be silently ignored.
      */
     onTaskDrop?: (payload: TaskDragPayload) => Promise<{ success: boolean; error?: string; toast?: string } | null | void> | null | void;
-    /** Same shape for subtasks. */
-    onSubtaskDrop?: (payload: SubtaskDragPayload) => Promise<{ success: boolean; error?: string; toast?: string } | null | void> | null | void;
     /** Accent color for the drop indicator (border + bg tint). */
     color?: string;
     /** When true, this zone advertises itself as a drop target while ANY drag is active. */
@@ -27,7 +20,6 @@
 
   let {
     onTaskDrop,
-    onSubtaskDrop,
     color = 'var(--primary)',
     showHintWhileDragging = true,
     class: extraClass = '',
@@ -67,20 +59,6 @@
     // Cleanup of global drag state lives on the source's ondragend handler.
     // DropZone only consumes the payload — it does NOT mutate global state,
     // so a passively-traversed nested zone can't kill the in-flight drag.
-    // Try subtask first (more specific), then task.
-    const subPayload = getSubtaskDragPayload(e);
-    if (subPayload && onSubtaskDrop) {
-      const result = await onSubtaskDrop(subPayload);
-      if (result && typeof result === 'object') {
-        if (!result.success && result.error) {
-          showToast(result.error, 'error');
-        } else if (result.success && result.toast) {
-          showToast(result.toast, 'success');
-        }
-      }
-      return;
-    }
-
     const taskPayload = getTaskDragPayload(e);
     if (taskPayload && onTaskDrop) {
       const result = await onTaskDrop(taskPayload);

@@ -15,9 +15,9 @@ function priorityWeight(p: Priority): number {
   return 6 - quota;
 }
 
-// The quota-bearing, plannable tiers. Deliberately excludes F: the Idea Pool is
-// unbounded, so counting parked ideas as "planned work" would drag completion
-// under the merge threshold and roll the whole pool into the next window.
+// The quota-bearing, plannable tiers — everything a unit can hold. Kept as an
+// explicit set rather than reusing isActivePriority so that cycle accounting
+// and UI visibility can diverge without one silently redefining the other.
 const PLANNED_PRIORITIES = new Set<Priority>(['A', 'B', 'C', 'D', 'E']);
 
 function isPlannedPriority(p: Priority | null | undefined): boolean {

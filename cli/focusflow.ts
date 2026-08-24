@@ -19,7 +19,7 @@ import { createDefaultActiveData } from '$lib/types';
 import type { ActiveData, Task, Priority } from '$lib/types';
 
 const APP_ID = 'com.focusflow.app';
-const OPERABLE = new Set<Priority>(['A', 'B', 'C', 'D', 'E', 'F', 'S', 'N']);
+const OPERABLE = new Set<Priority>(['A', 'B', 'C', 'D', 'E']);
 
 // ---------- data file ----------
 
@@ -97,15 +97,20 @@ function cmdAdd(positional: string[], flags: Record<string, string | boolean>, p
   const data = load(path);
   const task = createTaskFromInput(text);
 
-  // Single-slot tiers (A, S) are exempt — Highlander demotes the incumbent, so
+  // The single-slot tier is exempt — Highlander unseats the incumbent, so
   // there is always room.
   if (!isSingleSlotPriority(task.priority) && !canAddTask(data.tasks, task.priority)) {
     console.error(`focusflow: warning — ${task.priority} zone is over quota (added anyway).`);
   }
-  const tasks = applyHighlanderRule(data.tasks, task);
-  tasks.push(task);
-  data.tasks = tasks;
+  const result = applyHighlanderRule(data.tasks, task);
+  data.tasks = [...result.tasks, task];
   save(path, data);
+
+  // An unseated incumbent with nowhere to go leaves the unit entirely. Saying
+  // so matters: otherwise it just looks like the task disappeared.
+  for (const gone of result.evicted) {
+    console.error(`focusflow: "${gone.content}" left the unit — no tier had room.`);
+  }
 
   if (flags.json) console.log(JSON.stringify({ ok: true, id: task.id, priority: task.priority, content: task.content }));
   else console.log(`added [${task.priority}] ${task.content}  (id ${task.id.slice(0, 8)})`);
@@ -128,7 +133,7 @@ function cmdList(flags: Record<string, string | boolean>, path: string): void {
   }
 
   if (tasks.length === 0) { console.log('(no active tasks)'); return; }
-  const order: Priority[] = ['A', 'B', 'C', 'D', 'E', 'S', 'N', 'F'];
+  const order: Priority[] = ['A', 'B', 'C', 'D', 'E'];
   tasks.sort((a, b) => order.indexOf(a.priority) - order.indexOf(b.priority));
   for (const t of tasks) {
     const due = t.dueDate ? `  ~${t.dueDate}` : '';
@@ -172,21 +177,24 @@ Data file: ${defaultDataPath()}  (override with --data <path>)
 A running FocusFlow app auto-reloads when this file changes.
 
 Commands:
-  add "<text>" [--priority A-F|S|N] [--json]
+  add "<text>" [--priority A-E] [--json]
       Add a task. Inline syntax (parsed):
-        !A..!F !S !N   priority        +project   @context   #tag
+        !A..!E         priority        +project   @context   #tag
         ~2026-06-01 | ~tomorrow | ~today   due date
         thr:2026-06-01 | thr:+3d           hidden-until date
         🍅3 (or p3)    estimated pomodoros
-        rec:1d|1w|...  recurrence
-  list [--priority X] [--json]      List active tasks (A-F/S/N).
+        rec:[+]<n><d|b|w|m|y>   recurrence, same grammar as todo.txt
+  list [--priority X] [--json]      List the current unit's tasks (A-E).
   done <id|substring>               Mark a task complete.
   cancel <id|substring>             Cancel a task.
   import-reminders [--list <name>] [--priority X]
       Import macOS Reminders (incomplete) as tasks (title→content, due→date).
   agent-guide                       Print this guide.
 
-Priorities: A core(1) B key(2) C steady(3) D adhoc(4) E quick(5) F idea-pool(∞) S sustained N future.
+Priorities: A core(1) B key(2) C steady(3) D adhoc(4) E quick(5) — 15 tasks per
+2-day unit, and nothing more fits. Unsorted and long-horizon work lives in the
+todo.txt candidate pool this app shares with sleek, not in a tier here.
+
 Exit code 0 on success, 1 on error. Errors go to stderr.`);
 }
 

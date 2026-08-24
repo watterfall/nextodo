@@ -2,11 +2,10 @@
   import type { Task, Priority } from '$lib/types';
   import { PRIORITY_CONFIG, getRetentionRemaining } from '$lib/types';
   import TaskCard from './TaskCard.svelte';
-  import ZoneRail from './ZoneRail.svelte';
   import DropZone from './DropZone.svelte';
   import QuickAddRow from './QuickAddRow.svelte';
-  import type { TaskDragPayload, SubtaskDragPayload } from '$lib/utils/dnd';
-  import { getTasksStore, reorderTask, changePriority, promoteSubtask } from '$lib/stores/tasks.svelte';
+  import type { TaskDragPayload } from '$lib/utils/dnd';
+  import { getTasksStore, reorderTask, changePriority } from '$lib/stores/tasks.svelte';
   import { getPomodoroStore } from '$lib/stores/pomodoro.svelte';
   import { getUIStore, openEditModal } from '$lib/stores/ui.svelte';
   import { countActiveByPriority } from '$lib/utils/quota';
@@ -24,10 +23,9 @@
   const i18n = getI18nStore();
   const t = i18n.t;
 
-  // The quota-bearing columns this view renders. F/N/S live in the persistent
-  // ZoneRail beside the view, so they are deliberately not columns here.
+  // The quota-bearing columns this view renders — now the whole tier set.
   // Every per-column map below is keyed by this list, which keeps the types
-  // honest instead of carrying inert G/H/N/S buckets that can never be read.
+  // honest instead of carrying inert G/H buckets that can never be read.
   const priorities = ['A', 'B', 'C', 'D', 'E'] as const;
   type ColumnPriority = (typeof priorities)[number];
 
@@ -52,12 +50,6 @@
     const result = await changePriority(payload.taskId, priority, true);
     if (!result.success) return { success: false, error: result.error || t('message.moveFailed') };
     return { success: true, toast: t('message.movedTo', { priority, name: t(`priority.${priority}`) }) };
-  }
-
-  async function handleDropSubtaskInColumn(priority: Priority, payload: SubtaskDragPayload) {
-    const result = await promoteSubtask(payload.parentTaskId, payload.subtaskId, priority);
-    if (!result.success) return { success: false, error: result.error || t('message.promoteFailed') };
-    return { success: true, toast: t('message.promotedTo', { priority, name: t(`priority.${priority}`) }) };
   }
 
   // Recently completed tasks display state (per rendered column)
@@ -242,7 +234,6 @@
         color={config.color}
         class="priority-column drop-zone-column {isFull ? 'is-full' : ''} {isDimmed ? 'focus-dimmed' : ''}"
         onTaskDrop={(p) => handleDropTaskInColumn(priority, p)}
-        onSubtaskDrop={(p) => handleDropSubtaskInColumn(priority, p)}
       >
         <div class="column-header" title={t(`priority.tooltip.${priority}`)} style:--card-color={config.color}>
           <span class="column-letter" style:background={config.color}>{priority}</span>
@@ -318,7 +309,6 @@
   <!-- Bottom rail: S / F / N as a horizontal 3-zone strip below A-E.
        Spatially adjacent for short-distance DnD. -->
   <div class="kanban-rail">
-    <ZoneRail orientation="horizontal" />
   </div>
 
   <!-- Priority change confirmation dialog -->

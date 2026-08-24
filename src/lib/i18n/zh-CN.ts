@@ -52,18 +52,12 @@ export default {
     C: '稳步推进',
     D: '临时任务',
     E: '快速处理',
-    F: '灵感收集',
-    N: '未来推进',
-    S: '持续推进',
     description: {
       A: '深度工作，需 2+ 小时专注',
       B: '项目关键节点，45-90分钟',
       C: '稳步推进，20-45分钟',
       D: '计划外的临时任务',
       E: '15分钟内可完成',
-      F: '收集想法、待分类任务',
-      N: '重要但长期的推进任务',
-      S: '一周持续推进的重要项目',
     },
     tooltip: {
       A: '核心挑战 · 配额 1/周期 · 2+ 小时 · 高难度高价值',
@@ -71,8 +65,6 @@ export default {
       C: '稳步推进 · 配额 3/周期 · 20-45 分钟 · 标准难度',
       D: '临时任务 · 配额 4/周期 · 计划外意外 · 保持弹性',
       E: '快速处理 · 配额 5/周期 · <15 分钟 · 快速完成',
-      F: '灵感收集 · 无限制 · 收集想法 · 稍后分类',
-      N: '未来推进 · 无配额 · 默认隐藏 · 准备好再激活',
     },
     quota: {
       A: '1/周期',
@@ -80,8 +72,6 @@ export default {
       C: '3/周期',
       D: '4/周期',
       E: '5/周期',
-      F: '无限制',
-      N: '无配额',
     },
     difficulty: {
       A: '高难度',
@@ -89,8 +79,6 @@ export default {
       C: '标准难度',
       D: '意外任务',
       E: '低难度',
-      F: '待分类',
-      N: '长期',
     },
     time: {
       A: '2+ 小时',
@@ -98,8 +86,6 @@ export default {
       C: '20-45 分钟',
       D: '不定',
       E: '<15 分钟',
-      F: '不定',
-      N: '长期',
     },
   },
 
@@ -139,9 +125,7 @@ export default {
     monthly: '每月',
     keyboardHint: '按 Ctrl+Enter 快速添加',
     keyboardHintAction: '快速添加',
-    syntaxHint: '支持语法: !A-F !S !N 或 【A】-【N】 +项目 @状态 #标签 ~日期 thr:延后日期 🍅数量',
-    subtasks: '子任务',
-    subtaskPlaceholder: '添加一个子任务 · 回车确认',
+    syntaxHint: '支持语法: !A-E 或 【A】-【E】 +项目 @状态 #标签 ~日期 thr:延后日期 rec:1w 🍅数量',
   },
 
   quickAdd: {
@@ -166,7 +150,7 @@ export default {
   // Task
   task: {
     add: '添加任务',
-    addPlaceholder: '快速添加任务 (+项目 @状态 #标签 !A-F ~日期 🍅数量)',
+    addPlaceholder: '快速添加任务 (+项目 @状态 #标签 !A-E ~日期 🍅数量)',
     edit: '编辑任务',
     delete: '删除任务',
     complete: '完成任务',
@@ -328,8 +312,9 @@ export default {
     },
     autoArchive: '自动归档天数',
     autoArchiveDesc: '已完成任务在多少天后自动归档',
-    eZoneAging: '待处理区老化提醒',
-    eZoneAgingDesc: '待处理任务超过多少天提示处理',
+    focusProject: '本周焦点项目',
+    focusProjectDesc: '本周唯一持续推进的项目标签；带这个 +项目 的任务会被高亮',
+    focusProjectPlaceholder: '项目名，如 exporter',
     unitBoundaryFlex: '周期边界弹性',
     unitBoundaryFlexDesc: '任务可延迟或提前的小时数',
     dueReminders: '截止日提醒',

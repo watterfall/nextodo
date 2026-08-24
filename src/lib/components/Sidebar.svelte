@@ -27,7 +27,7 @@
   const settings = getSettingsStore();
 
   // Priority list for filtering (only active priorities, not G/H)
-  const priorities: Priority[] = ['A', 'B', 'C', 'D', 'E', 'F'];
+  const priorities: Priority[] = ['A', 'B', 'C', 'D', 'E'];
 
   // Extract unique projects, contexts, and tags from tasks
   let allProjects = $derived([...new Set(tasks.tasks.flatMap(task => task.projects))].sort());
@@ -40,7 +40,7 @@
     }
   
     // Count tasks per project/context/tag. Uses countedTasks so that tags
-    // attached to Future (N) and Sustained (S) tasks are included — the user's
+    // still-open tasks are included — the user's
     // sidebar badges reflect everything in their working set, not just A-F.
     function getProjectCount(project: string): number {
       return tasks.countedTasks.filter(task => task.projects.includes(project)).length;

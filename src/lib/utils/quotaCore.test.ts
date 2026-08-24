@@ -5,6 +5,7 @@ import {
   canAddTask,
   applyHighlanderRule,
   demotionTargetFor,
+  isSingleSlotPriority,
   getQuotaSummary,
   suggestPriority,
   canPromote,
@@ -17,70 +18,91 @@ function task(priority: Priority, overrides: Partial<Task> = {}): Task {
   return { ...createEmptyTask(priority), ...overrides };
 }
 
+/** A board with every tier at quota: A1 B2 C3 D4 E5 = 15 tasks, the whole unit. */
+function fullBoard(): Task[] {
+  return [
+    task('A', { id: 'a0' }),
+    ...Array.from({ length: 2 }, (_, i) => task('B', { id: `b${i}` })),
+    ...Array.from({ length: 3 }, (_, i) => task('C', { id: `c${i}` })),
+    ...Array.from({ length: 4 }, (_, i) => task('D', { id: `d${i}` })),
+    ...Array.from({ length: 5 }, (_, i) => task('E', { id: `e${i}` })),
+  ];
+}
+
 describe('countActiveByPriority', () => {
-  it('counts non-completed active (A-F) tasks and ignores others', () => {
+  it('counts non-completed A-E tasks and ignores hidden ones', () => {
     const tasks = [
       task('A'),
       task('A', { completed: true }), // completed → excluded
       task('B'),
       task('C'),
-      task('F'),
-      task('F'),
       task('G'), // hidden → excluded
-      task('N'), // not active → excluded
+      task('H'), // hidden → excluded
     ];
-    expect(countActiveByPriority(tasks)).toEqual({ A: 1, B: 1, C: 1, D: 0, E: 0, F: 2 });
+    expect(countActiveByPriority(tasks)).toEqual({ A: 1, B: 1, C: 1, D: 0, E: 0 });
   });
 
   it('returns all zeros for an empty list', () => {
-    expect(countActiveByPriority([])).toEqual({ A: 0, B: 0, C: 0, D: 0, E: 0, F: 0 });
+    expect(countActiveByPriority([])).toEqual({ A: 0, B: 0, C: 0, D: 0, E: 0 });
   });
 });
 
 describe('getRemainingQuota', () => {
   it('subtracts used counts from configured quotas', () => {
     const remaining = getRemainingQuota([task('A'), task('B'), task('B')]);
-    expect(remaining.A).toBe(0); // quota 1, used 1
-    expect(remaining.B).toBe(0); // quota 2, used 2
-    expect(remaining.C).toBe(3);
-    expect(remaining.D).toBe(4);
-    expect(remaining.E).toBe(5);
-    expect(remaining.F).toBe(Infinity);
+    expect(remaining).toEqual({ A: 0, B: 0, C: 3, D: 4, E: 5 });
   });
 
   it('never goes negative', () => {
-    const remaining = getRemainingQuota([task('A'), task('A')]);
-    expect(remaining.A).toBe(0);
+    // An explicit restore is allowed to put a tier over quota; readers must
+    // report "full", not a negative number.
+    expect(getRemainingQuota([task('A'), task('A')]).A).toBe(0);
   });
 });
 
 describe('canAddTask', () => {
-  it('allows an active priority under quota', () => {
+  it('allows a tier under quota and refuses one at quota', () => {
     expect(canAddTask([], 'A')).toBe(true);
-  });
-
-  it('rejects an active priority at quota', () => {
     expect(canAddTask([task('A')], 'A')).toBe(false);
+    expect(canAddTask([task('E'), task('E')], 'E')).toBe(true);
   });
 
-  it('always allows F (idea pool)', () => {
-    const many = Array.from({ length: 50 }, () => task('F'));
-    expect(canAddTask(many, 'F')).toBe(true);
-  });
-
-  it('always allows N (future) regardless of count', () => {
-    expect(canAddTask([task('N'), task('N')], 'N')).toBe(true);
-  });
-
-  it('allows S only when no active S exists (quota 1)', () => {
-    expect(canAddTask([], 'S')).toBe(true);
-    expect(canAddTask([task('S')], 'S')).toBe(false);
-    expect(canAddTask([task('S', { completed: true })], 'S')).toBe(true);
-  });
-
-  it('rejects hidden priorities', () => {
+  it('refuses hidden priorities', () => {
     expect(canAddTask([], 'G')).toBe(false);
     expect(canAddTask([], 'H')).toBe(false);
+  });
+
+  it('has no unbounded tier left to absorb an overflow', () => {
+    // F used to answer true here no matter what. The unit is now finite: 15
+    // tasks and nothing more fits.
+    const board = fullBoard();
+    for (const priority of ['A', 'B', 'C', 'D', 'E'] as Priority[]) {
+      expect(canAddTask(board, priority), priority).toBe(false);
+    }
+  });
+});
+
+describe('isSingleSlotPriority', () => {
+  it('is A and nothing else', () => {
+    expect(isSingleSlotPriority('A')).toBe(true);
+    // S was the other one; the week's sustained project is a +project tag now.
+    expect(isSingleSlotPriority('B')).toBe(false);
+    expect(isSingleSlotPriority('E')).toBe(false);
+    expect(isSingleSlotPriority('G')).toBe(false);
+  });
+});
+
+describe('demotionTargetFor', () => {
+  it('picks the highest tier that still has room', () => {
+    expect(demotionTargetFor([])).toBe('B');
+    expect(demotionTargetFor([task('B'), task('B')])).toBe('C');
+  });
+
+  it('returns null when every lower tier is full', () => {
+    // This used to be impossible: the ladder ended at F, the unbounded Idea
+    // Pool. Callers now have to handle "nowhere to put it".
+    const noRoom = fullBoard().filter(t => t.id !== 'a0');
+    expect(demotionTargetFor(noRoom)).toBeNull();
   });
 });
 
@@ -89,95 +111,61 @@ describe('applyHighlanderRule', () => {
     const existingA = task('A', { id: 'a1' });
     const completedA = task('A', { id: 'a2', completed: true });
     const b = task('B', { id: 'b1' });
-    const newA = task('A', { id: 'new' });
 
-    const result = applyHighlanderRule([existingA, completedA, b], newA);
-    expect(result.find((t) => t.id === 'a1')?.priority).toBe('B');
-    expect(result.find((t) => t.id === 'a2')?.priority).toBe('A'); // completed untouched
-    expect(result.find((t) => t.id === 'b1')?.priority).toBe('B');
+    const result = applyHighlanderRule([existingA, completedA, b], task('A', { id: 'new' }));
+    expect(result.tasks.find((t) => t.id === 'a1')?.priority).toBe('B');
+    expect(result.tasks.find((t) => t.id === 'a2')?.priority).toBe('A'); // completed untouched
+    expect(result.tasks.find((t) => t.id === 'b1')?.priority).toBe('B');
+    expect(result.demoted).toEqual([{ task: expect.objectContaining({ id: 'a1' }), to: 'B' }]);
+    expect(result.evicted).toEqual([]);
   });
 
   it('demotes past a full tier instead of overfilling it', () => {
     // B is at its quota of 2, so the unseated A must land in C, not B×3.
-    const existingA = task('A', { id: 'a1' });
-    const board = [existingA, task('B', { id: 'b1' }), task('B', { id: 'b2' })];
+    const board = [task('A', { id: 'a1' }), task('B', { id: 'b1' }), task('B', { id: 'b2' })];
 
     const result = applyHighlanderRule(board, task('A', { id: 'new' }));
-    expect(result.find((t) => t.id === 'a1')?.priority).toBe('C');
-    expect(result.filter((t) => t.priority === 'B')).toHaveLength(2);
+    expect(result.tasks.find((t) => t.id === 'a1')?.priority).toBe('C');
+    expect(result.tasks.filter((t) => t.priority === 'B')).toHaveLength(2);
   });
 
-  it('falls back to the unbounded Idea Pool when B-E are all full', () => {
-    const existingA = task('A', { id: 'a1' });
-    const full = [
-      existingA,
-      ...Array.from({ length: 2 }, (_, i) => task('B', { id: `b${i}` })),
-      ...Array.from({ length: 3 }, (_, i) => task('C', { id: `c${i}` })),
-      ...Array.from({ length: 4 }, (_, i) => task('D', { id: `d${i}` })),
-      ...Array.from({ length: 5 }, (_, i) => task('E', { id: `e${i}` })),
-    ];
+  it('evicts the incumbent when no tier has room', () => {
+    // The unit is full, so the unseated A goes back to the candidate pool
+    // rather than pushing a tier over quota. The caller has to report this or
+    // the task looks like it vanished.
+    const board = fullBoard();
+    const result = applyHighlanderRule(board, task('A', { id: 'new' }));
 
-    const result = applyHighlanderRule(full, task('A', { id: 'new' }));
-    expect(result.find((t) => t.id === 'a1')?.priority).toBe('F');
-  });
-
-  it('unseats an incumbent S the same way it unseats an incumbent A', () => {
-    // S is single-slot like A. Adding a second one must demote the incumbent,
-    // not be refused — S used to be the one tier where the add was rejected.
-    const existingS = task('S', { id: 's1' });
-    const result = applyHighlanderRule([existingS, task('C', { id: 'c1' })], task('S', { id: 'new' }));
-    expect(result.find((t) => t.id === 's1')?.priority).toBe('B');
-  });
-
-  it('leaves the other single-slot tier alone', () => {
-    // Adding an S must not disturb the day's A, and vice versa.
-    const board = [task('A', { id: 'a1' }), task('S', { id: 's1' })];
-    expect(applyHighlanderRule(board, task('S', { id: 'new' })).find((t) => t.id === 'a1')?.priority).toBe('A');
-    expect(applyHighlanderRule(board, task('A', { id: 'new' })).find((t) => t.id === 's1')?.priority).toBe('S');
+    expect(result.evicted.map((t) => t.id)).toEqual(['a0']);
+    expect(result.tasks.find((t) => t.id === 'a0')).toBeUndefined();
+    expect(result.tasks).toHaveLength(board.length - 1);
+    expect(result.demoted).toEqual([]);
   });
 
   it('ignores tiers that are not single-slot', () => {
     const board = [task('C', { id: 'c1' })];
-    expect(applyHighlanderRule(board, task('C', { id: 'new' })).find((t) => t.id === 'c1')?.priority).toBe('C');
-  });
-
-  it('shares its demotion target with the S (sustained) Highlander', () => {
-    // Both A and S are single-slot. demotionTargetFor is the one place that
-    // decides where an unseated incumbent lands, so the two rules cannot drift.
-    expect(demotionTargetFor([])).toBe('B');
-    expect(demotionTargetFor([task('B', { id: 'b1' }), task('B', { id: 'b2' })])).toBe('C');
-    expect(
-      demotionTargetFor([
-        ...Array.from({ length: 2 }, (_, i) => task('B', { id: `b${i}` })),
-        ...Array.from({ length: 3 }, (_, i) => task('C', { id: `c${i}` })),
-        ...Array.from({ length: 4 }, (_, i) => task('D', { id: `d${i}` })),
-        ...Array.from({ length: 5 }, (_, i) => task('E', { id: `e${i}` })),
-      ])
-    ).toBe('F');
+    const result = applyHighlanderRule(board, task('C', { id: 'new' }));
+    expect(result.tasks).toBe(board);
+    expect(result.demoted).toEqual([]);
+    expect(result.evicted).toEqual([]);
   });
 
   it('does not touch the new task itself', () => {
     const newA = task('A', { id: 'new' });
-    const result = applyHighlanderRule([newA], newA);
-    expect(result.find((t) => t.id === 'new')?.priority).toBe('A');
-  });
-
-  it('returns the array unchanged when the new task is not A', () => {
-    const tasks = [task('A'), task('B')];
-    expect(applyHighlanderRule(tasks, task('C'))).toBe(tasks);
+    expect(applyHighlanderRule([newA], newA).tasks.find((t) => t.id === 'new')?.priority).toBe('A');
   });
 });
 
 describe('getQuotaSummary', () => {
-  it('reports usage and full flags for A-F', () => {
+  it('reports usage and full flags for A-E', () => {
     const summary = getQuotaSummary([task('A'), task('C')]);
-    expect(summary).toHaveLength(6);
+    expect(summary).toHaveLength(5);
+
     const a = summary.find((s) => s.priority === 'A')!;
-    expect(a.used).toBe(1);
-    expect(a.quota).toBe(1);
-    expect(a.isFull).toBe(true);
-    const f = summary.find((s) => s.priority === 'F')!;
-    expect(f.isFull).toBe(false);
+    expect(a).toMatchObject({ used: 1, quota: 1, isFull: true });
+
+    const e = summary.find((s) => s.priority === 'E')!;
+    expect(e).toMatchObject({ used: 0, quota: 5, isFull: false });
   });
 });
 
@@ -187,19 +175,12 @@ describe('suggestPriority', () => {
   });
 
   it('skips a full priority and suggests the next available', () => {
-    const fullE = Array.from({ length: 5 }, () => task('E'));
-    expect(suggestPriority(fullE)).toBe('D');
+    expect(suggestPriority(Array.from({ length: 5 }, () => task('E')))).toBe('D');
   });
 
-  it('falls back to F when A-E are all full', () => {
-    const tasks = [
-      task('A'),
-      task('B'), task('B'),
-      task('C'), task('C'), task('C'),
-      task('D'), task('D'), task('D'), task('D'),
-      task('E'), task('E'), task('E'), task('E'), task('E'),
-    ];
-    expect(suggestPriority(tasks)).toBe('F');
+  it('returns null when the whole unit is full', () => {
+    // The honest answer, now that there is no Idea Pool to sweep it into.
+    expect(suggestPriority(fullBoard())).toBeNull();
   });
 });
 
@@ -213,21 +194,22 @@ describe('canPromote / canDemote', () => {
   });
 
   it('always allows promoting B to A (Highlander applies)', () => {
-    const fullA = [task('A')];
-    expect(canPromote(fullA, task('B'))).toEqual({ canPromote: true, targetPriority: 'A' });
+    expect(canPromote([task('A')], task('B'))).toEqual({ canPromote: true, targetPriority: 'A' });
   });
 
   it('cannot promote C when the target B is full', () => {
-    const fullB = [task('B'), task('B')];
-    expect(canPromote(fullB, task('C'))).toEqual({ canPromote: false, targetPriority: null });
+    expect(canPromote([task('B'), task('B')], task('C'))).toEqual({
+      canPromote: false,
+      targetPriority: null,
+    });
   });
 
-  it('demotes A to B and refuses to demote F (bottom)', () => {
+  it('demotes A to B and refuses to demote E (now the bottom tier)', () => {
     expect(canDemote(task('A'))).toEqual({ canDemote: true, targetPriority: 'B' });
-    expect(canDemote(task('F'))).toEqual({ canDemote: false, targetPriority: null });
+    expect(canDemote(task('E'))).toEqual({ canDemote: false, targetPriority: null });
   });
 
-  it('refuses promote/demote on a non-active priority', () => {
+  it('refuses promote/demote on a hidden priority', () => {
     expect(canPromote([], task('G'))).toEqual({ canPromote: false, targetPriority: null });
     expect(canDemote(task('G'))).toEqual({ canDemote: false, targetPriority: null });
   });

@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Priority } from '$lib/types';
-  import { PRIORITY_CONFIG } from '$lib/types';
+  import { PRIORITY_CONFIG, DEFAULT_PRIORITY } from '$lib/types';
   import { addTask, getTasksStore } from '$lib/stores/tasks.svelte';
   import { showToast } from '$lib/stores/ui.svelte';
   import { getI18nStore } from '$lib/i18n';
@@ -25,13 +25,13 @@
   let thresholdDate = $state('');
   let estimatedPomodoros = $state<number | null>(null);
   let recurrence = $state('');
-  let selectedPriority = $state<Priority>('F'); // Default to Idea Pool
+  let selectedPriority = $state<Priority>(DEFAULT_PRIORITY);
   let isExpanded = $state(false);
   let showSyntaxHint = $state(false);
   let hasStartedTyping = $state(false);
 
-  // Priority options for selector (A-E have quotas, F idea pool, S sustained, N future)
-  const priorityOptions: Priority[] = ['A', 'S', 'B', 'C', 'D', 'E', 'F', 'N'];
+  // Priority options for selector — the whole tier set, each with a quota.
+  const priorityOptions: Priority[] = ['A', 'B', 'C', 'D', 'E'];
 
   const moodOptions = $derived([
     { value: '', label: t('taskForm.moodPlaceholder'), emoji: '' },
@@ -59,7 +59,7 @@
 
   // Syntax patterns for highlighting
   const syntaxPatterns = $derived([
-    { pattern: '!A-F', label: t('syntax.priority'), color: '#ff7b7b' },
+    { pattern: '!A-E', label: t('syntax.priority'), color: '#ff7b7b' },
     { pattern: '+', label: t('syntax.project'), color: '#9384bc' },
     { pattern: '@', label: t('syntax.context'), color: '#6b9cbc' },
     { pattern: '#', label: t('syntax.tag'), color: '#6ca88c' },
@@ -167,7 +167,7 @@
     thresholdDate = '';
     estimatedPomodoros = null;
     recurrence = '';
-    selectedPriority = 'F';
+    selectedPriority = DEFAULT_PRIORITY;
     hasStartedTyping = false;
   }
 
@@ -349,8 +349,8 @@
   let detectedPatterns = $derived(
     syntaxPatterns.filter(p =>
       content.includes(p.pattern) ||
-      (p.pattern === '!A-F' && /![A-Fa-f]/.test(content)) ||
-      (p.pattern === '!A-F' && selectedPriority !== 'F') ||
+      (p.pattern === '!A-E' && /![A-Ea-e]/.test(content)) ||
+      (p.pattern === '!A-E' && selectedPriority !== DEFAULT_PRIORITY) ||
       (p.pattern === '+' && project.trim()) ||
       (p.pattern === '@' && mood) ||
       (p.pattern === '#' && tags.trim()) ||

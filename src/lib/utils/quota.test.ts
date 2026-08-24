@@ -18,28 +18,25 @@ function task(priority: Priority, overrides: Partial<Task> = {}): Task {
 }
 
 describe('validateQuota', () => {
-  it('returns null for future priority N (no quota)', () => {
-    expect(validateQuota([], 'N')).toBeNull();
-  });
-
-  it('returns null when an active priority is under quota', () => {
-    expect(validateQuota([], 'A')).toBeNull();
+  it('returns null when a priority is under quota', () => {
+    expect(validateQuota([], 'C')).toBeNull();
   });
 
   it('returns a quota-full message when the priority is at quota', () => {
-    const msg = validateQuota([task('A')], 'A');
+    const msg = validateQuota([task('B'), task('B')], 'B');
     expect(msg).not.toBeNull();
     expect(msg).toContain('message.quotaFull');
+  });
+
+  it('never refuses the single-slot tier — Highlander makes room instead', () => {
+    expect(validateQuota([], 'A')).toBeNull();
+    expect(validateQuota([task('A')], 'A')).toBeNull();
   });
 
   it('rejects adding directly to a hidden priority, via a translated message', () => {
     // Was an untranslated English literal — every other refusal goes through t().
     expect(validateQuota([], 'G')).toContain('message.hiddenPriority');
-  });
-
-  it('validates the sustained (S) single-slot rule', () => {
-    expect(validateQuota([], 'S')).toBeNull();
-    expect(validateQuota([task('S')], 'S')).toContain('message.sustainedExists');
+    expect(validateQuota([], 'H')).toContain('message.hiddenPriority');
   });
 });
 

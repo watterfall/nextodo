@@ -1,7 +1,7 @@
-import type { Task, Subtask, Priority, FilterState, UnitInfo, AppData, ActiveData, PomodoroHistoryData } from '$lib/types';
-import { createEmptyTask, createDefaultAppData, isThresholdPassed, calculateEZoneAge, isActivePriority, isCountedPriority, isFuturePriority, isSustainedPriority, isOperablePriority, createSubtask, ACTIVE_PRIORITIES, isWithinRetentionPeriod } from '$lib/types';
+import type { Task, Priority, FilterState, UnitInfo, AppData, ActiveData, PomodoroHistoryData } from '$lib/types';
+import { createDefaultAppData, isThresholdPassed, isActivePriority, isCountedPriority, isHiddenPriority, isOperablePriority, DEFAULT_PRIORITY, isWithinRetentionPeriod } from '$lib/types';
 import { loadAppData, saveAppData, reloadFile, archiveTasks } from '$lib/utils/storage';
-import { applyHighlanderRule, canAddTask, validateQuota, demotionTargetFor, isSingleSlotPriority } from '$lib/utils/quota';
+import { applyHighlanderRule, canAddTask, validateQuota, isSingleSlotPriority } from '$lib/utils/quota';
 import { createTaskFromInput } from '$lib/utils/parser';
 import { processRecurringTasks, createNextOccurrence } from '$lib/utils/recurrence';
 import { evaluateCycle, rollUnfinishedIntoWindow } from '$lib/utils/cycleEngine';
@@ -195,39 +195,54 @@ export interface AddTaskResult {
   success: boolean;
   error?: string;
   quotaExceeded?: boolean;
+  /** An incumbent A pushed down a tier to make room for this one. */
+  demoted?: { name: string; to: Priority } | null;
+  /**
+   * An incumbent A with nowhere left to go. It has been removed from the unit
+   * and belongs back in the candidate pool — callers must say so, or the task
+   * looks like it vanished.
+   */
+  evicted?: { name: string } | null;
+}
+
+interface HighlanderOutcome {
+  tasks: Task[];
+  demoted: { name: string; to: Priority } | null;
+  evicted: { name: string } | null;
+}
+
+/**
+ * Run the Highlander rule and flatten its result into something the UI can
+ * report. Every add/move path goes through here so they cannot drift.
+ */
+function runHighlander(tasks: Task[], newTask: Task): HighlanderOutcome {
+  const result = applyHighlanderRule(tasks, newTask);
+  const demoted = result.demoted[0];
+  const evicted = result.evicted[0];
+  return {
+    tasks: result.tasks,
+    demoted: demoted ? { name: demoted.task.content, to: demoted.to } : null,
+    evicted: evicted ? { name: evicted.content } : null
+  };
 }
 
 export async function addTask(input: string, force = false): Promise<AddTaskResult> {
-  const task = createTaskFromInput(input);
-
-  // Single-slot tiers (A, S) are exempt from the quota check: Highlander unseats
-  // the incumbent instead of refusing the add. Special-casing only A left S as
-  // the one tier where a second task was rejected outright.
-  const quotaError = isSingleSlotPriority(task.priority) ? null : validateQuota(appData.tasks, task.priority);
-  if (quotaError && !force) {
-    return { success: false, error: quotaError, quotaExceeded: true };
-  }
-
-  appData.tasks = applyHighlanderRule(appData.tasks, task);
-
-  appData.tasks = [...appData.tasks, task];
-  await persist();
-
-  return { success: true };
+  return addTaskDirect(createTaskFromInput(input), force);
 }
 
 export async function addTaskDirect(task: Task, force = false): Promise<AddTaskResult> {
+  // A single-slot tier is exempt from the quota check: Highlander unseats the
+  // incumbent instead of refusing the add.
   const quotaError = isSingleSlotPriority(task.priority) ? null : validateQuota(appData.tasks, task.priority);
   if (quotaError && !force) {
     return { success: false, error: quotaError, quotaExceeded: true };
   }
 
-  appData.tasks = applyHighlanderRule(appData.tasks, task);
-
-  appData.tasks = [...appData.tasks, task];
+  const outcome = runHighlander(appData.tasks, task);
+  appData.tasks = [...outcome.tasks, task];
   await persist();
 
-  return { success: true };
+  return { success: true, demoted: outcome.demoted, evicted: outcome.evicted };
 }
 
 export async function updateTask(taskId: string, updates: Partial<Task>): Promise<void> {
@@ -243,7 +258,7 @@ export async function updateTask(taskId: string, updates: Partial<Task>): Promis
   if (existingTask && updates.priority === 'A' && existingTask.priority !== 'A') {
     const promotedTask = nextTasks.find(task => task.id === taskId);
     if (promotedTask) {
-      nextTasks = applyHighlanderRule(nextTasks, promotedTask);
+      nextTasks = runHighlander(nextTasks, promotedTask).tasks;
     }
   }
 
@@ -311,14 +326,11 @@ export async function completeTask(taskId: string): Promise<void> {
 
   // Add next recurring task
   if (nextRecurringTask) {
-    const quotaError = nextRecurringTask.priority === 'A'
+    const quotaError = isSingleSlotPriority(nextRecurringTask.priority)
       ? null
       : validateQuota(appData.tasks.filter(t => isActivePriority(t.priority)), nextRecurringTask.priority);
     if (!quotaError) {
-      if (nextRecurringTask.priority === 'A') {
-        appData.tasks = applyHighlanderRule(appData.tasks, nextRecurringTask);
-      }
-      appData.tasks = [...appData.tasks, nextRecurringTask];
+      appData.tasks = [...runHighlander(appData.tasks, nextRecurringTask).tasks, nextRecurringTask];
     }
   }
 
@@ -383,28 +395,34 @@ export async function evolveTask(taskId: string, newContent?: string): Promise<{
   return { success: true, newTaskId: evolvedTask.id };
 }
 
-// Restore a task from G (completed) or H (cancelled) back to active state
+// Restore a task from G (completed) or H (cancelled) back to active state.
+//
+// It goes back to the tier it came from. There is no Idea Pool to park it in
+// any more, and dropping it into an arbitrary tier would lose the one piece of
+// information the record still carries about where it belongs.
 export async function uncompleteTask(taskId: string): Promise<void> {
-  appData.tasks = appData.tasks.map(task => {
-    if (task.id === taskId && (task.priority === 'G' || task.priority === 'H')) {
-      return {
-        ...task,
-        priority: 'F' as Priority, // Restore to Idea Pool by default
-        completed: false,
-        completedAt: null
-      };
-    }
-    return task;
-  });
+  const task = appData.tasks.find(t => t.id === taskId);
+  if (!task || !isHiddenPriority(task.priority)) return;
 
-  await persist();
+  const target = task.originalPriority && isActivePriority(task.originalPriority)
+    ? task.originalPriority
+    : DEFAULT_PRIORITY;
+
+  return restoreTask(taskId, target);
 }
 
-// Restore a task to a specific priority
-export async function restoreTask(taskId: string, targetPriority: Priority = 'F'): Promise<void> {
-  // Only allow restoring to operable (active or future) priorities
+/**
+ * Restore a task to a specific priority.
+ *
+ * An explicit restore is allowed to put a tier one over its quota. Quota is a
+ * planning guardrail, not an invariant the data has to satisfy — the meter
+ * shows the overflow, and refusing the user's own undo would be worse. The one
+ * exception is A, where Highlander still applies: the restored task takes the
+ * slot and the incumbent moves down.
+ */
+export async function restoreTask(taskId: string, targetPriority: Priority = DEFAULT_PRIORITY): Promise<void> {
   if (!isOperablePriority(targetPriority)) {
-    targetPriority = 'F';
+    targetPriority = DEFAULT_PRIORITY;
   }
 
   appData.tasks = appData.tasks.map(task => {
@@ -451,199 +469,16 @@ export async function resolvePendingReview(action: 'rollover' | 'dismiss'): Prom
   await persist();
 }
 
-// ============================================================================
-// Subtask operations — embedded lightweight checklist items on a parent Task
-// ============================================================================
-
-export async function addSubtask(taskId: string, content: string): Promise<void> {
-  const trimmed = content.trim();
-  if (!trimmed) return;
-  appData.tasks = appData.tasks.map(task => {
-    if (task.id === taskId) {
-      const subtasks = [...(task.subtasks ?? []), createSubtask(trimmed)];
-      return { ...task, subtasks };
-    }
-    return task;
-  });
-  await persist();
-}
-
-export async function removeSubtask(taskId: string, subtaskId: string): Promise<void> {
-  appData.tasks = appData.tasks.map(task => {
-    if (task.id === taskId && task.subtasks) {
-      return { ...task, subtasks: task.subtasks.filter(s => s.id !== subtaskId) };
-    }
-    return task;
-  });
-  await persist();
-}
-
-export async function toggleSubtask(taskId: string, subtaskId: string): Promise<void> {
-  const nowIso = new Date().toISOString();
-  appData.tasks = appData.tasks.map(task => {
-    if (task.id === taskId && task.subtasks) {
-      return {
-        ...task,
-        subtasks: task.subtasks.map(s => {
-          if (s.id !== subtaskId) return s;
-          const next = !s.completed;
-          return { ...s, completed: next, completedAt: next ? nowIso : null };
-        })
-      };
-    }
-    return task;
-  });
-  await persist();
-}
-
-// Promote a subtask out of its parent into a standalone task at target priority.
-// The subtask is removed from the parent. The new task inherits the subtask's
-// content and the parent's projects/contexts/tags as default classification.
-export async function promoteSubtask(
-  parentTaskId: string,
-  subtaskId: string,
-  targetPriority: Priority
-): Promise<{ success: boolean; error?: string }> {
-  const parent = appData.tasks.find(t => t.id === parentTaskId);
-  if (!parent || !parent.subtasks) {
-    return { success: false, error: 'Parent task not found' };
-  }
-  const subtask = parent.subtasks.find(s => s.id === subtaskId);
-  if (!subtask) {
-    return { success: false, error: 'Subtask not found' };
-  }
-  if (!isOperablePriority(targetPriority)) {
-    return { success: false, error: 'Invalid target priority' };
-  }
-
-  // Quota check (skip for A — handled by Highlander below; skip for F — unlimited).
-  // canAddTask handles S and N internally; pass full task list so S count is accurate.
-  if (targetPriority !== 'A' && targetPriority !== 'F') {
-    if (!canAddTask(appData.tasks, targetPriority)) {
-      return { success: false, error: t('message.quotaExceeded', { priority: targetPriority }) };
-    }
-  }
-
-  // Build the new standalone task from the subtask content
-  const now = new Date().toISOString();
-  const newTask: Task = {
-    id: crypto.randomUUID(),
-    content: subtask.content,
-    priority: targetPriority,
-    completed: false,
-    completedAt: null,
-    createdAt: now,
-    unitStart: currentUnitStartLocal(),
-    projects: [...parent.projects],
-    contexts: [...parent.contexts],
-    customTags: [...parent.customTags],
-    dueDate: null,
-    thresholdDate: null,
-    recurrence: null,
-    pomodoros: { estimated: 0, completed: 0 },
-    notes: '',
-    evolvedFrom: parentTaskId
-  };
-
-  // Apply Highlander if needed
-  let nextTasks = [...appData.tasks];
-  if (targetPriority === 'A') {
-    nextTasks = applyHighlanderRule(nextTasks, newTask);
-  }
-  // Append new task
-  nextTasks = [...nextTasks, newTask];
-  // Remove subtask from parent
-  nextTasks = nextTasks.map(item => {
-    if (item.id === parentTaskId && item.subtasks) {
-      return { ...item, subtasks: item.subtasks.filter(s => s.id !== subtaskId) };
-    }
-    return item;
-  });
-  appData.tasks = nextTasks;
-  await persist();
-  return { success: true };
-}
-
-export async function updateSubtaskContent(taskId: string, subtaskId: string, content: string): Promise<void> {
-  const trimmed = content.trim();
-  if (!trimmed) {
-    return removeSubtask(taskId, subtaskId);
-  }
-  appData.tasks = appData.tasks.map(task => {
-    if (task.id === taskId && task.subtasks) {
-      return {
-        ...task,
-        subtasks: task.subtasks.map(s => s.id === subtaskId ? { ...s, content: trimmed } : s)
-      };
-    }
-    return task;
-  });
-  await persist();
-}
-
-// Activate a future-progress (N) task into an active priority (A-F).
-// Subject to the target priority's quota.
-export async function activateFutureTask(
-  taskId: string,
-  targetPriority: Priority = 'F'
-): Promise<{ success: boolean; error?: string }> {
-  const task = appData.tasks.find(t => t.id === taskId);
-  if (!task) return { success: false, error: 'Task not found' };
-  if (!isFuturePriority(task.priority)) {
-    return { success: false, error: 'Task is not in future-progress' };
-  }
-  if (!isOperablePriority(targetPriority)) {
-    return { success: false, error: 'Invalid target priority' };
-  }
-
-  // Quota check — skip A and S; both are single-slot and changePriority's
-  // Highlander demotes the incumbent instead of refusing the move.
-  const otherTasks = appData.tasks.filter(t => t.id !== taskId);
-  if (targetPriority !== 'A' && !isSustainedPriority(targetPriority) && !canAddTask(otherTasks, targetPriority)) {
-    return { success: false, error: t('message.quotaExceeded', { priority: targetPriority }) };
-  }
-
-  // S Highlander lives in changePriority so every path behaves the same.
-  if (isSustainedPriority(targetPriority)) {
-    return changePriority(taskId, targetPriority, true);
-  }
-
-  // Apply Highlander rule if activating to A
-  let nextTasks = appData.tasks.map(item => {
-    if (item.id === taskId) {
-      return {
-        ...item,
-        priority: targetPriority,
-        lastPriorityChangeAt: new Date().toISOString()
-      };
-    }
-    return item;
-  });
-
-  if (targetPriority === 'A') {
-    const promoted = nextTasks.find(t => t.id === taskId);
-    if (promoted) {
-      nextTasks = applyHighlanderRule(nextTasks, promoted);
-    }
-  }
-
-  appData.tasks = nextTasks;
-  await persist();
-  return { success: true };
-}
-
 // Priority tiers for detecting drastic changes
 // Tier 1: A, B (high importance tasks)
 // Tier 2: C (standard tasks)
 // Tier 3: D, E (quick/temp tasks)
-// Tier 4: F (idea pool)
 function getPriorityTier(priority: Priority): number {
   switch (priority) {
     case 'A': case 'B': return 1;
     case 'C': return 2;
     case 'D': case 'E': return 3;
-    case 'F': return 4;
-    default: return 4;
+    default: return 3;
   }
 }
 
@@ -689,14 +524,24 @@ export function needsPriorityChangeConfirmation(task: Task, newPriority: Priorit
   return { needsConfirmation: false };
 }
 
-export async function changePriority(taskId: string, newPriority: Priority, skipConfirmation = false): Promise<{ success: boolean; error?: string; needsConfirmation?: boolean; confirmationReason?: string; demotedIncumbent?: { name: string; to: Priority } | null }> {
+export interface ChangePriorityResult {
+  success: boolean;
+  error?: string;
+  needsConfirmation?: boolean;
+  confirmationReason?: string;
+  /** The incumbent A this move pushed down a tier, if any. */
+  demotedIncumbent?: { name: string; to: Priority } | null;
+  /** The incumbent A that had nowhere to go and left the unit, if any. */
+  evictedIncumbent?: { name: string } | null;
+}
+
+export async function changePriority(taskId: string, newPriority: Priority, skipConfirmation = false): Promise<ChangePriorityResult> {
   const task = appData.tasks.find(t => t.id === taskId);
   if (!task) {
     return { success: false, error: 'Task not found' };
   }
 
-  // Allow changing to active (A-F) or future (N) priorities through this function
-  // Use completeTask or cancelTask for G/H
+  // A-E only through this function; use completeTask or cancelTask for G/H.
   if (!isOperablePriority(newPriority)) {
     return { success: false, error: 'Cannot change to hidden priority directly' };
   }
@@ -716,37 +561,24 @@ export async function changePriority(taskId: string, newPriority: Priority, skip
 
   const otherTasks = appData.tasks.filter(t => t.id !== taskId);
 
-  // S is single-slot like A, so it gets the same Highlander treatment: the
-  // incumbent is demoted rather than the move being refused. Previously this
-  // path returned a quota error while the ZoneRail drop and activateFutureTask
-  // paths silently demoted to 'B' — three behaviours for one rule.
-  let demotedIncumbent: { name: string; to: Priority } | null = null;
-  if (isSustainedPriority(newPriority)) {
-    const incumbent = otherTasks.find(t => t.priority === 'S' && !t.completed);
-    if (incumbent) {
-      const target = demotionTargetFor(otherTasks.filter(t => t.id !== incumbent.id));
-      appData.tasks = appData.tasks.map(item =>
-        item.id === incumbent.id
-          ? { ...item, priority: target, lastPriorityChangeAt: new Date().toISOString() }
-          : item
-      );
-      demotedIncumbent = { name: incumbent.content, to: target };
-    }
-  }
-
-  // Check quota for new priority — pass full task list so canAddTask can correctly
-  // count S (Sustained, quota 1) and N (Future, unlimited); the A-F branch
-  // internally filters by isActivePriority via getRemainingQuota.
-  // A and S are skipped: both are single-slot and handled by Highlander above.
-  if (newPriority !== 'A' && !isSustainedPriority(newPriority) && !canAddTask(otherTasks, newPriority)) {
+  // A is skipped: it is single-slot, and Highlander (inside updateTask) unseats
+  // the incumbent rather than refusing the move.
+  if (!isSingleSlotPriority(newPriority) && !canAddTask(otherTasks, newPriority)) {
     return { success: false, error: t('message.quotaExceeded', { priority: newPriority }) };
   }
 
-  await updateTask(taskId, {
-    priority: newPriority,
-    lastPriorityChangeAt: new Date().toISOString()
-  });
-  return { success: true, demotedIncumbent };
+  // Run Highlander here rather than leaning on updateTask's copy of it, so the
+  // caller can report what happened to the incumbent.
+  const moved: Task = { ...task, priority: newPriority, lastPriorityChangeAt: new Date().toISOString() };
+  const outcome = runHighlander(
+    appData.tasks.map(item => (item.id === taskId ? moved : item)),
+    moved
+  );
+
+  appData.tasks = outcome.tasks;
+  await persist();
+
+  return { success: true, demotedIncumbent: outcome.demoted, evictedIncumbent: outcome.evicted };
 }
 
 export async function incrementPomodoro(taskId: string): Promise<void> {
@@ -949,11 +781,8 @@ const tasksByPriority = $derived.by(() => {
     C: [],
     D: [],
     E: [],
-    F: [],
     G: [],
-    H: [],
-    N: [],
-    S: []
+    H: []
   };
 
   for (const task of filteredTasks) {
@@ -985,44 +814,29 @@ const cancelledTasks = $derived(
     })
 );
 
-// Future-progress tasks (N priority) — long-horizon, default hidden from daily views
-const futureTasks = $derived(
-  appData.tasks.filter(t => isFuturePriority(t.priority))
-    .sort((a, b) => {
-      const dateA = new Date(a.createdAt).getTime();
-      const dateB = new Date(b.createdAt).getTime();
-      return dateB - dateA;
-    })
-);
-
-const futureTasksTotal = $derived(futureTasks.length);
-
-// Sustained tasks (S priority) — week-long projects, surfaced in the tray with progress
-const sustainedTasks = $derived(
-  appData.tasks.filter(t => isSustainedPriority(t.priority))
-    .sort((a, b) => {
-      const dateA = new Date(a.createdAt).getTime();
-      const dateB = new Date(b.createdAt).getTime();
-      return dateB - dateA;
-    })
-);
-
-const sustainedTasksTotal = $derived(sustainedTasks.length);
-
-// Overall subtask completion across all S tasks (for tray progress display)
-const sustainedSubtaskProgress = $derived.by(() => {
-  let done = 0;
-  let total = 0;
-  for (const task of sustainedTasks) {
-    const subs = task.subtasks ?? [];
-    total += subs.length;
-    done += subs.filter(s => s.completed).length;
-  }
-  return { done, total, ratio: total === 0 ? 0 : done / total };
+// The week's focus project — what the S tier used to be, expressed as an
+// ordinary todo.txt `+project` tag. Its "subtasks" are just tasks carrying the
+// same tag, so unlike the old embedded checklist they can each hold their own
+// priority, due date and pomodoro estimate.
+const focusProjectTasks = $derived.by(() => {
+  const project = appData.settings.focusProject;
+  if (!project) return [];
+  return appData.tasks.filter(t => isActivePriority(t.priority) && t.projects.includes(project));
 });
 
-// Project/context aggregations use countedTasks (A-F + N + S) so that tags
-// attached to Future (N) and Sustained (S) tasks also surface in the sidebar.
+// Progress across everything tagged with the focus project, completed tasks
+// included — the number the old subtask checklist used to show.
+const focusProjectProgress = $derived.by(() => {
+  const project = appData.settings.focusProject;
+  if (!project) return { done: 0, total: 0, ratio: 0 };
+
+  const tagged = appData.tasks.filter(t => t.projects.includes(project) && t.priority !== 'H');
+  const done = tagged.filter(t => t.completed).length;
+  return { done, total: tagged.length, ratio: tagged.length === 0 ? 0 : done / tagged.length };
+});
+
+// Project/context aggregations use countedTasks (everything not completed or
+// cancelled) so the sidebar counts match what the user can still act on.
 const allProjects = $derived.by(() => {
   const projects = new Set<string>();
   for (const task of countedTasks) {
@@ -1091,23 +905,11 @@ const completedTodayCount = $derived(
   appData.tasks.filter(t => t.priority === 'G' && t.completedAt && isToday(t.completedAt)).length
 );
 
-// F zone (Idea Pool) aging tasks
-const agingFZoneTasks = $derived.by(() => {
-  const fZoneTasks = appData.tasks.filter(t => t.priority === 'F' && !t.completed);
-  return fZoneTasks.map(task => ({
-    ...task,
-    ageInUnits: calculateEZoneAge(task, 7) // Uses backward-compatible function
-  }));
-});
-
-// Backward compatibility alias
-const agingEZoneTasks = $derived(agingFZoneTasks);
-
 // Recently completed tasks within retention period, grouped by original priority
 // These will be shown with strikethrough in their original zone
 const recentlyCompletedTasksByPriority = $derived.by(() => {
   const byPriority: Record<Priority, Task[]> = {
-    A: [], B: [], C: [], D: [], E: [], F: [], G: [], H: [], N: [], S: []
+    A: [], B: [], C: [], D: [], E: [], G: [], H: []
   };
 
   const recentlyCompleted = appData.tasks.filter(t =>
@@ -1115,7 +917,7 @@ const recentlyCompletedTasksByPriority = $derived.by(() => {
   );
 
   for (const task of recentlyCompleted) {
-    const originalPriority = task.originalPriority || 'F';
+    const originalPriority = task.originalPriority || DEFAULT_PRIORITY;
     if (byPriority[originalPriority]) {
       byPriority[originalPriority].push(task);
     }
@@ -1142,11 +944,8 @@ export function getTasksStore() {
     get countedTasks() { return countedTasks; },
     get completedTasks() { return completedTasks; },
     get cancelledTasks() { return cancelledTasks; },
-    get futureTasks() { return futureTasks; },
-    get futureTasksTotal() { return futureTasksTotal; },
-    get sustainedTasks() { return sustainedTasks; },
-    get sustainedTasksTotal() { return sustainedTasksTotal; },
-    get sustainedSubtaskProgress() { return sustainedSubtaskProgress; },
+    get focusProjectTasks() { return focusProjectTasks; },
+    get focusProjectProgress() { return focusProjectProgress; },
     get isLoading() { return isLoading; },
     get lastError() { return lastError; },
     get currentUnit() { return currentUnit; },
@@ -1165,7 +964,6 @@ export function getTasksStore() {
     get dailyRecurringCount() { return dailyRecurringCount; },
     get weeklyRecurringCount() { return weeklyRecurringCount; },
     get completedTodayCount() { return completedTodayCount; },
-    get agingEZoneTasks() { return agingEZoneTasks; },
     get recentlyCompletedTasksByPriority() { return recentlyCompletedTasksByPriority; },
     get customTagGroups() { return appData.customTagGroups; },
     get settings() { return appData.settings; },

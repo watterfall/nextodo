@@ -7,6 +7,7 @@ import {
   createDefaultSettings
 } from '$lib/types';
 import { migrateRecurrence } from './recurrence';
+import { migrateToV5 } from './migrateV5';
 
 type DataFileType = 'active' | 'archive' | 'pomodoro_history';
 type PersistedFileType = 'active' | 'pomodoro_history';
@@ -210,20 +211,28 @@ function loadFromLocalStorage(): AppData {
       }
     }
 
-    return {
-      version: active.version || '4.0',
-      lastModified: active.lastModified,
+    const upgraded = upgradeToV5(
+      active.version || '4.0',
       tasks,
+      migrateSettings(active.settings),
+      active.pendingExport
+    );
+
+    return {
+      version: upgraded.version,
+      lastModified: active.lastModified,
+      tasks: upgraded.tasks,
       reviews: active.reviews || [],
       customTagGroups: active.customTagGroups || {
         energy: ['⚡高能量', '😴低能量', '☕中等'],
         type: ['📞电话', '💻编码', '✍️写作', '🤝会议']
       },
       pomodoroHistory: pomodoro.sessions || [],
-      settings: migrateSettings(active.settings),
+      settings: upgraded.settings,
       gamification: active.gamification || createDefaultGamificationData(),
       cycleState: active.cycleState,
-      cycleHistory: active.cycleHistory
+      cycleHistory: active.cycleHistory,
+      pendingExport: upgraded.pendingExport
     };
   } catch (error) {
     console.error('Failed to load from localStorage:', error);
@@ -246,7 +255,8 @@ function saveToLocalStorage(data: AppData): void {
       settings: data.settings,
       gamification: data.gamification,
       cycleState: data.cycleState,
-      cycleHistory: data.cycleHistory
+      cycleHistory: data.cycleHistory,
+      pendingExport: data.pendingExport
     };
 
     const pomodoroHistory: PomodoroHistoryData = {
@@ -305,20 +315,28 @@ async function loadFromTauri(): Promise<AppData> {
     }
 
     // Combine into AppData
-    return {
-      version: active.version || '4.0',
-      lastModified: active.lastModified,
+    const upgraded = upgradeToV5(
+      active.version || '4.0',
       tasks,
+      migrateSettings(active.settings),
+      active.pendingExport
+    );
+
+    return {
+      version: upgraded.version,
+      lastModified: active.lastModified,
+      tasks: upgraded.tasks,
       reviews: active.reviews || [],
       customTagGroups: active.customTagGroups || {
         energy: ['⚡高能量', '😴低能量', '☕中等'],
         type: ['📞电话', '💻编码', '✍️写作', '🤝会议']
       },
       pomodoroHistory: pomodoro.sessions || [],
-      settings: migrateSettings(active.settings),
+      settings: upgraded.settings,
       gamification: active.gamification || createDefaultGamificationData(),
       cycleState: active.cycleState,
-      cycleHistory: active.cycleHistory
+      cycleHistory: active.cycleHistory,
+      pendingExport: upgraded.pendingExport
     };
   } catch (error) {
     console.error('Failed to load from Tauri:', error);
@@ -346,7 +364,8 @@ async function saveToTauri(data: AppData, filesToSave: PersistedFileType[] = ['a
       settings: data.settings,
       gamification: data.gamification,
       cycleState: data.cycleState,
-      cycleHistory: data.cycleHistory
+      cycleHistory: data.cycleHistory,
+      pendingExport: data.pendingExport
     };
 
     const pomodoroHistory: PomodoroHistoryData = {
@@ -402,6 +421,37 @@ async function saveFileTauri(fileType: DataFileType, data: unknown): Promise<voi
 }
 
 /**
+ * Apply the 4.0 -> 5.0 upgrade to a file that has just been read.
+ *
+ * Both live load paths (localStorage and Tauri) assemble AppData themselves
+ * rather than going through migrateData — that one only handles the legacy
+ * single-file layout — so the upgrade has to be applied at each of them or it
+ * silently never runs for real users.
+ */
+function upgradeToV5(
+  version: string,
+  tasks: Task[],
+  settings: AppData['settings'],
+  existingPending: Task[] | undefined
+): { version: string; tasks: Task[]; settings: AppData['settings']; pendingExport?: Task[] } {
+  const pending = existingPending ?? [];
+
+  if (version >= '5.0') {
+    return { version, tasks, settings, pendingExport: pending.length > 0 ? pending : undefined };
+  }
+
+  const migration = migrateToV5(tasks, settings.focusProject ?? null);
+  const allPending = [...pending, ...migration.pendingExport];
+
+  return {
+    version: '5.0',
+    tasks: migration.tasks,
+    settings: { ...settings, focusProject: migration.focusProject },
+    pendingExport: allPending.length > 0 ? allPending : undefined
+  };
+}
+
+/**
  * Migrate tasks to add new fields and remove symbol prefixes
  */
 function migrateTasks(tasks: Task[]): Task[] {
@@ -430,8 +480,10 @@ function migrateSettings(settings: any): AppData['settings'] {
     theme: settings?.theme ?? defaults.theme,
     language: settings?.language ?? defaults.language,
     autoArchiveDays: settings?.autoArchiveDays ?? defaults.autoArchiveDays,
-    eZoneAgingDays: settings?.eZoneAgingDays ?? defaults.eZoneAgingDays,
-    showFutureTasks: settings?.showFutureTasks ?? defaults.showFutureTasks,
+    todoFilePath: settings?.todoFilePath ?? defaults.todoFilePath,
+    doneFilePath: settings?.doneFilePath ?? defaults.doneFilePath,
+    writeBackOrigin: settings?.writeBackOrigin ?? defaults.writeBackOrigin,
+    focusProject: settings?.focusProject ?? defaults.focusProject,
     unitBoundaryFlexHours: settings?.unitBoundaryFlexHours ?? defaults.unitBoundaryFlexHours,
     dueReminders: settings?.dueReminders ?? defaults.dueReminders,
     lowCompletionPrompt: settings?.lowCompletionPrompt ?? defaults.lowCompletionPrompt
@@ -484,6 +536,18 @@ function migrateData(data: any): AppData {
     data.version = '4.0';
   }
 
+  // Migrate to 5.0: the F / N / S tiers and embedded subtasks are gone, and
+  // the candidate pool moved to a todo.txt. Nothing is deleted — see
+  // migrateToV5 and docs/SLEEK-INTEROP.md §10.
+  let pendingExport: Task[] = data.pendingExport ?? [];
+  if (data.version < '5.0') {
+    const migration = migrateToV5(tasks, data.settings.focusProject ?? null);
+    tasks = migration.tasks;
+    pendingExport = [...pendingExport, ...migration.pendingExport];
+    data.settings = { ...data.settings, focusProject: migration.focusProject };
+    data.version = '5.0';
+  }
+
   return {
     version: data.version,
     lastModified: data.lastModified || new Date().toISOString(),
@@ -494,7 +558,8 @@ function migrateData(data: any): AppData {
     settings: data.settings,
     gamification: data.gamification || createDefaultGamificationData(),
     cycleState: data.cycleState,
-    cycleHistory: data.cycleHistory
+    cycleHistory: data.cycleHistory,
+    pendingExport: pendingExport.length > 0 ? pendingExport : undefined
   };
 }
 

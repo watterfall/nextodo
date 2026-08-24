@@ -30,7 +30,7 @@
 
     // Consider completed tasks (G) + uncompleted active tasks
     const relevantTasks = tasks.tasks.filter(task =>
-      task.priority === 'G' || (isActivePriority(task.priority) && task.priority !== 'F')
+      task.priority === 'G' || isActivePriority(task.priority)
     );
 
     if (relevantTasks.length === 0) return 0;

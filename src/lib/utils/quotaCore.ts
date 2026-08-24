@@ -1,15 +1,21 @@
 import type { ActivePriority, ActivePriorityCounts, Task, Priority } from '$lib/types';
-import { ACTIVE_PRIORITIES, PRIORITY_CONFIG, isActivePriority, isFuturePriority, isSustainedPriority } from '$lib/types';
+import { ACTIVE_PRIORITIES, PRIORITY_CONFIG, isActivePriority } from '$lib/types';
 
 // Pure quota logic — no i18n / Svelte / Tauri dependencies, so it is safe to
 // import from a plain Node context (the FocusFlow CLI). The i18n-flavoured
 // validateQuota() lives in quota.ts and re-exports everything here.
+//
+// A unit now holds at most 15 tasks: A×1 B×2 C×3 D×4 E×5. There is no unbounded
+// tier any more — F (Idea Pool) is gone, because unsorted work lives in the
+// todo.txt candidate pool instead. That has one consequence worth stating
+// loudly: an add that has nowhere to go can no longer be absorbed, and is
+// returned to the candidate pool instead. See docs/SLEEK-INTEROP.md §6.2.
 
 /**
  * Count active (non-completed) tasks by priority
  */
 export function countActiveByPriority(tasks: Task[]): ActivePriorityCounts {
-  const counts: ActivePriorityCounts = { A: 0, B: 0, C: 0, D: 0, E: 0, F: 0 };
+  const counts: ActivePriorityCounts = { A: 0, B: 0, C: 0, D: 0, E: 0 };
 
   for (const task of tasks) {
     if (!task.completed && isActivePriority(task.priority)) {
@@ -25,11 +31,10 @@ export function countActiveByPriority(tasks: Task[]): ActivePriorityCounts {
  */
 export function getRemainingQuota(tasks: Task[]): ActivePriorityCounts {
   const counts = countActiveByPriority(tasks);
-  const remaining: ActivePriorityCounts = { A: 0, B: 0, C: 0, D: 0, E: 0, F: Infinity };
+  const remaining: ActivePriorityCounts = { A: 0, B: 0, C: 0, D: 0, E: 0 };
 
   for (const priority of ACTIVE_PRIORITIES) {
-    const quota = PRIORITY_CONFIG[priority].quota;
-    remaining[priority] = quota === Infinity ? Infinity : Math.max(0, quota - counts[priority]);
+    remaining[priority] = Math.max(0, PRIORITY_CONFIG[priority].quota - counts[priority]);
   }
 
   return remaining;
@@ -39,69 +44,90 @@ export function getRemainingQuota(tasks: Task[]): ActivePriorityCounts {
  * Check if adding a task of given priority is allowed
  */
 export function canAddTask(tasks: Task[], priority: Priority): boolean {
-  // Future-progress (N) has no quota — always allowed
-  if (isFuturePriority(priority)) return true;
-  // Sustained (S) has quota of 1 — week-long single-project semantics
-  if (isSustainedPriority(priority)) {
-    const sCount = tasks.filter(t => !t.completed && t.priority === 'S').length;
-    return sCount < 1;
-  }
   if (!isActivePriority(priority)) return false;
-
-  // F category (Idea Pool) has unlimited quota
-  if (priority === 'F') return true;
-
-  const remaining = getRemainingQuota(tasks);
-  return remaining[priority] > 0;
+  return getRemainingQuota(tasks)[priority] > 0;
 }
 
-// Tiers an unseated single-slot task can fall back to, best first. F (Idea Pool)
-// is the final stop because it is the only unbounded lane — reaching it means
-// B-E are all full.
-const DEMOTION_LADDER: ActivePriority[] = ['B', 'C', 'D', 'E', 'F'];
+// Tiers an unseated single-slot task can fall back to, best first.
+const DEMOTION_LADDER: ActivePriority[] = ['B', 'C', 'D', 'E'];
 
 /**
- * Where an incumbent A or S should land when it is unseated.
+ * Where an incumbent A should land when it is unseated, or null when every
+ * lower tier is full.
  *
- * Shared so every "only one of these may exist" path demotes the same way.
- * Hardcoding 'B' overfills it when B is already at quota.
+ * Null used to be impossible: the ladder ended at F, the unbounded Idea Pool,
+ * so there was always somewhere to put the loser. With F gone, "nowhere" is a
+ * real answer and callers must handle it by returning the task to the candidate
+ * pool rather than quietly overfilling a tier.
  */
-export function demotionTargetFor(tasks: Task[]): ActivePriority {
+export function demotionTargetFor(tasks: Task[]): ActivePriority | null {
   const remaining = getRemainingQuota(tasks);
-  return DEMOTION_LADDER.find(p => remaining[p] > 0) ?? 'F';
-}
-
-// Tiers that hold exactly one task. Adding a second one unseats the incumbent
-// rather than being refused — A is the day's single core challenge, S the week's
-// single sustained project. They are the same rule, so they share the code path.
-const SINGLE_SLOT_PRIORITIES: Priority[] = ['A', 'S'];
-
-export function isSingleSlotPriority(priority: Priority): boolean {
-  return SINGLE_SLOT_PRIORITIES.includes(priority);
+  return DEMOTION_LADDER.find(p => remaining[p] > 0) ?? null;
 }
 
 /**
- * Apply Highlander Rule: adding into a single-slot tier demotes the incumbent.
+ * Tiers that hold exactly one task: adding a second unseats the incumbent
+ * rather than being refused.
+ *
+ * Only A now. S was the other one, and it is gone — the week's single sustained
+ * project is a `+project` tag (settings.focusProject), not a priority tier.
+ */
+export function isSingleSlotPriority(priority: Priority): boolean {
+  return priority === 'A';
+}
+
+export interface HighlanderResult {
+  /** The task list with incumbents demoted and evicted ones removed. */
+  tasks: Task[];
+  /** Incumbents that were pushed down a tier. */
+  demoted: Array<{ task: Task; to: ActivePriority }>;
+  /**
+   * Incumbents with nowhere left to go. They are removed from the unit and
+   * belong back in the candidate pool; the caller must say so.
+   */
+  evicted: Task[];
+}
+
+/**
+ * Apply the Highlander Rule: adding into a single-slot tier unseats the incumbent.
  *
  * The incumbent lands in the highest tier that still has room, not
  * unconditionally in B — a board already holding B×2 would otherwise end up at
  * B×3 against a quota of 2, which every quota reader then reports as full.
+ * When no tier has room the incumbent is evicted rather than overfilling one.
  */
-export function applyHighlanderRule(tasks: Task[], newTask: Task): Task[] {
+export function applyHighlanderRule(tasks: Task[], newTask: Task): HighlanderResult {
   if (!isSingleSlotPriority(newTask.priority)) {
-    return tasks;
+    return { tasks, demoted: [], evicted: [] };
   }
 
   const remaining = getRemainingQuota(tasks);
+  const demoted: HighlanderResult['demoted'] = [];
+  const evicted: Task[] = [];
 
-  return tasks.map(task => {
-    if (task.id !== newTask.id && task.priority === newTask.priority && !task.completed) {
-      const target = DEMOTION_LADDER.find(p => remaining[p] > 0) ?? 'F';
-      remaining[target]--; // reserve the slot in case of multiple incumbents
-      return { ...task, priority: target as Priority };
+  const next: Task[] = [];
+  for (const task of tasks) {
+    const isIncumbent =
+      task.id !== newTask.id && task.priority === newTask.priority && !task.completed;
+
+    if (!isIncumbent) {
+      next.push(task);
+      continue;
     }
-    return task;
-  });
+
+    const target = DEMOTION_LADDER.find(p => remaining[p] > 0);
+    if (!target) {
+      evicted.push(task);
+      continue;
+    }
+
+    remaining[target]--; // reserve the slot in case of multiple incumbents
+    const moved = { ...task, priority: target as Priority };
+    next.push(moved);
+    demoted.push({ task: moved, to: target });
+  }
+
+  return { tasks: next, demoted, evicted };
 }
 
 /**
@@ -119,33 +145,32 @@ export function getQuotaSummary(tasks: Task[]): Array<{
   return ACTIVE_PRIORITIES.map(priority => {
     const config = PRIORITY_CONFIG[priority];
     const used = counts[priority];
-    const quota = config.quota;
 
     return {
       priority,
       name: config.name,
       used,
-      quota,
-      isFull: priority !== 'F' && quota !== Infinity && used >= quota
+      quota: config.quota,
+      isFull: used >= config.quota
     };
   });
 }
 
 /**
- * Suggest priority based on available quota
+ * Suggest a priority based on available quota, or null when the unit is full.
+ *
+ * Null is a real outcome now that there is no unbounded tier to fall back on:
+ * 15 tasks is the whole unit, and the honest answer is "this does not fit".
  */
-export function suggestPriority(tasks: Task[]): ActivePriority {
+export function suggestPriority(tasks: Task[]): ActivePriority | null {
   const remaining = getRemainingQuota(tasks);
 
   // Prefer lower priorities first (E, D, C, B, A)
-  if (remaining['E'] > 0) return 'E';
-  if (remaining['D'] > 0) return 'D';
-  if (remaining['C'] > 0) return 'C';
-  if (remaining['B'] > 0) return 'B';
-  if (remaining['A'] > 0) return 'A';
+  for (const priority of [...ACTIVE_PRIORITIES].reverse()) {
+    if (remaining[priority] > 0) return priority;
+  }
 
-  // Default to idea pool
-  return 'F';
+  return null;
 }
 
 /**
@@ -156,14 +181,13 @@ export function canPromote(tasks: Task[], task: Task): { canPromote: boolean; ta
     return { canPromote: false, targetPriority: null };
   }
 
-  const priorities: ActivePriority[] = ACTIVE_PRIORITIES;
-  const currentIndex = priorities.indexOf(task.priority);
+  const currentIndex = ACTIVE_PRIORITIES.indexOf(task.priority);
 
   if (currentIndex === 0) {
     return { canPromote: false, targetPriority: null };
   }
 
-  const targetPriority = priorities[currentIndex - 1];
+  const targetPriority = ACTIVE_PRIORITIES[currentIndex - 1];
 
   // Special case for promoting to A - Highlander rule will apply
   if (targetPriority === 'A') {
@@ -186,12 +210,11 @@ export function canDemote(task: Task): { canDemote: boolean; targetPriority: Pri
     return { canDemote: false, targetPriority: null };
   }
 
-  const priorities: ActivePriority[] = ACTIVE_PRIORITIES;
-  const currentIndex = priorities.indexOf(task.priority);
+  const currentIndex = ACTIVE_PRIORITIES.indexOf(task.priority);
 
-  if (currentIndex === priorities.length - 1) {
+  if (currentIndex === ACTIVE_PRIORITIES.length - 1) {
     return { canDemote: false, targetPriority: null };
   }
 
-  return { canDemote: true, targetPriority: priorities[currentIndex + 1] };
+  return { canDemote: true, targetPriority: ACTIVE_PRIORITIES[currentIndex + 1] };
 }
