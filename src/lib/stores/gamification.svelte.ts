@@ -52,24 +52,20 @@ const BADGE_DEFINITIONS: Omit<Badge, 'unlocked' | 'unlockedAt'>[] = [
     icon: '🏆',
     condition: (s) => s.totalACompleted >= 5,
     xpReward: 500
-  },
-  {
-    id: 'consistency_is_key',
-    name: 'Consistency',
-    description: 'Maintain a 3-day streak',
-    icon: '🔥',
-    condition: (s) => s.currentStreak >= 3,
-    xpReward: 300
-  },
-  {
-    id: 'sustainable_worker',
-    name: 'Sustainable Worker',
-    description: 'Achieve 3 "Perfect Days" (Healthy completion rate)',
-    icon: '🌿',
-    condition: (s) => s.perfectDays >= 3,
-    xpReward: 400
   }
 ];
+
+// Two badges used to sit here and were removed, not retired:
+//
+//   consistency_is_key ("maintain a 3-day streak")  — read `currentStreak`
+//   sustainable_worker ("achieve 3 perfect days")   — read `perfectDays`
+//
+// Neither field was ever incremented by any code path, so both badges were
+// unreachable from the day they shipped. The streak one would have been cut
+// anyway: streak counters contradict what habit-formation data actually shows
+// (a missed day is invisible to the automaticity curve; a broken streak is
+// not). Their unlock records, if a file somehow has any, are dropped on load.
+const REMOVED_BADGE_IDS = new Set(['consistency_is_key', 'sustainable_worker']);
 
 // Level Definitions
 const LEVELS: Level[] = [
@@ -85,14 +81,19 @@ class GamificationStore {
   stats = $state<GamificationStats>({
     totalTasksCompleted: 0,
     totalPomodoros: 0,
-    currentStreak: 0,
-    longestStreak: 0,
-    totalACompleted: 0,
-    earlyBirdCount: 0,
-    nightOwlCount: 0,
-    perfectDays: 0
+    totalACompleted: 0
   });
   xp = $state(0);
+
+  /**
+   * Mirrors `settings.gamificationEnabled`. Off by default.
+   *
+   * When off, nothing is counted at all — not counted-but-hidden. Hiding a
+   * running score still leaves it running, and it would come back with a jump
+   * the moment anyone flipped the switch, which is its own kind of nudge.
+   * Whatever was earned before stays on disk untouched.
+   */
+  enabled = $state(false);
 
   private persistCallback: (() => Promise<void>) | null = null;
 
@@ -137,8 +138,13 @@ class GamificationStore {
     return Math.min(100, Math.max(0, (xpInLevel / levelSpan) * 100));
   });
 
+  setEnabled(enabled: boolean) {
+    this.enabled = enabled;
+  }
+
   // Actions
   checkBadges() {
+    if (!this.enabled) return;
     let newUnlocks = false;
 
     this.badges = this.badges.map(badge => {
@@ -162,12 +168,16 @@ class GamificationStore {
 
   // Update stats based on action
   recordTaskCompletion(task: Task) {
+    if (!this.enabled) return;
+
+    // Completion rewrites `priority` to 'G', so by the time some callers get
+    // here the tier is only readable from `originalPriority`.
+    const tier = task.originalPriority ?? task.priority;
+
     this.stats = {
       ...this.stats,
       totalTasksCompleted: this.stats.totalTasksCompleted + 1,
-      totalACompleted: task.priority === 'A' ? this.stats.totalACompleted + 1 : this.stats.totalACompleted,
-      earlyBirdCount: new Date().getHours() < 9 ? this.stats.earlyBirdCount + 1 : this.stats.earlyBirdCount,
-      nightOwlCount: new Date().getHours() >= 22 ? this.stats.nightOwlCount + 1 : this.stats.nightOwlCount
+      totalACompleted: tier === 'A' ? this.stats.totalACompleted + 1 : this.stats.totalACompleted
     };
 
     this.xp += 10; // Base XP for task
@@ -176,6 +186,7 @@ class GamificationStore {
   }
 
   recordPomodoro() {
+    if (!this.enabled) return;
     this.stats = {
       ...this.stats,
       totalPomodoros: this.stats.totalPomodoros + 1
@@ -187,20 +198,32 @@ class GamificationStore {
 
   // Load from persisted data
   load(data: GamificationData | undefined) {
-    if (data) {
-      this.stats = data.stats || this.stats;
-      this.xp = data.xp || 0;
-      if (data.badges && data.badges.length > 0) {
-        // Merge saved unlock status with badge definitions
-        this.badges = BADGE_DEFINITIONS.map(def => {
-          const saved = data.badges.find(sb => sb.id === def.id);
-          return {
-            ...def,
-            unlocked: saved?.unlocked || false,
-            unlockedAt: saved?.unlockedAt
-          };
-        });
-      }
+    if (!data) return;
+
+    // Copy field by field rather than assigning the object wholesale: a file
+    // written before the stat trimming still carries currentStreak and
+    // friends, and taking it as-is would write those keys straight back out
+    // again on the next save, forever.
+    const saved = data.stats as Partial<GamificationStats> | undefined;
+    this.stats = {
+      totalTasksCompleted: saved?.totalTasksCompleted ?? 0,
+      totalPomodoros: saved?.totalPomodoros ?? 0,
+      totalACompleted: saved?.totalACompleted ?? 0
+    };
+
+    this.xp = data.xp || 0;
+
+    if (data.badges && data.badges.length > 0) {
+      // Merge saved unlock status with badge definitions. Records for badges
+      // that no longer exist fall out here simply by not matching anything.
+      this.badges = BADGE_DEFINITIONS.map(def => {
+        const savedBadge = data.badges.find(sb => sb.id === def.id);
+        return {
+          ...def,
+          unlocked: savedBadge?.unlocked || false,
+          unlockedAt: savedBadge?.unlockedAt
+        };
+      });
     }
   }
 
@@ -209,11 +232,13 @@ class GamificationStore {
     return {
       stats: this.stats,
       xp: this.xp,
-      badges: this.badges.map(b => ({
-        id: b.id,
-        unlocked: b.unlocked,
-        unlockedAt: b.unlockedAt
-      }))
+      badges: this.badges
+        .filter(b => !REMOVED_BADGE_IDS.has(b.id))
+        .map(b => ({
+          id: b.id,
+          unlocked: b.unlocked,
+          unlockedAt: b.unlockedAt
+        }))
     };
   }
 
@@ -241,8 +266,13 @@ export function getGamificationStore() {
 }
 
 // Initialize gamification store with persisted data
-export function initGamification(data: GamificationData | undefined, persistCallback: () => Promise<void>) {
+export function initGamification(
+  data: GamificationData | undefined,
+  persistCallback: () => Promise<void>,
+  enabled: boolean = false
+) {
   const s = getGamificationStore();
   s.load(data);
   s.setPersistCallback(persistCallback);
+  s.setEnabled(enabled);
 }

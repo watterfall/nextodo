@@ -312,9 +312,11 @@ export default {
     languageDesc: '选择界面显示语言',
     pomodoro: {
       title: '番茄钟设置',
-      workDuration: '专注时长',
+      workDuration: '默认专注时长',
       shortBreak: '短休息时长',
       longBreak: '长休息时长',
+      byPriority: '各档专注时长',
+      byPriorityDesc: '25 分钟不是研究结论，是发明者厨房里的计时器。深度任务给长块，杂事给短块',
     },
     data: {
       title: '数据管理',
@@ -346,6 +348,8 @@ export default {
     dueRemindersDesc: '每天提醒今天到期或已逾期的任务（仅桌面端）',
     lowCompletionPrompt: '低完成度微复盘',
     lowCompletionPromptDesc: '某2天周期完成度低于30%时，先提示复盘再决定是否顺延（关闭则自动合并）',
+    gamification: '积分与徽章',
+    gamificationDesc: '默认关闭。计分奖励「完成得多」，配额限制「承诺得少」，两者方向相反；关闭时不计分，已有进度保留',
     hours: '小时',
     minutes: '分钟',
     days: '天',

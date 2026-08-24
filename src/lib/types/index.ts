@@ -118,6 +118,26 @@ export interface Task {
     completed: number;
   };
   notes: string;
+  /**
+   * A situational cue that starts this task — the "if" half of an
+   * implementation intention ("坐下打开电脑后" → write the report).
+   *
+   * `dueDate` and `thresholdDate` are both *time* triggers, and time triggers
+   * fail the same way every time: the schedule slips, the moment passes, and
+   * the cue is simply gone. A situational cue still shows up. That difference
+   * is why if-then planning has the largest effect size in this whole field
+   * (642 tests, d=.27–.66) while "set a deadline" does not.
+   *
+   * Free text on purpose: parsing it into categories would add a classification
+   * decision at exactly the moment the point is to lower the cost of starting.
+   * Never required, and never nagged about — a task without one is normal.
+   *
+   * FocusFlow-only. todo.txt extension values cannot contain spaces, so there
+   * is no honest way to round-trip a phrase like this through a shared file.
+   * That is the right home for it anyway: the cue belongs to the commitment
+   * ("how will I start this in the next two days"), not to the backlog entry.
+   */
+  trigger?: string | null;
   // Set when this task was pulled from a todo.txt candidate pool.
   source?: TaskSource;
   // NEW: Unit override for flexible unit control
@@ -175,15 +195,19 @@ export interface CustomTagGroups {
 export type Theme = 'dark' | 'light' | 'system';
 
 // Gamification types
+//
+// `currentStreak` / `longestStreak` used to live here. They are gone, and not
+// because of taste: habit-formation data shows a single missed day is
+// statistically invisible to the automaticity curve, while a streak counter
+// turns that same missed day into a reason to abandon the whole thing. The
+// counter models the opposite of what actually happens. (They were also dead
+// code — nothing ever incremented them, so the "3-day streak" badge could
+// never unlock.) `perfectDays`, `earlyBirdCount` and `nightOwlCount` went the
+// same way: never written, or written and never read.
 export interface GamificationStats {
   totalTasksCompleted: number;
   totalPomodoros: number;
-  currentStreak: number;
-  longestStreak: number;
   totalACompleted: number;
-  earlyBirdCount: number;
-  nightOwlCount: number;
-  perfectDays: number;
 }
 
 export interface BadgeData {
@@ -203,12 +227,7 @@ export function createDefaultGamificationData(): GamificationData {
     stats: {
       totalTasksCompleted: 0,
       totalPomodoros: 0,
-      currentStreak: 0,
-      longestStreak: 0,
-      totalACompleted: 0,
-      earlyBirdCount: 0,
-      nightOwlCount: 0,
-      perfectDays: 0
+      totalACompleted: 0
     },
     xp: 0,
     badges: []
@@ -222,9 +241,20 @@ export type Language = 'zh-CN' | 'en-US';
 export interface Settings {
   theme: Theme;
   language: Language;
+  // Fallback focus-block length in minutes, used when no task is selected.
+  //
+  // 25 is not a finding. It came from the inventor's kitchen timer, and the one
+  // controlled study to vary it found 12–3 and 24–6 barely distinguishable:
+  // what does the work is having an external structure at all, not the number.
+  // So the number is the user's to set, per tier, below.
   pomodoroWork: number;
   pomodoroShortBreak: number;
   pomodoroLongBreak: number;
+  // Focus-block length per priority tier. An A task is 2.5+ hours of deep work
+  // and a 25-minute block just interrupts it; an E task is under 15 minutes and
+  // a 50-minute block is theatre. Falls back to `pomodoroWork` when a tier is
+  // missing.
+  pomodoroWorkByPriority: Partial<Record<ActivePriority, number>>;
   autoBackup: boolean;
   sidebarCollapsed: boolean;
   // NEW: Auto archive settings
@@ -252,6 +282,15 @@ export interface Settings {
   // NEW: when a 2-day period ends under-completed, prompt a micro-review instead
   // of silently merging into the next period
   lowCompletionPrompt: boolean;
+  // XP, levels, badges and the completion animation. Off by default.
+  //
+  // The quota system and the XP system optimise for opposite things: one caps
+  // what you may promise, the other pays you per completion, and the fastest
+  // way to earn is to do many small tasks — precisely what the quota exists to
+  // prevent. When two mechanisms disagree, the visible one wins, so the
+  // scoreboard has to be the one that is off unless asked for. Existing XP and
+  // badges are kept, just not shown.
+  gamificationEnabled: boolean;
 }
 
 // Dynamic 2-day cycle state. The active work window normally equals the calendar
@@ -468,7 +507,8 @@ export function createEmptyTask(priority: Priority = DEFAULT_PRIORITY): Task {
       estimated: 0,
       completed: 0
     },
-    notes: ''
+    notes: '',
+    trigger: null
   };
 }
 
@@ -480,6 +520,9 @@ export function createDefaultSettings(): Settings {
     pomodoroWork: 25,
     pomodoroShortBreak: 5,
     pomodoroLongBreak: 20,
+    // Deep tiers get a block long enough to actually load the problem; the
+    // short tiers keep the classic length.
+    pomodoroWorkByPriority: { A: 50, B: 50, C: 25, D: 25, E: 25 },
     autoBackup: true,
     sidebarCollapsed: false,
     autoArchiveDays: 7,
@@ -490,7 +533,8 @@ export function createDefaultSettings(): Settings {
     unitBoundaryFlexHours: 12, // Default: half day flexibility
     density: 'comfortable',
     dueReminders: true,
-    lowCompletionPrompt: true
+    lowCompletionPrompt: true,
+    gamificationEnabled: false
   };
 }
 

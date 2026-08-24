@@ -495,7 +495,15 @@ function migrateSettings(settings: any): AppData['settings'] {
     focusProject: settings?.focusProject ?? defaults.focusProject,
     unitBoundaryFlexHours: settings?.unitBoundaryFlexHours ?? defaults.unitBoundaryFlexHours,
     dueReminders: settings?.dueReminders ?? defaults.dueReminders,
-    lowCompletionPrompt: settings?.lowCompletionPrompt ?? defaults.lowCompletionPrompt
+    lowCompletionPrompt: settings?.lowCompletionPrompt ?? defaults.lowCompletionPrompt,
+    // Existing installs land on `false` too. Upgrading someone into a running
+    // scoreboard they never asked for is exactly the nudge this switch exists
+    // to remove; their earned XP and badges stay on disk either way.
+    gamificationEnabled: settings?.gamificationEnabled ?? defaults.gamificationEnabled,
+    pomodoroWorkByPriority: {
+      ...defaults.pomodoroWorkByPriority,
+      ...(settings?.pomodoroWorkByPriority ?? {})
+    }
   };
 }
 

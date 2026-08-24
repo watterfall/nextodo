@@ -67,6 +67,13 @@
 
   let showConfetti = $state(false);
   let searchInput = $state('');
+
+  // Scoring is off by default and follows the setting live, so flipping it in
+  // Settings takes effect without a reload.
+  const gamificationOn = $derived(tasks.appData.settings.gamificationEnabled === true);
+  $effect(() => {
+    getGamificationStore().setEnabled(gamificationOn);
+  });
   let isInitialized = $state(false);
   let unlistenFileWatcher: (() => void) | null = null;
   let isSettingsOpen = $state(false);
@@ -113,7 +120,8 @@
     initPomodoro({
       work: settings.pomodoroWork,
       shortBreak: settings.pomodoroShortBreak,
-      longBreak: settings.pomodoroLongBreak
+      longBreak: settings.pomodoroLongBreak,
+      workByPriority: settings.pomodoroWorkByPriority
     });
 
     // Initialize reviews
@@ -125,7 +133,7 @@
       const data = tasks.appData;
       data.gamification = gamification.getData();
       await saveAppData(data);
-    });
+    }, tasks.appData.settings.gamificationEnabled);
 
     // Initialize keyboard shortcuts
     initKeyboardShortcuts();
@@ -164,8 +172,11 @@
     // Listen for pomodoro complete events
     window.addEventListener('pomodoro-complete', ((e: CustomEvent) => {
       incrementPomodoro(e.detail.taskId);
-      showConfetti = true;
-      setTimeout(() => showConfetti = false, 100);
+      // Celebration is part of the scoreboard, so it follows the same switch.
+      if (tasks.appData.settings.gamificationEnabled) {
+        showConfetti = true;
+        setTimeout(() => showConfetti = false, 100);
+      }
     }) as EventListener);
 
     // Window-level safety net: guarantees the global drag flag is reset even
@@ -312,19 +323,21 @@
           </button>
         </div>
 
-        <!-- Badges Button (Subtle) -->
-        <button 
-          class="icon-btn badges-btn" 
-          class:active={ui.isBadgesOpen}
-          onclick={(e) => { 
-            e.preventDefault();
-            e.stopPropagation();
-            setBadgesOpen(!ui.isBadgesOpen);
-          }} 
-          title={t('nav.badges') || '成就'}
-        >
-          <span class="icon">🏅</span>
-        </button>
+        <!-- Badges Button (Subtle) — only exists when scoring is switched on -->
+        {#if gamificationOn}
+          <button
+            class="icon-btn badges-btn"
+            class:active={ui.isBadgesOpen}
+            onclick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setBadgesOpen(!ui.isBadgesOpen);
+            }}
+            title={t('nav.badges') || '成就'}
+          >
+            <span class="icon">🏅</span>
+          </button>
+        {/if}
 
         <!-- Theme Toggle -->
         <button class="theme-toggle" onclick={toggleTheme} title={t('settings.theme')}>
@@ -375,7 +388,7 @@
     {/if}
 
     <!-- Badges Inline Section (Visible when badges open) -->
-    {#if ui.isBadgesOpen}
+    {#if ui.isBadgesOpen && gamificationOn}
       <div class="badges-inline-container">
         <BadgesModal onClose={() => setBadgesOpen(false)} isInline={true} />
       </div>

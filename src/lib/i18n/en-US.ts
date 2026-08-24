@@ -312,9 +312,11 @@ export default {
     languageDesc: 'Choose the interface language',
     pomodoro: {
       title: 'Pomodoro Settings',
-      workDuration: 'Focus Duration',
+      workDuration: 'Default focus duration',
       shortBreak: 'Short Break',
       longBreak: 'Long Break',
+      byPriority: 'Focus block per tier',
+      byPriorityDesc: '25 minutes is not a finding — it came from the inventor\'s kitchen timer. Give deep work a long block and errands a short one',
     },
     data: {
       title: 'Data Management',
@@ -346,6 +348,8 @@ export default {
     dueRemindersDesc: 'Daily reminder for tasks due today or overdue (desktop only)',
     lowCompletionPrompt: 'Low-completion review',
     lowCompletionPromptDesc: 'When a 2-day period ends below 30%, prompt a quick review before rolling tasks over (off = auto-merge)',
+    gamification: 'XP and badges',
+    gamificationDesc: 'Off by default. Scoring rewards finishing more; the quota exists to make you promise less. Nothing is counted while off, and past progress is kept',
     hours: 'hours',
     minutes: 'min',
     days: 'days',

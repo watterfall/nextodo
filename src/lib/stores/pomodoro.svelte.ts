@@ -1,4 +1,4 @@
-import type { PomodoroState, PomodoroSession, Task } from '$lib/types';
+import type { PomodoroState, PomodoroSession, Task, ActivePriority } from '$lib/types';
 
 // Pomodoro state
 let state = $state<PomodoroState>('idle');
@@ -11,7 +11,15 @@ let interruptionCount = $state(0); // Current session interruption counter
 let currentInterruptionReasons = $state<string[]>([]); // Current session reasons
 
 // Settings (will be synced from main store)
+//
+// `baseWorkDuration` is the fallback; `workDuration` is the length of the
+// session actually running, which is chosen per task from the tier table. An A
+// task and an E task are not the same shape of work, so they do not get the
+// same block — the one controlled study to vary the number found that what does
+// the work is having an external structure at all, not any particular length.
+let baseWorkDuration = $state(25);
 let workDuration = $state(25);
+let workByPriority = $state<Partial<Record<ActivePriority, number>>>({});
 let shortBreakDuration = $state(5);
 let longBreakDuration = $state(20);
 
@@ -37,12 +45,29 @@ export function initPomodoro(settings: {
   work: number;
   shortBreak: number;
   longBreak: number;
+  workByPriority?: Partial<Record<ActivePriority, number>>;
 }): void {
-  workDuration = settings.work;
+  baseWorkDuration = settings.work;
+  workByPriority = settings.workByPriority ?? {};
+  workDuration = baseWorkDuration;
   shortBreakDuration = settings.shortBreak;
   longBreakDuration = settings.longBreak;
   timeRemaining = workDuration * 60;
   initAudio();
+}
+
+/**
+ * Focus-block length for a task, in minutes.
+ *
+ * Falls back to the global setting for a tier with no override and for the
+ * hidden G / H states (a completed task has no block length; its tier is only
+ * readable from `originalPriority` anyway).
+ */
+export function workDurationForTask(task: Task | null): number {
+  if (!task) return baseWorkDuration;
+  const tier = task.originalPriority ?? task.priority;
+  if (tier === 'G' || tier === 'H') return baseWorkDuration;
+  return workByPriority[tier] ?? baseWorkDuration;
 }
 
 // Start pomodoro for a task
@@ -50,6 +75,7 @@ export function startPomodoro(task: Task): void {
   activeTaskId = task.id;
   activeTask = task;
   state = 'work';
+  workDuration = workDurationForTask(task);
   timeRemaining = workDuration * 60;
   isRunning = true;
   interruptionCount = 0; // Reset interruption counter for new session
@@ -98,6 +124,10 @@ export function stopPomodoro(): void {
   isRunning = false;
   stopTimer();
   state = 'idle';
+  // Back to the generic block: the tier-specific one belonged to the task that
+  // just stopped, and leaving it in place would size the next idle timer by
+  // whatever happened to run last.
+  workDuration = baseWorkDuration;
   timeRemaining = workDuration * 60;
   activeTaskId = null;
   activeTask = null;

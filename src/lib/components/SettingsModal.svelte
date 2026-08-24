@@ -1,7 +1,7 @@
 <script lang="ts">
   import { getSettingsStore, updateSettings, toggleTheme, setAppLanguage } from '$lib/stores/settings.svelte';
   import { getI18nStore, availableLanguages, setLanguage, currentLanguage } from '$lib/i18n';
-  import type { Language } from '$lib/types';
+  import type { Language, ActivePriority } from '$lib/types';
   import { PRIORITY_CONFIG } from '$lib/types';
   import { exportData, importData, createBackup } from '$lib/utils/storage';
   import { getTasksStore, replaceAllData } from '$lib/stores/tasks.svelte';
@@ -99,6 +99,22 @@
   function handleLanguageChange(lang: Language) {
     setLanguage(lang);
     setAppLanguage(lang);
+  }
+
+  /**
+   * Saves one tier's focus-block length immediately, like the on/off rows do,
+   * rather than waiting for the Save button — a five-field grid where four
+   * changes stick and the fifth needs a separate confirm is a trap.
+   */
+  function setTierDuration(tier: ActivePriority, raw: string) {
+    const minutes = parseInt(raw, 10);
+    if (!Number.isFinite(minutes) || minutes < 1 || minutes > 180) return;
+    updateSettings({
+      pomodoroWorkByPriority: {
+        ...(settings.pomodoroWorkByPriority ?? {}),
+        [tier]: minutes
+      }
+    });
   }
 
   function handleSave() {
@@ -299,6 +315,33 @@
               <span class="input-suffix">{t('settings.minutes')}</span>
             </div>
           </div>
+
+          <!-- Per-tier block length. 25 minutes is not a research finding —
+               it came from the inventor's kitchen timer, and the controlled
+               study that varied it found the structure mattered, not the
+               number. So an A block can be long enough to actually load the
+               problem, and an E block does not have to pretend. -->
+          <div class="setting-row setting-row-stack">
+            <div class="setting-info">
+              <span class="setting-label">{t('settings.pomodoro.byPriority')}</span>
+              <span class="setting-desc">{t('settings.pomodoro.byPriorityDesc')}</span>
+            </div>
+            <div class="tier-durations">
+              {#each ['A', 'B', 'C', 'D', 'E'] as const as tier}
+                <label class="tier-duration">
+                  <span class="tier-badge">{tier}</span>
+                  <input
+                    type="number"
+                    class="setting-input setting-input-sm"
+                    min="1"
+                    max="180"
+                    value={settings.pomodoroWorkByPriority?.[tier] ?? settings.pomodoroWork}
+                    onchange={(e) => setTierDuration(tier, e.currentTarget.value)}
+                  />
+                </label>
+              {/each}
+            </div>
+          </div>
         </section>
 
         <!-- Data Settings -->
@@ -427,6 +470,17 @@
             <div class="theme-buttons">
               <button class="theme-btn" class:active={settings.lowCompletionPrompt !== false} onclick={() => updateSettings({ lowCompletionPrompt: true })}>{t('settings.on')}</button>
               <button class="theme-btn" class:active={settings.lowCompletionPrompt === false} onclick={() => updateSettings({ lowCompletionPrompt: false })}>{t('settings.off')}</button>
+            </div>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-info">
+              <span class="setting-label">{t('settings.gamification')}</span>
+              <span class="setting-desc">{t('settings.gamificationDesc')}</span>
+            </div>
+            <div class="theme-buttons">
+              <button class="theme-btn" class:active={settings.gamificationEnabled === true} onclick={() => updateSettings({ gamificationEnabled: true })}>{t('settings.on')}</button>
+              <button class="theme-btn" class:active={settings.gamificationEnabled !== true} onclick={() => updateSettings({ gamificationEnabled: false })}>{t('settings.off')}</button>
             </div>
           </div>
 
@@ -715,6 +769,43 @@
 
   .setting-row:last-child {
     border-bottom: none;
+  }
+
+  /* A row whose control is a grid rather than a single field. */
+  .setting-row-stack {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .tier-durations {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .tier-duration {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .tier-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-primary);
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-subtle);
+  }
+
+  .setting-input-sm {
+    width: 64px;
   }
 
   .setting-info {
