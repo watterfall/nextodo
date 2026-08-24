@@ -77,8 +77,8 @@ export interface CycleEvaluation {
  * period begins, the period that just ended is scored (priority-weighted A-E
  * completion). If it scored below MERGE_THRESHOLD, the new period is flagged as
  * a continued ("merged") window and that period's unfinished A-E tasks roll
- * forward into it. Saturday (review day) never participates — the engine is a
- * no-op on Saturdays, so Saturday stays empty.
+ * forward into it. Sunday (review day) never participates — the engine is a
+ * no-op on Sundays, so Sunday stays empty.
  *
  * Mutates `appData.tasks` and `appData.cycleState` in place. Idempotent within a
  * period (guarded by `lastEvaluatedStart`), so it won't re-fire each launch.
@@ -86,7 +86,7 @@ export interface CycleEvaluation {
 export function evaluateCycle(appData: AppData, now: Date = new Date()): CycleEvaluation {
   const cal = getUnitForDate(now);
 
-  // Saturday / review day: leave the work window untouched, never merge into it.
+  // Sunday / review day: leave the work window untouched, never merge into it.
   if (cal.isReviewDay) return { changed: false, merged: false };
 
   const calStart = localISO(cal.startDate);

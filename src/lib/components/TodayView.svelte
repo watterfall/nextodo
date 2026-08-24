@@ -386,7 +386,7 @@
     background: var(--primary);
   }
 
-  /* Saturday review-day variant: warmer tint across the whole today view */
+  /* Sunday review-day variant: warmer tint across the whole today view */
   .today-view-container.review-day {
     background: linear-gradient(
       180deg,

@@ -192,7 +192,7 @@ export interface Settings {
 // Dynamic 2-day cycle state. The active work window normally equals the calendar
 // unit; when a period ends with low (priority-weighted) completion the next
 // period is flagged as a continued ("merged") window and the unfinished A-E
-// tasks roll into it. Saturday (review day) never participates.
+// tasks roll into it. Sunday (review day) never participates.
 export interface CycleState {
   anchorStart: string;        // local YYYY-MM-DD — start of the current 2-day window
   windowEnd: string;          // local YYYY-MM-DD — inclusive end of the current window
@@ -361,13 +361,16 @@ export const PRIORITY_CONFIG: Record<Priority, PriorityConfig> = {
   }
 };
 
-// Unit info
+// Unit info.
+//
+// There is deliberately no `label` here: it used to carry a hardcoded Chinese
+// string that nothing ever rendered (UnitNav builds its own localized label),
+// so it was a permanent trap for anyone who did start rendering it.
 export interface UnitInfo {
   unitNumber: number;
   startDate: Date;
   endDate: Date;
   isReviewDay: boolean;
-  label: string;
 }
 
 // Filter state - extended with threshold filter

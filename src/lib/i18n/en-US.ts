@@ -240,6 +240,12 @@ export default {
     current: 'Current Period',
     week: 'Week {n}',
     reviewDay: 'Review Day',
+    days: {
+      '1': 'Mon&Tue',
+      '2': 'Wed&Thu',
+      '3': 'Fri&Sat',
+      review: 'Sun Review',
+    },
     reflection: 'Weekly Review',
     nextFocus: 'Next Week Focus',
     biDaily: 'Bi-daily',
@@ -361,8 +367,8 @@ export default {
       },
       biDaily: {
         title: 'Bi-daily Cycle',
-        pattern: 'Sun-Mon, Tue-Wed, Thu-Fri as work units',
-        review: 'Saturday as review day',
+        pattern: 'Mon-Tue, Wed-Thu, Fri-Sat as work units',
+        review: 'Sunday as review day',
         benefit: 'More flexible than daily, more compact than weekly planning',
       },
       redundancy: {

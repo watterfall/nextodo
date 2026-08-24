@@ -1,63 +1,47 @@
 import type { UnitInfo } from '$lib/types';
 
 /**
- * Calculate which bi-daily unit a date belongs to
- * Unit 1: Sunday + Monday
- * Unit 2: Tuesday + Wednesday
- * Unit 3: Thursday + Friday
- * Saturday: Review day
+ * Calculate which bi-daily unit a date belongs to.
+ *
+ *   Unit 1: Monday + Tuesday
+ *   Unit 2: Wednesday + Thursday
+ *   Unit 3: Friday + Saturday
+ *   Sunday: review day
+ *
+ * The week therefore runs Monday-to-Sunday, so `getWeekUnits` and `isThisWeek`
+ * anchor on Monday too — anchoring one of them on Sunday would put the review
+ * day in a different week from the units it reviews.
  */
 export function getUnitForDate(date: Date): UnitInfo {
-  const dayOfWeek = date.getDay(); // 0 = Sunday, 6 = Saturday
+  const dayOfWeek = date.getDay(); // 0 = Sunday, 1 = Monday, ... 6 = Saturday
 
   // Clone date to avoid mutation
   const d = new Date(date);
   d.setHours(0, 0, 0, 0);
 
-  if (dayOfWeek === 6) {
-    // Saturday - Review day
+  if (dayOfWeek === 0) {
+    // Sunday — review day, a unit of one
     return {
       unitNumber: 0,
       startDate: d,
       endDate: d,
-      isReviewDay: true,
-      label: '周复盘'
+      isReviewDay: true
     };
   }
 
-  let unitNumber: number;
-  let startDate: Date;
-  let endDate: Date;
-
-  if (dayOfWeek === 0 || dayOfWeek === 1) {
-    // Sunday (0) or Monday (1) -> Unit 1
-    unitNumber = 1;
-    startDate = new Date(d);
-    startDate.setDate(d.getDate() - (dayOfWeek === 0 ? 0 : 1));
-    endDate = new Date(startDate);
-    endDate.setDate(startDate.getDate() + 1);
-  } else if (dayOfWeek === 2 || dayOfWeek === 3) {
-    // Tuesday (2) or Wednesday (3) -> Unit 2
-    unitNumber = 2;
-    startDate = new Date(d);
-    startDate.setDate(d.getDate() - (dayOfWeek === 2 ? 0 : 1));
-    endDate = new Date(startDate);
-    endDate.setDate(startDate.getDate() + 1);
-  } else {
-    // Thursday (4) or Friday (5) -> Unit 3
-    unitNumber = 3;
-    startDate = new Date(d);
-    startDate.setDate(d.getDate() - (dayOfWeek === 4 ? 0 : 1));
-    endDate = new Date(startDate);
-    endDate.setDate(startDate.getDate() + 1);
-  }
+  // Mon/Tue -> 1, Wed/Thu -> 2, Fri/Sat -> 3; the second day of each pair steps
+  // back one to reach its unit's start.
+  const unitNumber = Math.ceil(dayOfWeek / 2);
+  const startDate = new Date(d);
+  startDate.setDate(d.getDate() - ((dayOfWeek - 1) % 2));
+  const endDate = new Date(startDate);
+  endDate.setDate(startDate.getDate() + 1);
 
   return {
     unitNumber,
     startDate,
     endDate,
-    isReviewDay: false,
-    label: `Unit ${unitNumber}: ${formatDateShort(startDate)}-${formatDateShort(endDate)}`
+    isReviewDay: false
   };
 }
 
@@ -84,7 +68,7 @@ export function currentUnitStartLocal(date: Date = new Date()): string {
 export function navigateUnit(currentUnit: UnitInfo, direction: 'prev' | 'next'): UnitInfo {
   // Step to the day just outside this unit's boundary: one day before its start,
   // or one day after its end. That day always belongs to the adjacent unit, so
-  // prev and next are exact inverses and neither skips Saturday's review day —
+  // prev and next are exact inverses and neither skips Sunday's review day —
   // a fixed ±2 offset stepped over it going backwards, making past reviews
   // unreachable from the unit navigator.
   const newDate = new Date(direction === 'next' ? currentUnit.endDate : currentUnit.startDate);
@@ -93,37 +77,34 @@ export function navigateUnit(currentUnit: UnitInfo, direction: 'prev' | 'next'):
   return getUnitForDate(newDate);
 }
 
+/** Move a date back to the Monday that starts its week. */
+function startOfWeek(date: Date): Date {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  // getDay() is Sunday-based; (day + 6) % 7 is how many days back Monday is,
+  // which for Sunday is 6 — Sunday closes its week here, it does not open one.
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  return d;
+}
+
 /**
- * Get all units in a week
+ * Get all units in a week: three 2-day work units, then Sunday's review day.
  */
 export function getWeekUnits(weekStart: Date): UnitInfo[] {
+  const d = startOfWeek(weekStart);
+
   const units: UnitInfo[] = [];
-  const d = new Date(weekStart);
-
-  // Find Sunday of this week
-  d.setDate(d.getDate() - d.getDay());
-
-  // Unit 1 (Sun-Mon)
-  units.push(getUnitForDate(d));
-
-  // Unit 2 (Tue-Wed)
-  d.setDate(d.getDate() + 2);
-  units.push(getUnitForDate(d));
-
-  // Unit 3 (Thu-Fri)
-  d.setDate(d.getDate() + 2);
-  units.push(getUnitForDate(d));
-
-  // Review day (Sat)
-  d.setDate(d.getDate() + 2);
-  units.push(getUnitForDate(d));
-
+  for (const offset of [0, 2, 4, 6]) {
+    const day = new Date(d);
+    day.setDate(d.getDate() + offset);
+    units.push(getUnitForDate(day));
+  }
   return units;
 }
 
 /**
  * Check if two dates fall in the same 2-day unit (by unit start date).
- * Saturday (review day) only matches another Saturday of the same date.
+ * Sunday (review day) only matches another Sunday of the same date.
  */
 export function isSameUnit(a: Date, b: Date): boolean {
   const ua = getUnitForDate(a);
@@ -289,23 +270,17 @@ export function isOverdue(dateStr: string | null): boolean {
 }
 
 /**
- * Check if a date is within this week
+ * Check if a date is within this week (Monday through Sunday).
  */
 export function isThisWeek(dateStr: string | null): boolean {
   if (!dateStr) return false;
 
   const date = parseISODate(dateStr);
-  const today = new Date();
 
-  // Get Sunday of this week
-  const sunday = new Date(today);
-  sunday.setDate(today.getDate() - today.getDay());
-  sunday.setHours(0, 0, 0, 0);
+  const monday = startOfWeek(new Date());
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  sunday.setHours(23, 59, 59, 999);
 
-  // Get Saturday of this week
-  const saturday = new Date(sunday);
-  saturday.setDate(sunday.getDate() + 6);
-  saturday.setHours(23, 59, 59, 999);
-
-  return date >= sunday && date <= saturday;
+  return date >= monday && date <= sunday;
 }

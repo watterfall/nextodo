@@ -8,11 +8,12 @@
   const i18n = getI18nStore();
   const t = i18n.t;
 
-  // Day names for unit display (clearer format with weekday prefix)
-  const unitDayNames: Record<number, { zh: string; en: string }> = {
-    1: { zh: '周日&周一', en: 'Sun&Mon' },
-    2: { zh: '周二&周三', en: 'Tue&Wed' },
-    3: { zh: '周四&周五', en: 'Thu&Fri' },
+  // Day names for unit display. These go through i18n rather than an inline
+  // zh/en pair so that adding a third locale does not need a code change.
+  const unitDayNameKeys: Record<number, string> = {
+    1: 'unit.days.1',
+    2: 'unit.days.2',
+    3: 'unit.days.3',
   };
 
   function handlePrev() {
@@ -34,14 +35,10 @@
     return tasks.currentUnit.startDate.getTime() === current.startDate.getTime();
   });
 
-  // Get display label based on language
   const unitDisplayLabel = $derived(() => {
-    if (tasks.currentUnit.isReviewDay) {
-      return i18n.language === 'zh-CN' ? '周六复盘' : 'Sat Review';
-    }
-    const dayName = unitDayNames[tasks.currentUnit.unitNumber];
-    if (!dayName) return '';
-    return i18n.language === 'zh-CN' ? dayName.zh : dayName.en;
+    if (tasks.currentUnit.isReviewDay) return t('unit.days.review');
+    const key = unitDayNameKeys[tasks.currentUnit.unitNumber];
+    return key ? t(key) : '';
   });
 </script>
 

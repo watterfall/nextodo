@@ -240,6 +240,12 @@ export default {
     current: '当前周期',
     week: '第 {n} 周',
     reviewDay: '复盘日',
+    days: {
+      '1': '周一&周二',
+      '2': '周三&周四',
+      '3': '周五&周六',
+      review: '周日复盘',
+    },
     reflection: '本周回顾',
     nextFocus: '下周重点',
     biDaily: '双日制',
@@ -361,8 +367,8 @@ export default {
       },
       biDaily: {
         title: '双日周期',
-        pattern: '周日-周一、周二-周三、周四-周五为工作单元',
-        review: '周六为复盘日',
+        pattern: '周一-周二、周三-周四、周五-周六为工作单元',
+        review: '周日为复盘日',
         benefit: '比日计划更灵活，比周计划更紧凑',
       },
       redundancy: {
