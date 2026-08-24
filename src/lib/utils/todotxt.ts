@@ -1,5 +1,5 @@
 import type { Task, Priority } from '$lib/types';
-import { PRIORITY_CONFIG, createEmptyTask, isHiddenPriority } from '$lib/types';
+import { PRIORITY_CONFIG, createEmptyTask } from '$lib/types';
 import { formatDateISO, parseISODate } from './unitCalc';
 import { parseRecurrence, formatRecurrence, isTodoTxtExpressible } from './recurrence';
 import { parseDateInput } from './parser';
@@ -243,7 +243,7 @@ function customTagsFromBody(body: string): string[] {
 function importPriority(letter: string | null, fallback: Priority): Priority {
   if (!letter) return fallback;
   const priority = letter as Priority;
-  if (!(priority in PRIORITY_CONFIG) || isHiddenPriority(priority)) return fallback;
+  if (!(priority in PRIORITY_CONFIG)) return fallback;
   return priority;
 }
 
@@ -292,15 +292,17 @@ export function taskFromTodoTxt(line: string, defaultPriority: Priority = 'C'): 
   if (item.createdDate) task.createdAt = parseISODate(item.createdDate).toISOString();
 
   if (item.complete) {
-    task.completed = true;
-    task.priority = 'G';
+    task.status = 'completed';
     task.completedAt = item.completedDate
       ? parseISODate(item.completedDate).toISOString()
       : task.createdAt;
-    // sleek parks the pre-completion priority here; it is exactly this app's
-    // `originalPriority`.
+    // sleek moves the pre-completion priority into `pri:` when it marks a line
+    // done, because todo.txt has no way to carry `(A)` on a completed line.
+    // That is the same idea as this app's status/priority split, so it maps
+    // straight onto `priority` — and unlike before, nothing has to be stashed
+    // in a second field to survive the completion.
     const pri = extensionValue(item, 'pri');
-    task.originalPriority = importPriority(pri, defaultPriority);
+    task.priority = importPriority(pri, defaultPriority);
   }
 
   return {
@@ -319,8 +321,7 @@ export function taskFromTodoTxt(line: string, defaultPriority: Priority = 'C'): 
  * that everything else on that line survives untouched.
  */
 export function todoTxtFromTask(task: Task): string {
-  const completed = task.priority === 'G' || task.completed;
-  const effectivePriority = completed ? task.originalPriority ?? null : task.priority;
+  const completed = task.status === 'completed';
 
   const parts: string[] = [task.content.trim()];
 
@@ -336,13 +337,15 @@ export function todoTxtFromTask(task: Task): string {
   // would produce a `rec:` value sleek cannot read, so it stays FocusFlow-side.
   if (isTodoTxtExpressible(task.recurrence)) parts.push(`rec:${formatRecurrence(task.recurrence)}`);
   if (task.pomodoros.estimated > 0) parts.push(`pm:${task.pomodoros.estimated}`);
-  if (completed && effectivePriority && !isHiddenPriority(effectivePriority)) {
-    parts.push(`pri:${effectivePriority}`);
-  }
+  // todo.txt cannot carry `(A)` on a completed line, so sleek moves the tier
+  // into `pri:` when it marks something done. Same rule here, and the tier is
+  // simply `task.priority` on both branches now that completion no longer
+  // overwrites it.
+  if (completed) parts.push(`pri:${task.priority}`);
 
   return serializeItem({
     complete: completed,
-    priority: completed ? null : effectivePriority && !isHiddenPriority(effectivePriority) ? effectivePriority : null,
+    priority: completed ? null : task.priority,
     completedDate: task.completedAt ? formatDateISO(new Date(task.completedAt)) : null,
     createdDate: task.createdAt ? formatDateISO(new Date(task.createdAt)) : null,
     body: parts.filter(Boolean).join(' '),

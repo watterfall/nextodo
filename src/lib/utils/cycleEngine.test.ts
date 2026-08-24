@@ -19,18 +19,18 @@ function task(priority: Priority, overrides: Partial<Task> = {}): Task {
 describe('weightedCompletionForPeriod', () => {
   it('scores priority-weighted completion of a period', () => {
     const openA = task('A', { unitStart: '2026-01-05' }); // weight 5, not done
-    const doneA = task('G', { unitStart: '2026-01-05', completed: true, originalPriority: 'A' }); // weight 5, done
+    const doneA = task('A', { unitStart: '2026-01-05', status: 'completed' }); // weight 5, done
     expect(weightedCompletionForPeriod([openA, doneA], '2026-01-05')).toBeCloseTo(0.5);
   });
 
   it('returns 1 when everything planned is done', () => {
-    const doneC = task('G', { unitStart: '2026-01-05', completed: true, originalPriority: 'C' });
+    const doneC = task('C', { unitStart: '2026-01-05', status: 'completed' });
     expect(weightedCompletionForPeriod([doneC], '2026-01-05')).toBeCloseTo(1);
   });
 
   it('returns null when nothing A-F was planned', () => {
     expect(weightedCompletionForPeriod([], '2026-01-05')).toBeNull();
-    const cancelled = task('H', { unitStart: '2026-01-05' });
+    const cancelled = task('C', { unitStart: '2026-01-05', status: 'cancelled' });
     expect(weightedCompletionForPeriod([cancelled], '2026-01-05')).toBeNull();
   });
 
@@ -43,7 +43,7 @@ describe('weightedCompletionForPeriod', () => {
 describe('rollUnfinishedIntoWindow', () => {
   it('moves only open active tasks of the given period into the window', () => {
     const openA = task('A', { id: 'open', unitStart: '2026-01-05' });
-    const doneA = task('G', { id: 'done', unitStart: '2026-01-05', completed: true, originalPriority: 'A' });
+    const doneA = task('A', { id: 'done', unitStart: '2026-01-05', status: 'completed' });
     const other = task('B', { id: 'other', unitStart: '2026-01-07' });
 
     const result = rollUnfinishedIntoWindow(
@@ -99,7 +99,7 @@ describe('evaluateCycle', () => {
       merged: false,
       lastEvaluatedStart: '2025-12-01',
     };
-    app.tasks = [task('A', { id: 'roll', unitStart: '2026-01-05', completed: false })];
+    app.tasks = [task('A', { id: 'roll', unitStart: '2026-01-05' })];
 
     const res = evaluateCycle(app, new Date(2026, 0, 7, 12, 0, 0)); // Wednesday → new window
     expect(res).toEqual({ changed: true, merged: true });
@@ -118,7 +118,7 @@ describe('evaluateCycle', () => {
       merged: false,
       lastEvaluatedStart: '2025-12-01',
     };
-    app.tasks = [task('A', { id: 'roll', unitStart: '2026-01-05', completed: false })];
+    app.tasks = [task('A', { id: 'roll', unitStart: '2026-01-05' })];
 
     const res = evaluateCycle(app, new Date(2026, 0, 7, 12, 0, 0));
     expect(res).toEqual({ changed: true, merged: false });
@@ -137,7 +137,7 @@ describe('evaluateCycle', () => {
       pendingReview: { periodStart: '2026-01-05', completion: 0.2 },
     };
     // Unit 2 finished everything, so nothing new is flagged...
-    app.tasks = [task('G', { unitStart: '2026-01-07', completed: true, originalPriority: 'A' })];
+    app.tasks = [task('A', { unitStart: '2026-01-07', status: 'completed' })];
 
     evaluateCycle(app, new Date(2026, 0, 9, 12, 0, 0)); // Friday → new window
     // ...but the banner the user never answered must survive, or Unit 1's
@@ -150,16 +150,16 @@ describe('only planned work counts toward the cycle', () => {
   it('ignores cancelled tasks when scoring a period', () => {
     // A cancelled task is not unfinished work — counting it would drag the
     // period under the merge threshold and trigger a rollover nobody asked for.
-    const done = task('G', { unitStart: '2026-01-05', completed: true, originalPriority: 'A' });
+    const done = task('A', { unitStart: '2026-01-05', status: 'completed' });
     const cancelled = Array.from({ length: 20 }, (_, i) =>
-      task('H', { id: `drop${i}`, unitStart: '2026-01-05' })
+      task('C', { id: `drop${i}`, unitStart: '2026-01-05', status: 'cancelled' })
     );
     expect(weightedCompletionForPeriod([done, ...cancelled], '2026-01-05')).toBeCloseTo(1);
   });
 
   it('rolls forward only open A-E tasks', () => {
-    const cancelled = task('H', { id: 'drop', unitStart: '2026-01-05' });
-    const done = task('G', { id: 'done', unitStart: '2026-01-05', completed: true });
+    const cancelled = task('C', { id: 'drop', unitStart: '2026-01-05', status: 'cancelled' });
+    const done = task('C', { id: 'done', unitStart: '2026-01-05', status: 'completed' });
     const planned = task('C', { id: 'plan', unitStart: '2026-01-05' });
 
     const rolled = rollUnfinishedIntoWindow(

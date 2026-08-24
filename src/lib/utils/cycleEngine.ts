@@ -1,5 +1,5 @@
 import type { AppData, Task, Priority } from '$lib/types';
-import { PRIORITY_CONFIG } from '$lib/types';
+import { PRIORITY_CONFIG, isOpen } from '$lib/types';
 import { getUnitForDate, parseISODate } from './unitCalc';
 
 // A 2-day period whose priority-weighted completion falls below this ratio is
@@ -24,14 +24,6 @@ function isPlannedPriority(p: Priority | null | undefined): boolean {
   return !!p && PLANNED_PRIORITIES.has(p);
 }
 
-// Effective A-E priority for cycle accounting. Completed tasks (G) keep the
-// priority they had before completion; open tasks use their current priority.
-// Returns null for anything that isn't an A-E task.
-function effectiveActivePriority(task: Task): Priority | null {
-  const p = task.priority === 'G' ? task.originalPriority : task.priority;
-  return isPlannedPriority(p) ? (p as Priority) : null;
-}
-
 // Local YYYY-MM-DD (avoids the UTC day-shift that toISOString can introduce).
 function localISO(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -47,19 +39,22 @@ function taskPeriodKey(task: Task): string {
 }
 
 // Priority-weighted completion of one 2-day period, identified by its key.
-// Counts A-E tasks (open A-E + completed-from-A-E) belonging to that period;
-// cancelled (H) tasks are excluded. Returns null when nothing was planned.
+//
+// Cancelled tasks are excluded from BOTH sides of the ratio, not counted as
+// misses: dropping something is a decision the user made about the plan, and
+// scoring it as a failure would make cancelling feel like a penalty. Since the
+// tier now survives completion, one read of `task.priority` serves both sides.
+// Returns null when nothing was planned.
 export function weightedCompletionForPeriod(tasks: Task[], periodKey: string): number | null {
   let total = 0;
   let done = 0;
   for (const task of tasks) {
-    if (task.priority === 'H') continue;
-    const p = effectiveActivePriority(task);
-    if (!p) continue;
+    if (task.status === 'cancelled') continue;
+    if (!isPlannedPriority(task.priority)) continue;
     if (taskPeriodKey(task) !== periodKey) continue;
-    const w = priorityWeight(p);
+    const w = priorityWeight(task.priority);
     total += w;
-    if (task.priority === 'G' && task.completed) done += w;
+    if (task.status === 'completed') done += w;
   }
   if (total === 0) return null;
   return done / total;
@@ -165,7 +160,7 @@ export function rollUnfinishedIntoWindow(
   windowEnd: string
 ): Task[] {
   return tasks.map(task => {
-    if (isPlannedPriority(task.priority) && !task.completed && taskPeriodKey(task) === periodStart) {
+    if (isPlannedPriority(task.priority) && isOpen(task) && taskPeriodKey(task) === periodStart) {
       return {
         ...task,
         unitStart: windowStart,

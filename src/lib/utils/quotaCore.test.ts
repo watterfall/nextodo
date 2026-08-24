@@ -30,14 +30,14 @@ function fullBoard(): Task[] {
 }
 
 describe('countActiveByPriority', () => {
-  it('counts non-completed A-E tasks and ignores hidden ones', () => {
+  it('counts only open tasks, whatever tier they sit in', () => {
     const tasks = [
       task('A'),
-      task('A', { completed: true }), // completed → excluded
+      task('A', { status: 'completed' }), // finished → excluded
       task('B'),
       task('C'),
-      task('G'), // hidden → excluded
-      task('H'), // hidden → excluded
+      task('C', { status: 'completed' }), // finished → excluded
+      task('D', { status: 'cancelled' }), // finished → excluded
     ];
     expect(countActiveByPriority(tasks)).toEqual({ A: 1, B: 1, C: 1, D: 0, E: 0 });
   });
@@ -67,11 +67,6 @@ describe('canAddTask', () => {
     expect(canAddTask([task('E'), task('E')], 'E')).toBe(true);
   });
 
-  it('refuses hidden priorities', () => {
-    expect(canAddTask([], 'G')).toBe(false);
-    expect(canAddTask([], 'H')).toBe(false);
-  });
-
   it('has no unbounded tier left to absorb an overflow', () => {
     // F used to answer true here no matter what. The unit is now finite: 15
     // tasks and nothing more fits.
@@ -88,7 +83,6 @@ describe('isSingleSlotPriority', () => {
     // S was the other one; the week's sustained project is a +project tag now.
     expect(isSingleSlotPriority('B')).toBe(false);
     expect(isSingleSlotPriority('E')).toBe(false);
-    expect(isSingleSlotPriority('G')).toBe(false);
   });
 });
 
@@ -109,7 +103,7 @@ describe('demotionTargetFor', () => {
 describe('applyHighlanderRule', () => {
   it('demotes an existing active A to B when adding a new A', () => {
     const existingA = task('A', { id: 'a1' });
-    const completedA = task('A', { id: 'a2', completed: true });
+    const completedA = task('A', { id: 'a2', status: 'completed' });
     const b = task('B', { id: 'b1' });
 
     const result = applyHighlanderRule([existingA, completedA, b], task('A', { id: 'new' }));
@@ -209,8 +203,11 @@ describe('canPromote / canDemote', () => {
     expect(canDemote(task('E'))).toEqual({ canDemote: false, targetPriority: null });
   });
 
-  it('refuses promote/demote on a hidden priority', () => {
-    expect(canPromote([], task('G'))).toEqual({ canPromote: false, targetPriority: null });
-    expect(canDemote(task('G'))).toEqual({ canDemote: false, targetPriority: null });
+  it('is unaffected by a task having been finished', () => {
+    // Promotion/demotion is about the tier, and the tier survives an ending —
+    // so a completed B still reports the same neighbours a open B does.
+    const doneB = task('B', { status: 'completed' });
+    expect(canPromote([], doneB)).toEqual({ canPromote: true, targetPriority: 'A' });
+    expect(canDemote(doneB)).toEqual({ canDemote: true, targetPriority: 'C' });
   });
 });

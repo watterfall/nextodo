@@ -282,7 +282,7 @@ export function createNextOccurrence(task: Task, completedOn: Date = new Date())
   return {
     ...task,
     id: crypto.randomUUID(),
-    completed: false,
+    status: 'open',
     completedAt: null,
     createdAt: new Date().toISOString(),
     unitStart: nextDue,
@@ -348,7 +348,7 @@ export function recurrenceLabel(
  */
 export function getTasksNeedingRecurrence(tasks: Task[]): Task[] {
   return tasks.filter(task =>
-    task.completed &&
+    task.status === 'completed' &&
     hasRecurrence(task) &&
     (!task.recurrence!.strict || !!task.dueDate)
   );

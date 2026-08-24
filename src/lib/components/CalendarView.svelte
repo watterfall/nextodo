@@ -77,7 +77,7 @@
       if (task.dueDate === dateStr) return true;
       
       // Check completed date for history
-      if (task.completed && task.completedAt && task.completedAt.startsWith(dateStr)) return true;
+      if (task.status === 'completed' && task.completedAt && task.completedAt.startsWith(dateStr)) return true;
       
       return false;
     });

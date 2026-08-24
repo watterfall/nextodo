@@ -7,6 +7,7 @@ import {
 } from '$lib/types';
 import { migrateRecurrence } from './recurrence';
 import { migrateToV5 } from './migrateV5';
+import { migrateToV6 } from './migrateV6';
 
 type DataFileType = 'active' | 'archive' | 'pomodoro_history';
 type PersistedFileType = 'active' | 'pomodoro_history';
@@ -210,7 +211,7 @@ function loadFromLocalStorage(): AppData {
       }
     }
 
-    const upgraded = upgradeToV5(
+    const upgraded = upgradeData(
       active.version || '4.0',
       tasks,
       migrateSettings(active.settings),
@@ -312,7 +313,7 @@ async function loadFromTauri(): Promise<AppData> {
     }
 
     // Combine into AppData
-    const upgraded = upgradeToV5(
+    const upgraded = upgradeData(
       active.version || '4.0',
       tasks,
       migrateSettings(active.settings),
@@ -416,33 +417,50 @@ async function saveFileTauri(fileType: DataFileType, data: unknown): Promise<voi
 }
 
 /**
- * Apply the 4.0 -> 5.0 upgrade to a file that has just been read.
+ * Bring a file that has just been read up to the current data version.
  *
  * Both live load paths (localStorage and Tauri) assemble AppData themselves
  * rather than going through migrateData — that one only handles the legacy
  * single-file layout — so the upgrade has to be applied at each of them or it
  * silently never runs for real users.
+ *
+ * The steps run in order and each one hands the next its own output shape:
+ *
+ *   4.0 → 5.0   F / N / S tiers and embedded subtasks go away; the candidate
+ *               pool becomes a todo.txt (migrateV5, SLEEK-INTEROP.md §10)
+ *   5.0 → 6.0   completion stops being a priority letter (migrateV6)
+ *
+ * 6.0 runs unconditionally, not only when the stored version is older. It is
+ * idempotent by construction — a task that already has a valid `status` is
+ * passed through — and running it always means a file written by some other
+ * tool, or by a build in between these versions, still lands in a shape the
+ * app can read.
  */
-function upgradeToV5(
+function upgradeData(
   version: string,
-  tasks: Task[],
+  rawTasks: unknown[],
   settings: AppData['settings'],
-  existingPending: Task[] | undefined
+  existingPending: unknown[] | undefined
 ): { version: string; tasks: Task[]; settings: AppData['settings']; pendingExport?: Task[] } {
-  const pending = existingPending ?? [];
+  let pending: unknown[] = existingPending ?? [];
+  let tasks: unknown[] = rawTasks;
+  let nextSettings = settings;
 
-  if (version >= '5.0') {
-    return { version, tasks, settings, pendingExport: pending.length > 0 ? pending : undefined };
+  if (version < '5.0') {
+    const migration = migrateToV5(tasks as never, settings.focusProject ?? null);
+    tasks = migration.tasks;
+    pending = [...pending, ...migration.pendingExport];
+    nextSettings = { ...settings, focusProject: migration.focusProject };
   }
 
-  const migration = migrateToV5(tasks, settings.focusProject ?? null);
-  const allPending = [...pending, ...migration.pendingExport];
+  const v6 = migrateToV6(tasks);
+  const pendingV6 = migrateToV6(pending);
 
   return {
-    version: '5.0',
-    tasks: migration.tasks,
-    settings: { ...settings, focusProject: migration.focusProject },
-    pendingExport: allPending.length > 0 ? allPending : undefined
+    version: '6.0',
+    tasks: v6.tasks,
+    settings: nextSettings,
+    pendingExport: pendingV6.tasks.length > 0 ? pendingV6.tasks : undefined
   };
 }
 
@@ -544,17 +562,12 @@ function migrateData(data: any): AppData {
     data.version = '4.0';
   }
 
-  // Migrate to 5.0: the F / N / S tiers and embedded subtasks are gone, and
-  // the candidate pool moved to a todo.txt. Nothing is deleted — see
-  // migrateToV5 and docs/SLEEK-INTEROP.md §10.
-  let pendingExport: Task[] = data.pendingExport ?? [];
-  if (data.version < '5.0') {
-    const migration = migrateToV5(tasks, data.settings.focusProject ?? null);
-    tasks = migration.tasks;
-    pendingExport = [...pendingExport, ...migration.pendingExport];
-    data.settings = { ...data.settings, focusProject: migration.focusProject };
-    data.version = '5.0';
-  }
+  // Everything from 4.0 onwards, in one place. See upgradeData.
+  const upgraded = upgradeData(data.version, tasks, data.settings, data.pendingExport);
+  tasks = upgraded.tasks;
+  const pendingExport: Task[] = upgraded.pendingExport ?? [];
+  data.settings = upgraded.settings;
+  data.version = upgraded.version;
 
   return {
     version: data.version,

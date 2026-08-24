@@ -1,5 +1,5 @@
 import type { Task, Priority, TaskOrigin, FilterState, UnitInfo, AppData, ActiveData, PomodoroHistoryData } from '$lib/types';
-import { createDefaultAppData, isThresholdPassed, isActivePriority, isCountedPriority, isHiddenPriority, isOperablePriority, DEFAULT_PRIORITY, ORIGIN_CONTEXT, withOrigin, isWithinRetentionPeriod } from '$lib/types';
+import { createDefaultAppData, isThresholdPassed, isOpen, isFinished, emptyPriorityCounts, DEFAULT_PRIORITY, ORIGIN_CONTEXT, withOrigin, isWithinRetentionPeriod } from '$lib/types';
 import { loadAppData, saveAppData, reloadFile, archiveTasks } from '$lib/utils/storage';
 import { readTodoFile, writeTodoFile, appendTodoLines } from '$lib/utils/todoFile';
 import {
@@ -55,8 +55,8 @@ function cleanupOldTasks(): void {
   const toArchive: Task[] = [];
 
   appData.tasks = appData.tasks.filter(task => {
-    // Cancelled (H): hard-delete after 2 days
-    if (task.priority === 'H') {
+    // Cancelled: hard-delete after 2 days
+    if (task.status === 'cancelled') {
       if (!task.completedAt) return true; // Keep if no timestamp (shouldn't happen but safe)
       const cancelledTime = new Date(task.completedAt).getTime();
       if (now - cancelledTime > twoDaysMs) {
@@ -64,8 +64,8 @@ function cleanupOldTasks(): void {
       }
     }
 
-    // Completed (G): archive to cold storage after the History window, drop from active
-    if (task.priority === 'G' && task.completedAt) {
+    // Completed: archive to cold storage after the History window, drop from active
+    if (task.status === 'completed' && task.completedAt) {
       const completedTime = new Date(task.completedAt).getTime();
       if (now - completedTime > archiveAfterMs) {
         toArchive.push(task);
@@ -115,10 +115,11 @@ export async function initializeData(): Promise<void> {
     // Process recurring tasks. This is the catch-up net for completions that did
     // not go through completeTask() — chiefly the CLI, which writes active.json
     // directly. It must include G (completed) tasks: getTasksNeedingRecurrence
-    // keys on `completed`, and every completion also sets priority 'G', so
-    // filtering to A-F here made this branch permanently unreachable.
+    // keys on a completed status, so cancelled tasks are the only ones to
+    // leave out — filtering to the open tiers made this branch unreachable
+    // back when completion overwrote the priority.
     const newRecurringTasks = processRecurringTasks(
-      appData.tasks.filter(t => t.priority !== 'H')
+      appData.tasks.filter(t => t.status !== 'cancelled')
     );
     let dataChanged = newRecurringTasks.length > 0 || cycleResult.changed || normalized;
     if (dataChanged) {
@@ -279,10 +280,9 @@ export async function updateTask(taskId: string, updates: Partial<Task>): Promis
 // Cancel a task (move to H priority)
 export async function cancelTask(taskId: string): Promise<void> {
   appData.tasks = appData.tasks.map(task => {
-    if (task.id === taskId && isOperablePriority(task.priority)) {
+    if (task.id === taskId && isOpen(task)) {
       return {
         ...task,
-        originalPriority: task.priority, // Save original priority for retention period calculation
         priority: 'H' as Priority,
         completedAt: new Date().toISOString()
       };
@@ -299,7 +299,7 @@ export async function deleteTask(taskId: string): Promise<void> {
 
 export async function completeTask(taskId: string): Promise<void> {
   // Find the task first to check for recurrence
-  const taskToComplete = appData.tasks.find(t => t.id === taskId && isOperablePriority(t.priority));
+  const taskToComplete = appData.tasks.find(t => t.id === taskId && isOpen(t));
   let nextRecurringTask: Task | null = null;
 
   // One completion instant, used both to stamp the task and to seed the next
@@ -313,14 +313,14 @@ export async function completeTask(taskId: string): Promise<void> {
     nextRecurringTask = createNextOccurrence(taskToComplete, completedOn);
   }
 
-  // Move task to G (completed) priority, preserving original priority for retention display
+  // Flip the status. The priority is left exactly as it was — an A that got
+  // finished is still an A, which is why nothing has to be stashed anywhere to
+  // put it back later.
   appData.tasks = appData.tasks.map(task => {
-    if (task.id === taskId && isOperablePriority(task.priority)) {
+    if (task.id === taskId && isOpen(task)) {
       return {
         ...task,
-        originalPriority: task.priority, // Save original priority for retention period calculation
-        priority: 'G' as Priority,
-        completed: true,
+        status: 'completed' as const,
         completedAt: new Date().toISOString()
       };
     }
@@ -331,7 +331,7 @@ export async function completeTask(taskId: string): Promise<void> {
   if (nextRecurringTask) {
     const quotaError = isSingleSlotPriority(nextRecurringTask.priority)
       ? null
-      : validateQuota(appData.tasks.filter(t => isActivePriority(t.priority)), nextRecurringTask.priority);
+      : validateQuota(appData.tasks.filter(isOpen), nextRecurringTask.priority);
     if (!quotaError) {
       appData.tasks = [...runHighlander(appData.tasks, nextRecurringTask).tasks, nextRecurringTask];
     }
@@ -449,7 +449,7 @@ export async function loadCandidates(includeHidden = false): Promise<CandidateLi
 
     for (const raw of splitLines(content)) {
       const imported = taskFromTodoTxt(raw, DEFAULT_PRIORITY);
-      if (imported.task.completed) continue;
+      if (imported.task.status === 'completed') continue;
       if (imported.hidden && !includeHidden) continue;
       if (pulled.has(raw)) {
         alreadyPulled++;
@@ -556,7 +556,7 @@ export async function exportPendingTasks(): Promise<{ exported: number; error?: 
       const line = todoTxtFromTask(task);
       // A task with no threshold date was a "not now" item with no date
       // attached; h:1 is how todo.txt says that.
-      return task.thresholdDate || task.completed ? line : `${line} h:1`;
+      return task.thresholdDate || task.status === 'completed' ? line : `${line} h:1`;
     });
 
     await appendTodoLines(path, lines);
@@ -573,7 +573,7 @@ export async function exportPendingTasks(): Promise<{ exported: number; error?: 
 // Evolve a task: complete the original and create a new evolved task
 // The new task inherits priority, projects, contexts, tags, and pomodoro estimates
 export async function evolveTask(taskId: string, newContent?: string): Promise<{ success: boolean; newTaskId?: string; error?: string }> {
-  const originalTask = appData.tasks.find(t => t.id === taskId && isActivePriority(t.priority));
+  const originalTask = appData.tasks.find(t => t.id === taskId && isOpen(t));
   if (!originalTask) {
     return { success: false, error: 'Task not found or already completed' };
   }
@@ -584,7 +584,7 @@ export async function evolveTask(taskId: string, newContent?: string): Promise<{
     id: crypto.randomUUID(),
     content: newContent || originalTask.content,
     priority: originalTask.priority,
-    completed: false,
+    status: 'open',
     completedAt: null,
     createdAt: now,
     unitStart: currentUnitStartLocal(),
@@ -631,13 +631,10 @@ export async function evolveTask(taskId: string, newContent?: string): Promise<{
 // information the record still carries about where it belongs.
 export async function uncompleteTask(taskId: string): Promise<void> {
   const task = appData.tasks.find(t => t.id === taskId);
-  if (!task || !isHiddenPriority(task.priority)) return;
+  if (!task || !isFinished(task)) return;
 
-  const target = task.originalPriority && isActivePriority(task.originalPriority)
-    ? task.originalPriority
-    : DEFAULT_PRIORITY;
-
-  return restoreTask(taskId, target);
+  // The tier survived the completion, so undoing one is just a status flip.
+  return restoreTask(taskId, task.priority);
 }
 
 /**
@@ -650,16 +647,12 @@ export async function uncompleteTask(taskId: string): Promise<void> {
  * slot and the incumbent moves down.
  */
 export async function restoreTask(taskId: string, targetPriority: Priority = DEFAULT_PRIORITY): Promise<void> {
-  if (!isOperablePriority(targetPriority)) {
-    targetPriority = DEFAULT_PRIORITY;
-  }
-
   appData.tasks = appData.tasks.map(task => {
-    if (task.id === taskId && (task.priority === 'G' || task.priority === 'H')) {
+    if (task.id === taskId && isFinished(task)) {
       return {
         ...task,
         priority: targetPriority,
-        completed: false,
+        status: 'open' as const,
         completedAt: null
       };
     }
@@ -770,11 +763,6 @@ export async function changePriority(taskId: string, newPriority: Priority, skip
     return { success: false, error: 'Task not found' };
   }
 
-  // A-E only through this function; use completeTask or cancelTask for G/H.
-  if (!isOperablePriority(newPriority)) {
-    return { success: false, error: 'Cannot change to hidden priority directly' };
-  }
-
   // Check if confirmation is needed
   if (!skipConfirmation) {
     const confirmCheck = needsPriorityChangeConfirmation(task, newPriority);
@@ -829,11 +817,6 @@ export async function incrementPomodoro(taskId: string): Promise<void> {
 
 // Reorder tasks within a priority zone (for drag-and-drop) or move between zones
 export async function reorderTask(priority: Priority, newOrderedTasks: Task[], promotedTaskId?: string): Promise<void> {
-  // Only allow reordering to active priorities
-  if (!isActivePriority(priority)) {
-    return;
-  }
-
   const newIds = new Set(newOrderedTasks.map(t => t.id));
 
   // Get all tasks that are NOT in the new list
@@ -852,7 +835,7 @@ export async function reorderTask(priority: Priority, newOrderedTasks: Task[], p
   if (priority === 'A') {
     const keeperId = promotedTaskId || newOrderedTasks[0]?.id;
     nextTasks = nextTasks.map(task => {
-      if (task.id !== keeperId && task.priority === 'A' && !task.completed) {
+      if (task.id !== keeperId && task.priority === 'A' && isOpen(task)) {
         return { ...task, priority: 'B' as Priority };
       }
       return task;
@@ -916,11 +899,13 @@ export function setCurrentUnit(unit: UnitInfo): void {
 }
 
 // Derived values - Step 1: the quota-bearing A-E tiers.
-const activeTasks = $derived(appData.tasks.filter(t => isActivePriority(t.priority)));
+const activeTasks = $derived(appData.tasks.filter(isOpen));
 
 // Tasks that count toward cross-cutting aggregations (sidebar project/context/
-// tag badges, etc.) — everything not hidden (G/H).
-const countedTasks = $derived(appData.tasks.filter(t => isCountedPriority(t.priority)));
+// tag badges, etc.) — everything still owed. Identical to `activeTasks` now
+// that "is this a real tier" and "is this still open" are the same question;
+// kept as its own name because the two call sites mean different things.
+const countedTasks = $derived(appData.tasks.filter(isOpen));
 
 // Flow metrics: how work is moving, as opposed to how much of it there has been.
 //
@@ -1015,13 +1000,7 @@ const filteredTasks = $derived.by(() => {
 
 const tasksByPriority = $derived.by(() => {
   const byPriority: Record<Priority, Task[]> = {
-    A: [],
-    B: [],
-    C: [],
-    D: [],
-    E: [],
-    G: [],
-    H: []
+    A: [], B: [], C: [], D: [], E: []
   };
 
   for (const task of filteredTasks) {
@@ -1033,9 +1012,9 @@ const tasksByPriority = $derived.by(() => {
   return byPriority;
 });
 
-// Completed tasks (G priority)
+// Completed tasks
 const completedTasks = $derived(
-  appData.tasks.filter(t => t.priority === 'G')
+  appData.tasks.filter(t => t.status === 'completed')
     .sort((a, b) => {
       const dateA = a.completedAt ? new Date(a.completedAt).getTime() : 0;
       const dateB = b.completedAt ? new Date(b.completedAt).getTime() : 0;
@@ -1043,9 +1022,9 @@ const completedTasks = $derived(
     })
 );
 
-// Cancelled tasks (H priority)
+// Cancelled tasks
 const cancelledTasks = $derived(
-  appData.tasks.filter(t => t.priority === 'H')
+  appData.tasks.filter(t => t.status === 'cancelled')
     .sort((a, b) => {
       const dateA = a.completedAt ? new Date(a.completedAt).getTime() : 0;
       const dateB = b.completedAt ? new Date(b.completedAt).getTime() : 0;
@@ -1060,7 +1039,7 @@ const cancelledTasks = $derived(
 const focusProjectTasks = $derived.by(() => {
   const project = appData.settings.focusProject;
   if (!project) return [];
-  return appData.tasks.filter(t => isActivePriority(t.priority) && t.projects.includes(project));
+  return appData.tasks.filter(t => isOpen(t) && t.projects.includes(project));
 });
 
 // Progress across everything tagged with the focus project, completed tasks
@@ -1069,8 +1048,8 @@ const focusProjectProgress = $derived.by(() => {
   const project = appData.settings.focusProject;
   if (!project) return { done: 0, total: 0, ratio: 0 };
 
-  const tagged = appData.tasks.filter(t => t.projects.includes(project) && t.priority !== 'H');
-  const done = tagged.filter(t => t.completed).length;
+  const tagged = appData.tasks.filter(t => t.projects.includes(project) && t.status !== 'cancelled');
+  const done = tagged.filter(t => t.status === 'completed').length;
   return { done, total: tagged.length, ratio: tagged.length === 0 ? 0 : done / tagged.length };
 });
 
@@ -1141,25 +1120,20 @@ const weeklyRecurringCount = $derived(
 );
 
 const completedTodayCount = $derived(
-  appData.tasks.filter(t => t.priority === 'G' && t.completedAt && isToday(t.completedAt)).length
+  appData.tasks.filter(t => t.status === 'completed' && t.completedAt && isToday(t.completedAt)).length
 );
 
-// Recently completed tasks within retention period, grouped by original priority
-// These will be shown with strikethrough in their original zone
+// Recently completed tasks within retention period, grouped by their tier.
+// These are shown struck through in the zone they were completed from — which
+// needs no lookup any more, because completing one never moved it.
 const recentlyCompletedTasksByPriority = $derived.by(() => {
   const byPriority: Record<Priority, Task[]> = {
-    A: [], B: [], C: [], D: [], E: [], G: [], H: []
+    A: [], B: [], C: [], D: [], E: []
   };
 
-  const recentlyCompleted = appData.tasks.filter(t =>
-    t.priority === 'G' && isWithinRetentionPeriod(t)
-  );
-
-  for (const task of recentlyCompleted) {
-    const originalPriority = task.originalPriority || DEFAULT_PRIORITY;
-    if (byPriority[originalPriority]) {
-      byPriority[originalPriority].push(task);
-    }
+  for (const task of appData.tasks) {
+    if (task.status !== 'completed' || !isWithinRetentionPeriod(task)) continue;
+    byPriority[task.priority].push(task);
   }
 
   // Sort each group by completion time (most recent first)

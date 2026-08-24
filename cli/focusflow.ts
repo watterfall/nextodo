@@ -22,11 +22,10 @@ import {
   samplesUntilReady,
   MIN_SAMPLE
 } from '$lib/utils/flowMetrics';
-import { createDefaultActiveData } from '$lib/types';
+import { createDefaultActiveData, isOpen } from '$lib/types';
 import type { ActiveData, Task, Priority } from '$lib/types';
 
 const APP_ID = 'com.focusflow.app';
-const OPERABLE = new Set<Priority>(['A', 'B', 'C', 'D', 'E']);
 
 // ---------- data file ----------
 
@@ -82,7 +81,7 @@ function parseArgs(argv: string[]): { positional: string[]; flags: Record<string
 }
 
 function findTask(tasks: Task[], query: string): Task | null {
-  const operable = tasks.filter(t => OPERABLE.has(t.priority) && !t.completed);
+  const operable = tasks.filter(isOpen);
   const byId = operable.find(t => t.id === query);
   if (byId) return byId;
   const matches = operable.filter(t => t.content.toLowerCase().includes(query.toLowerCase()));
@@ -125,7 +124,7 @@ function cmdAdd(positional: string[], flags: Record<string, string | boolean>, p
 
 function cmdList(flags: Record<string, string | boolean>, path: string): void {
   const data = load(path);
-  let tasks = data.tasks.filter(t => OPERABLE.has(t.priority) && !t.completed);
+  let tasks = data.tasks.filter(isOpen);
   if (typeof flags.priority === 'string') {
     const p = flags.priority.toUpperCase();
     tasks = tasks.filter(t => t.priority === p);
@@ -156,8 +155,8 @@ function cmdResolve(kind: 'done' | 'cancel', positional: string[], path: string)
   if (!task) fail(`${kind}: no active task matches "${query}"`);
 
   // Mirror the app: completing a recurring task regenerates it, cancelling does
-  // not, and only completion sets `completed`. Cancelled tasks keep it false so
-  // both surfaces write the same record shape.
+  // not. Both endings keep the tier — an A that got finished is still an A —
+  // so only `status` and `completedAt` change.
   //
   // One instant serves both the stamp and the next occurrence — a loose
   // recurrence counts from the completion date, and the regeneration runs
@@ -165,9 +164,7 @@ function cmdResolve(kind: 'done' | 'cancel', positional: string[], path: string)
   const resolvedAt = new Date();
   const next = kind === 'done' ? createNextOccurrence(task, resolvedAt) : null;
 
-  task.originalPriority = task.priority;
-  task.priority = kind === 'done' ? 'G' : 'H';
-  task.completed = kind === 'done';
+  task.status = kind === 'done' ? 'completed' : 'cancelled';
   task.completedAt = resolvedAt.toISOString();
 
   if (next) data.tasks.push(next);

@@ -20,7 +20,8 @@
  *    exactly the false confidence this module exists to avoid.
  */
 
-import type { Task, ActivePriority } from '$lib/types';
+import type { Task, Priority } from '$lib/types';
+import { isOpen } from '$lib/types';
 
 /** Below this many samples, the medians refuse to answer. */
 export const MIN_SAMPLE = 5;
@@ -77,25 +78,15 @@ function median(values: number[]): number {
   return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
 }
 
-/** A task still owed: not finished, not cancelled. */
-function isUnfinished(task: Task): boolean {
-  return !task.completed && task.priority !== 'G' && task.priority !== 'H';
-}
-
 /**
- * A finished task, and the tier it was finished at.
+ * A delivered task, and the tier it was delivered at.
  *
- * Completion rewrites `priority` to 'G', so anything that wants to know what
- * kind of task it was has to read `originalPriority`. Cancelled ('H') tasks are
- * deliberately excluded — cancelling is a legitimate outcome, but it is not a
- * delivery, and counting it as one would make the cycle time look better the
- * more work you abandon.
+ * Cancelled tasks return null on purpose — cancelling is a legitimate outcome,
+ * but it is not a delivery, and counting it as one would make the cycle time
+ * look better the more work you abandon.
  */
-function finishedTier(task: Task): ActivePriority | null {
-  const done = task.completed || task.priority === 'G';
-  if (!done) return null;
-  const tier = task.originalPriority ?? task.priority;
-  return tier === 'G' || tier === 'H' ? null : tier;
+function deliveredTier(task: Task): Priority | null {
+  return task.status === 'completed' ? task.priority : null;
 }
 
 /**
@@ -110,7 +101,7 @@ function finishedTier(task: Task): ActivePriority | null {
  * inventing it.
  */
 export function ageDistribution(tasks: Task[], now: Date = new Date()): AgeDistribution {
-  const open = tasks.filter(isUnfinished);
+  const open = tasks.filter(isOpen);
   if (open.length === 0) {
     return { count: 0, p50: null, p90: null, oldest: null };
   }
@@ -139,7 +130,7 @@ export function cycleTimeMedian(
   window: number = DEFAULT_WINDOW
 ): Sampled | null {
   const done = tasks
-    .filter((t) => finishedTier(t) !== null && t.completedAt)
+    .filter((t) => deliveredTier(t) !== null && t.completedAt)
     .sort((a, b) => (b.completedAt ?? '').localeCompare(a.completedAt ?? ''))
     .slice(0, window);
 
@@ -166,13 +157,13 @@ export function cycleTimeMedian(
  */
 export function estimationFactor(
   tasks: Task[],
-  opts: { priority?: ActivePriority; window?: number } = {}
+  opts: { priority?: Priority; window?: number } = {}
 ): Sampled | null {
   const window = opts.window ?? DEFAULT_WINDOW;
 
   const usable = tasks
     .filter((t) => {
-      const tier = finishedTier(t);
+      const tier = deliveredTier(t);
       if (!tier) return false;
       if (opts.priority && tier !== opts.priority) return false;
       return t.pomodoros.estimated > 0 && t.pomodoros.completed > 0;
@@ -195,7 +186,7 @@ export function estimationFactor(
  * queue shorter, it can make it visible enough to argue with.
  */
 export function commitmentCount(tasks: Task[]): number {
-  return tasks.filter(isUnfinished).length;
+  return tasks.filter(isOpen).length;
 }
 
 /**
@@ -203,6 +194,6 @@ export function commitmentCount(tasks: Task[]): number {
  * Drives the empty state, so it can say "4 more" instead of showing a fake 0.
  */
 export function samplesUntilReady(tasks: Task[]): number {
-  const done = tasks.filter((t) => finishedTier(t) !== null && t.completedAt).length;
+  const done = tasks.filter((t) => deliveredTier(t) !== null && t.completedAt).length;
   return Math.max(0, MIN_SAMPLE - done);
 }

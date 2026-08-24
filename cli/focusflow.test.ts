@@ -78,8 +78,9 @@ describe('focusflow CLI', () => {
     run('done', 'water');
 
     const [task] = read().tasks;
-    expect(task.priority).toBe('G');
-    expect(task.completed).toBe(true);
+    // The tier is untouched — it was added as !E and it is still an E.
+    expect(task.priority).toBe('E');
+    expect(task.status).toBe('completed');
     expect(task.completedAt).not.toBeNull();
   });
 
@@ -98,14 +99,14 @@ describe('focusflow CLI', () => {
     const tasks = read().tasks;
 
     const completed = tasks.find((t) => t.id === 'standup')!;
-    expect(completed.priority).toBe('G');
+    expect(completed.status).toBe('completed');
 
     // Without this the user's daily standup silently disappeared forever.
     const next = tasks.find((t) => t.id !== 'standup')!;
     expect(next).toBeDefined();
     expect(next.content).toBe('daily standup');
     expect(next.dueDate).toBe('2026-03-16');
-    expect(next.completed).toBe(false);
+    expect(next.status).toBe('open');
   });
 
   it('regenerates a loose recurring task from the completion date', () => {
@@ -138,10 +139,10 @@ describe('focusflow CLI', () => {
     run('cancel', 'memo');
 
     const [task] = read().tasks;
-    expect(task.priority).toBe('H');
-    // The app's cancelTask leaves this false; both surfaces must agree, or
-    // predicates keyed on `completed` disagree depending on who cancelled.
-    expect(task.completed).toBe(false);
+    // Cancelled, and still the D it was added as. Both surfaces write the same
+    // record shape, so nothing downstream depends on who cancelled it.
+    expect(task.status).toBe('cancelled');
+    expect(task.priority).toBe('D');
   });
 
   it('does not regenerate a recurring task that was cancelled', () => {
@@ -189,14 +190,12 @@ describe('focusflow CLI', () => {
 describe('metrics', () => {
   /** A finished task, `spanDays` from creation to completion. */
   function finished(spanDays: number, endedDaysAgo: number, est = 0, actual = 0): Task {
-    const t = createEmptyTask('G');
+    const t = createEmptyTask('C');
     const end = new Date();
     end.setDate(end.getDate() - endedDaysAgo);
     const start = new Date(end);
     start.setDate(start.getDate() - spanDays);
-    t.completed = true;
-    t.priority = 'G';
-    t.originalPriority = 'C';
+    t.status = 'completed';
     t.createdAt = start.toISOString();
     t.completedAt = end.toISOString();
     t.pomodoros = { estimated: est, completed: actual };

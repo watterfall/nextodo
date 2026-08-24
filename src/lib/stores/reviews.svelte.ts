@@ -1,5 +1,5 @@
-import type { ActivePriorityCounts, UnitReview, Task } from '$lib/types';
-import { ACTIVE_PRIORITIES, isActivePriority, countOrigins } from '$lib/types';
+import type { UnitReview, Task, PriorityCounts } from '$lib/types';
+import { ACTIVE_PRIORITIES, emptyPriorityCounts, countOrigins } from '$lib/types';
 
 // Reviews state
 let reviews = $state<UnitReview[]>([]);
@@ -25,27 +25,25 @@ export function createReview(
     return taskDate >= start && taskDate <= end;
   });
 
-  const planned: ActivePriorityCounts = { A: 0, B: 0, C: 0, D: 0, E: 0 };
-  const completed: ActivePriorityCounts = { A: 0, B: 0, C: 0, D: 0, E: 0 };
+  const planned = emptyPriorityCounts();
+  const completed = emptyPriorityCounts();
   let pomodorosTotal = 0;
 
-  for (const task of unitTasks) {
-    const priority = task.originalPriority || task.priority;
-    if (!isActivePriority(priority)) {
-      continue;
-    }
+  // Cancelled work is left out of both tallies rather than counted as a miss.
+  // Dropping something is a decision about the plan, and scoring it as a
+  // failure would make cancelling feel like a penalty — which is the one thing
+  // that stops people clearing a queue.
+  const counted = unitTasks.filter(t => t.status !== 'cancelled');
 
-    planned[priority]++;
-    if (task.completed) {
-      completed[priority]++;
+  for (const task of counted) {
+    planned[task.priority]++;
+    if (task.status === 'completed') {
+      completed[task.priority]++;
     }
     pomodorosTotal += task.pomodoros.completed;
   }
 
-  // Only A-E tasks count, matching the planned/completed tallies above.
-  const originCounts = countOrigins(
-    unitTasks.filter(t => isActivePriority(t.originalPriority || t.priority))
-  );
+  const originCounts = countOrigins(counted);
 
   const review: UnitReview = {
     id: crypto.randomUUID(),
@@ -97,8 +95,8 @@ export function getCompletionRate(review: UnitReview): number {
 }
 
 // Get priority completion rates
-export function getPriorityRates(review: UnitReview): ActivePriorityCounts {
-  const rates: ActivePriorityCounts = { A: 0, B: 0, C: 0, D: 0, E: 0 };
+export function getPriorityRates(review: UnitReview): PriorityCounts {
+  const rates = emptyPriorityCounts();
 
   for (const priority of ACTIVE_PRIORITIES) {
     const planned = review.stats.planned[priority];

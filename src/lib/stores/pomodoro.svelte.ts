@@ -1,4 +1,4 @@
-import type { PomodoroState, PomodoroSession, Task, ActivePriority } from '$lib/types';
+import type { PomodoroState, PomodoroSession, Task, Priority } from '$lib/types';
 
 // Pomodoro state
 let state = $state<PomodoroState>('idle');
@@ -19,7 +19,7 @@ let currentInterruptionReasons = $state<string[]>([]); // Current session reason
 // the work is having an external structure at all, not any particular length.
 let baseWorkDuration = $state(25);
 let workDuration = $state(25);
-let workByPriority = $state<Partial<Record<ActivePriority, number>>>({});
+let workByPriority = $state<Partial<Record<Priority, number>>>({});
 let shortBreakDuration = $state(5);
 let longBreakDuration = $state(20);
 
@@ -45,7 +45,7 @@ export function initPomodoro(settings: {
   work: number;
   shortBreak: number;
   longBreak: number;
-  workByPriority?: Partial<Record<ActivePriority, number>>;
+  workByPriority?: Partial<Record<Priority, number>>;
 }): void {
   baseWorkDuration = settings.work;
   workByPriority = settings.workByPriority ?? {};
@@ -58,16 +58,11 @@ export function initPomodoro(settings: {
 
 /**
  * Focus-block length for a task, in minutes.
- *
- * Falls back to the global setting for a tier with no override and for the
- * hidden G / H states (a completed task has no block length; its tier is only
- * readable from `originalPriority` anyway).
+ * Falls back to the global setting for a tier with no override.
  */
 export function workDurationForTask(task: Task | null): number {
   if (!task) return baseWorkDuration;
-  const tier = task.originalPriority ?? task.priority;
-  if (tier === 'G' || tier === 'H') return baseWorkDuration;
-  return workByPriority[tier] ?? baseWorkDuration;
+  return workByPriority[task.priority] ?? baseWorkDuration;
 }
 
 // Start pomodoro for a task

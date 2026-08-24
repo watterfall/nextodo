@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { migrateToV5, slugifyProject } from './migrateV5';
+import type { V5Task } from './migrateV5';
 import { createEmptyTask } from '$lib/types';
-import type { Task } from '$lib/types';
 
 /**
  * A task as it was stored under data version 4.0, when F / N / S were real
@@ -12,7 +12,7 @@ function legacy(priority: string, overrides: Record<string, unknown> = {}): unkn
   return { ...createEmptyTask('C'), priority, ...overrides };
 }
 
-function ids(tasks: Task[]): string[] {
+function ids(tasks: V5Task[]): string[] {
   return tasks.map((t) => t.id).sort();
 }
 
@@ -134,7 +134,7 @@ describe('migrateToV5', () => {
     expect(result.changed).toBe(true);
   });
 
-  it('rewrites an originalPriority that names a tier that no longer exists', () => {
+  it('rewrites an originalPriority that names a tier 5.0 no longer had', () => {
     // Otherwise a completed task vanishes from the retention display, because
     // it is grouped by a key nothing renders.
     const result = migrateToV5([legacy('G', { id: 'done', completed: true, originalPriority: 'F' })]);
@@ -171,7 +171,7 @@ describe('migrateToV5', () => {
   it('is a no-op on data that has already been migrated', () => {
     const clean = ['A', 'C', 'G'].map((p) => legacy(p, { id: `t${p}` }));
     const once = migrateToV5(clean);
-    const twice = migrateToV5(once.tasks);
+    const twice = migrateToV5(once.tasks as unknown[]);
 
     expect(ids(twice.tasks)).toEqual(ids(once.tasks));
     expect(twice.pendingExport).toEqual([]);

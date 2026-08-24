@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Task, Priority } from '$lib/types';
-  import { PRIORITY_CONFIG, ORIGIN_CONTEXT, isThresholdPassed, isActivePriority, isOperablePriority, taskOrigin } from '$lib/types';
+  import { PRIORITY_CONFIG, ORIGIN_CONTEXT, isThresholdPassed, isOpen, taskOrigin } from '$lib/types';
   import { getTasksStore, completeTask, uncompleteTask, cancelTask, changePriority, evolveTask, toggleFilterAttribute, isFilterActive } from '$lib/stores/tasks.svelte';
   import { openEditModal, getUIStore, showToast, setDraggingTask } from '$lib/stores/ui.svelte';
   import { clearDragPayload, startTaskDrag } from '$lib/utils/dnd';
@@ -95,11 +95,10 @@
   }
 
   function handleCheck() {
-    if (task.priority === 'G') {
+    if (task.status === 'completed') {
       // Task is completed, restore it
       uncompleteTask(task.id);
-    } else if (isOperablePriority(task.priority)) {
-      // Capture priority BEFORE completion (completeTask mutates it to 'G')
+    } else if (isOpen(task)) {
       const wasAPriority = task.priority === 'A';
       // Trigger press micro-interaction
       justCompleted = true;
@@ -145,12 +144,14 @@
     }
   }
 
-  const effectivePriority = $derived(task.completed && task.originalPriority ? task.originalPriority : task.priority);
-  const config = $derived(PRIORITY_CONFIG[effectivePriority]);
-  const isTaskOverdue = $derived(isActivePriority(task.priority) && isOverdue(task.dueDate));
+  // The tier survives completion now, so there is no "effective" priority to
+  // work out — the card renders in the zone it was completed from because it
+  // never left it.
+  const config = $derived(PRIORITY_CONFIG[task.priority]);
+  const isTaskOverdue = $derived(isOpen(task) && isOverdue(task.dueDate));
   const dueDateLabel = $derived(task.dueDate ? i18n.getRelativeDate(parseISODate(task.dueDate)) : null);
-  const isCompleted = $derived(task.priority === 'G');
-  const isCancelled = $derived(task.priority === 'H');
+  const isCompleted = $derived(task.status === 'completed');
+  const isCancelled = $derived(task.status === 'cancelled');
   // Tasks tagged with the week's focus project get a subtle accent — the visual
   // role the S tier used to play, now driven by a +project tag.
   const isFocusProject = $derived(
@@ -171,7 +172,7 @@
   // Check if task is scheduled too far in advance for its priority
   // A: current cycle only, B: +1 cycle (4 days), C: within a week, D/E: no restriction
   const isScheduledTooFar = $derived.by(() => {
-    if (!task.dueDate || task.completed) return false;
+    if (!task.dueDate || !isOpen(task)) return false;
     const dueDate = parseISODate(task.dueDate);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -210,7 +211,7 @@
   oncontextmenu={handleContextMenu}
   draggable="true"
   ondragstart={(e) => {
-    if (!isOperablePriority(task.priority)) {
+    if (!isOpen(task)) {
       e.preventDefault();
       return;
     }
@@ -244,7 +245,7 @@
       {/if}
     </button>
 
-    {#if isActivePriority(task.priority) && task.pomodoros.estimated > 0}
+    {#if isOpen(task) && task.pomodoros.estimated > 0}
       {@const remaining = Math.max(0, task.pomodoros.estimated - task.pomodoros.completed)}
       {#if remaining > 0}
         <button
@@ -339,7 +340,7 @@
       {/if}
     </div>
 
-    {#if !task.completed && task.pomodoros.estimated === 0}
+    {#if isOpen(task) && task.pomodoros.estimated === 0}
       <!-- Show nothing for tasks with no estimate or exceeded estimate to keep interface clean -->
     {/if}
   </div>
@@ -367,7 +368,7 @@
   <!-- Action buttons - hover reveal (hidden in compact mode as parent provides its own actions) -->
   {#if !compact}
     <div class="task-actions" class:visible={isHovered || isFocused}>
-      {#if isActivePriority(task.priority)}
+      {#if isOpen(task)}
         <button
           class="action-btn play"
           onclick={handleStartPomodoro}
@@ -393,7 +394,7 @@
           <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
         </svg>
       </button>
-      {#if isActivePriority(task.priority)}
+      {#if isOpen(task)}
         <button class="action-btn evolve" onclick={handleEvolve} title={i18n.t('message.evolveTaskHint') || '完成并演化'}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M12 5v14"></path>
@@ -402,7 +403,7 @@
           </svg>
         </button>
       {/if}
-      {#if isOperablePriority(task.priority)}
+      {#if isOpen(task)}
         <button class="action-btn cancel" onclick={handleCancel} title={i18n.t('action.cancel') || '取消任务'}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -453,11 +454,7 @@
       </svg>
       {i18n.t('taskCard.editDetails')}
     </button>
-    <!-- isOperablePriority, not isActivePriority: N and S are completable and
-         cancellable too (handleCheck/handleCancel and the hover action bar all
-         gate on operable), so gating this menu on A-F left those two tiers with
-         no way to finish or remove a task. -->
-    {#if isOperablePriority(task.priority)}
+    {#if isOpen(task)}
       <button class="ctx-action" onclick={() => { ctxMenuOpen = false; handleCheck(); }}>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <polyline points="20 6 9 17 4 12"></polyline>

@@ -237,7 +237,7 @@ describe('createTaskFromInput', () => {
   it('produces a well-formed Task', () => {
     const task = createTaskFromInput('Ship it !B +release 🍅2');
     expect(typeof task.id).toBe('string');
-    expect(task.completed).toBe(false);
+    expect(task.status).toBe('open');
     expect(task.content).toBe('Ship it');
     expect(task.priority).toBe('B');
     expect(task.projects).toEqual(['release']);

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { getSettingsStore, updateSettings, toggleTheme, setAppLanguage } from '$lib/stores/settings.svelte';
   import { getI18nStore, availableLanguages, setLanguage, currentLanguage } from '$lib/i18n';
-  import type { Language, ActivePriority } from '$lib/types';
+  import type { Language, Priority } from '$lib/types';
   import { PRIORITY_CONFIG } from '$lib/types';
   import { exportData, importData, createBackup } from '$lib/utils/storage';
   import { getTasksStore, replaceAllData } from '$lib/stores/tasks.svelte';
@@ -106,7 +106,7 @@
    * rather than waiting for the Save button — a five-field grid where four
    * changes stick and the fifth needs a separate confirm is a trap.
    */
-  function setTierDuration(tier: ActivePriority, raw: string) {
+  function setTierDuration(tier: Priority, raw: string) {
     const minutes = parseInt(raw, 10);
     if (!Number.isFinite(minutes) || minutes < 1 || minutes > 180) return;
     updateSettings({

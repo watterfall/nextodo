@@ -33,10 +33,10 @@ describe('validateQuota', () => {
     expect(validateQuota([task('A')], 'A')).toBeNull();
   });
 
-  it('rejects adding directly to a hidden priority, via a translated message', () => {
-    // Was an untranslated English literal — every other refusal goes through t().
-    expect(validateQuota([], 'G')).toContain('message.hiddenPriority');
-    expect(validateQuota([], 'H')).toContain('message.hiddenPriority');
+  it('ignores finished tasks when measuring the load', () => {
+    // Three completed Cs do not fill the C tier — they are not owed any more.
+    const done = [task('C'), task('C'), task('C')].map(t => ({ ...t, status: 'completed' as const }));
+    expect(validateQuota(done, 'C')).toBeNull();
   });
 });
 

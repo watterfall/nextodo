@@ -32,10 +32,8 @@ function done(opts: {
   estimated?: number;
   completed?: number;
 }): Task {
-  const t = createEmptyTask('G');
-  t.completed = true;
-  t.priority = 'G';
-  t.originalPriority = opts.tier ?? 'C';
+  const t = createEmptyTask(opts.tier ?? 'C');
+  t.status = 'completed';
   t.createdAt = daysAgo(opts.createdDaysAgo);
   t.completedAt = daysAgo(opts.completedDaysAgo);
   t.pomodoros.estimated = opts.estimated ?? 0;
@@ -85,7 +83,8 @@ describe('ageDistribution', () => {
   });
 
   it('ignores completed and cancelled tasks', () => {
-    const cancelled = createEmptyTask('H');
+    const cancelled = createEmptyTask('C');
+    cancelled.status = 'cancelled';
     cancelled.createdAt = daysAgo(90);
     const tasks = [open(2), cancelled, done({ createdDaysAgo: 80, completedDaysAgo: 1 })];
     const dist = ageDistribution(tasks, NOW);
@@ -128,7 +127,8 @@ describe('cycleTimeMedian', () => {
     const quick = Array.from({ length: 5 }, (_, i) =>
       done({ createdDaysAgo: 20 + i, completedDaysAgo: 10 + i })
     );
-    const abandoned = createEmptyTask('H');
+    const abandoned = createEmptyTask('C');
+    abandoned.status = 'cancelled';
     abandoned.createdAt = daysAgo(100);
     abandoned.completedAt = daysAgo(0);
     expect(cycleTimeMedian([...quick, abandoned])).toEqual({ value: 10, sampleSize: 5 });
@@ -187,11 +187,12 @@ describe('estimationFactor', () => {
     expect(estimationFactor(all, { priority: 'A' })).toBeNull();
   });
 
-  it('reads the tier off originalPriority, since completion overwrites priority', () => {
+  it('keeps the tier through completion, so no second field is needed', () => {
     const tasks = Array.from({ length: 5 }, (_, i) =>
       done({ createdDaysAgo: 5, completedDaysAgo: i, tier: 'A', estimated: 5, completed: 10 })
     );
-    expect(tasks[0].priority).toBe('G');
+    expect(tasks[0].priority).toBe('A');
+    expect(tasks[0].status).toBe('completed');
     expect(estimationFactor(tasks, { priority: 'A' })?.value).toBe(2);
   });
 });
@@ -202,7 +203,7 @@ describe('commitmentCount', () => {
       open(1),
       open(2),
       done({ createdDaysAgo: 5, completedDaysAgo: 1 }),
-      createEmptyTask('H')
+      { ...createEmptyTask('C'), status: 'cancelled' as const }
     ];
     expect(commitmentCount(tasks)).toBe(2);
   });

@@ -1,5 +1,5 @@
 import type { Task, Priority } from '$lib/types';
-import { PRIORITY_CONFIG, isActivePriority } from '$lib/types';
+import { PRIORITY_CONFIG } from '$lib/types';
 import { t } from '$lib/i18n';
 import { canAddTask, isSingleSlotPriority } from './quotaCore';
 
@@ -12,9 +12,8 @@ export * from './quotaCore';
  * Returns a localized error message if not allowed, null if ok.
  */
 export function validateQuota(tasks: Task[], priority: Priority): string | null {
-  if (!isActivePriority(priority)) {
-    return t('message.hiddenPriority');
-  }
+  // The "is this even a real tier?" guard that used to open this function is
+  // gone: every Priority is a tier now, and completion lives on `status`.
 
   // A single-slot tier never refuses an add: Highlander unseats the incumbent,
   // so there is always room by the time the task lands.

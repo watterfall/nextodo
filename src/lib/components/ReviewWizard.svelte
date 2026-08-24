@@ -3,7 +3,7 @@
   import { getTasksStore } from '$lib/stores/tasks.svelte';
   import { getPomodoroStore } from '$lib/stores/pomodoro.svelte';
   import { getUIStore, setViewMode, toggleSidebar, setSidebarCollapsed } from '$lib/stores/ui.svelte';
-  import { isActivePriority } from '$lib/types';
+  import { isOpen } from '$lib/types';
   import { fade, slide, scale } from 'svelte/transition';
 
   const tasks = getTasksStore();
@@ -16,8 +16,8 @@
   let showConfetti = $state(false);
 
   // Basic Stats - G is completed, active is A-F
-  const completedCount = $derived(tasks.tasks.filter(task => task.priority === 'G').length);
-  const activeCount = $derived(tasks.tasks.filter(task => isActivePriority(task.priority)).length);
+  const completedCount = $derived(tasks.tasks.filter(task => task.status === 'completed').length);
+  const activeCount = $derived(tasks.tasks.filter(isOpen).length);
   const completedA = $derived(tasks.completedTasks.filter(task => task.content.includes('[A]')).length); // Tasks completed from A
   const activeA = $derived(tasks.tasks.filter(task => task.priority === 'A').length);
 
@@ -29,7 +29,7 @@
 
     // Consider completed tasks (G) + uncompleted active tasks
     const relevantTasks = tasks.tasks.filter(task =>
-      task.priority === 'G' || isActivePriority(task.priority)
+      task.status !== 'cancelled'
     );
 
     if (relevantTasks.length === 0) return 0;
@@ -40,7 +40,7 @@
     for (const task of relevantTasks) {
       const w = getWeight(task.priority);
       totalPoints += w;
-      if (task.priority === 'G') completedPoints += w;
+      if (task.status === 'completed') completedPoints += w;
     }
 
     if (totalPoints === 0) return 0;
@@ -71,7 +71,7 @@
   });
 
   // Analytics: Estimation Calibration
-  const estimatedTasks = $derived(tasks.tasks.filter(task => task.priority === 'G' && task.pomodoros.estimated > 0));
+  const estimatedTasks = $derived(tasks.tasks.filter(task => task.status === 'completed' && task.pomodoros.estimated > 0));
   const estimationAccuracy = $derived.by(() => {
     if (estimatedTasks.length === 0) return 0;
     let totalDiff = 0;

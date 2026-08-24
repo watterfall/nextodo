@@ -247,18 +247,18 @@ describe('taskFromTodoTxt', () => {
 
   it('imports a completed line with its stashed priority', () => {
     const { task } = taskFromTodoTxt('x 2026-01-07 2026-01-05 finish report pri:B +work');
-    expect(task.completed).toBe(true);
-    expect(task.priority).toBe('G');
-    expect(task.originalPriority).toBe('B');
+    expect(task.status).toBe('completed');
+    // sleek's `pri:` IS the tier — completion is a separate axis on both sides
+    // now, so it lands straight on `priority` with nothing stashed anywhere.
+    expect(task.priority).toBe('B');
     expect(task.content).toBe('finish report');
   });
 
   it('falls back for a priority letter this app has no tier for', () => {
+    // todo.txt allows (A)-(Z); this app has five tiers, so the rest fall back.
     expect(taskFromTodoTxt('(Z) thing', 'C').task.priority).toBe('C');
-    // G and H are this app's completed/cancelled markers, not importable tiers —
-    // a literal `(G)` line is a coincidence of lettering, not a completed task.
     expect(taskFromTodoTxt('(G) thing', 'C').task.priority).toBe('C');
-    expect(taskFromTodoTxt('(G) thing', 'C').task.completed).toBe(false);
+    expect(taskFromTodoTxt('(G) thing', 'C').task.status).toBe('open');
   });
 
   it('leaves an extension it does not own in the content', () => {
@@ -337,9 +337,8 @@ describe('todoTxtFromTask', () => {
     const line = todoTxtFromTask(
       task({
         content: 'finish report',
-        priority: 'G',
-        completed: true,
-        originalPriority: 'B',
+        priority: 'B',
+        status: 'completed',
         completedAt: new Date(2026, 0, 7).toISOString(),
       })
     );

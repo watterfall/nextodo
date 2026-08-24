@@ -2,7 +2,7 @@
   import { changePriority, getTasksStore } from '$lib/stores/tasks.svelte';
   import { getI18nStore } from '$lib/i18n';
   import { slide } from 'svelte/transition';
-  import { PRIORITY_CONFIG, type Priority, type Task, isActivePriority } from '$lib/types';
+  import { PRIORITY_CONFIG, type Priority, type Task, isOpen } from '$lib/types';
   import TaskCard from './TaskCard.svelte';
   import DropZone from './DropZone.svelte';
   import QuickAddRow from './QuickAddRow.svelte';
@@ -49,8 +49,8 @@
   }
 
   function getStatusBucket(task: Task): string {
-    if (task.priority === 'G') return '__completed__';
-    if (task.priority === 'H') return '__cancelled__';
+    if (task.status === 'completed') return '__completed__';
+    if (task.status === 'cancelled') return '__cancelled__';
     return '__active__';
   }
 
@@ -64,8 +64,8 @@
 
     // Active filter applied: hide completed unless status mode shows them
     const visibleTasks = groupBy === 'priority'
-      ? sourceTasks.filter(t => isActivePriority(t.priority))
-      : sourceTasks.filter(t => isActivePriority(t.priority));
+      ? sourceTasks.filter(isOpen)
+      : sourceTasks.filter(isOpen);
 
     for (const task of visibleTasks) {
       let keys: string[] = [];

@@ -1,9 +1,6 @@
 import { isCompletedInCurrentUnit, getUnitRetentionRemaining, currentUnitStartLocal } from '$lib/utils/unitCalc';
 
-// Priority levels.
-//
-// A-E are the quota-bearing tiers of the current 2-day unit. G marks a
-// completed task and H a cancelled one; neither is a tier you can put work in.
+// Priority levels: the five quota-bearing tiers of the current 2-day unit.
 //
 // There used to be three more: F (Idea Pool), N (Future Progress) and
 // S (Sustained Progress). They are gone, because the candidate pool now lives
@@ -11,10 +8,39 @@ import { isCompletedInCurrentUnit, getUnitRetentionRemaining, currentUnitStartLo
 // line that has not been pulled into a unit, "later" is todo.txt's `t:`
 // threshold date or `h:1`, and the week's one sustained project is a
 // `+project` tag. See docs/SLEEK-INTEROP.md §6.
-export type Priority = 'A' | 'B' | 'C' | 'D' | 'E' | 'G' | 'H';
-export type ActivePriority = Exclude<Priority, 'G' | 'H'>;
-export type HiddenPriority = Extract<Priority, 'G' | 'H'>;
-export type ActivePriorityCounts = Record<ActivePriority, number>;
+//
+// There used to be two more after that: G (completed) and H (cancelled). Those
+// were never tiers — they are what HAPPENED to a task, on an axis at right
+// angles to how important it was. Keeping them in this union meant completion
+// overwrote the priority, so every reader that wanted to know what kind of task
+// something had been needed a second field (`originalPriority`) to put it back,
+// and every function taking a Priority had to handle two values it could do
+// nothing with. See `TaskStatus` below and docs/EVIDENCE-REVIEW.md §3.
+export type Priority = 'A' | 'B' | 'C' | 'D' | 'E';
+export type PriorityCounts = Record<Priority, number>;
+
+/**
+ * What happened to a task, independent of how important it is.
+ *
+ * `open` is work still owed. `completed` and `cancelled` are both endings, and
+ * they are deliberately distinct: cancelling is a legitimate outcome, but it is
+ * not a delivery, so anything measuring throughput (cycle time, review stats)
+ * counts one and not the other.
+ *
+ * A task keeps its priority through either ending — an A that got finished is
+ * still an A. That is the whole reason this axis exists separately.
+ */
+export type TaskStatus = 'open' | 'completed' | 'cancelled';
+
+/** Work still owed: not finished, not abandoned. */
+export function isOpen(task: Pick<Task, 'status'>): boolean {
+  return task.status === 'open';
+}
+
+/** Reached an ending, either way. Hidden from the working views. */
+export function isFinished(task: Pick<Task, 'status'>): boolean {
+  return task.status !== 'open';
+}
 
 // Recurrence, aligned 1:1 with the todo.txt `rec:` attribute so that a
 // recurrence typed here and one imported from a sleek todo.txt behave
@@ -101,8 +127,16 @@ export interface TaskSource {
 export interface Task {
   id: string;
   content: string;
+  /** Which tier this is. Survives completion and cancellation unchanged. */
   priority: Priority;
-  completed: boolean;
+  /** Whether it is still owed, and if not, how it ended. */
+  status: TaskStatus;
+  /**
+   * When it ended — set for both `completed` and `cancelled`, null while open.
+   *
+   * The name is historical. It reads oddly on a cancelled task, but renaming it
+   * would break every stored file for no behavioural gain.
+   */
   completedAt: string | null;
   createdAt: string;
   unitStart: string;
@@ -145,8 +179,6 @@ export interface Task {
     extendedUntil?: string;
     endedEarly?: boolean;
   };
-  // Original priority before completion/cancellation (for retention display)
-  originalPriority?: Priority;
   // Last priority change timestamp (for detecting frequent changes)
   lastPriorityChangeAt?: string;
   // Task evolution: ID of the parent task this task evolved from
@@ -160,8 +192,8 @@ export interface UnitReview {
   unitEnd: string;
   createdAt: string;
   stats: {
-    planned: ActivePriorityCounts;
-    completed: ActivePriorityCounts;
+    planned: PriorityCounts;
+    completed: PriorityCounts;
     pomodorosTotal: number;
     // How much of the period was work the user chose versus work handed to
     // them. Optional because reviews recorded before the origin marker existed
@@ -232,7 +264,7 @@ export interface Settings {
   // and a 25-minute block just interrupts it; an E task is under 15 minutes and
   // a 50-minute block is theatre. Falls back to `pomodoroWork` when a tier is
   // missing.
-  pomodoroWorkByPriority: Partial<Record<ActivePriority, number>>;
+  pomodoroWorkByPriority: Partial<Record<Priority, number>>;
   autoBackup: boolean;
   sidebarCollapsed: boolean;
   // NEW: Auto archive settings
@@ -395,24 +427,6 @@ export const PRIORITY_CONFIG: Record<Priority, PriorityConfig> = {
     borderColor: 'var(--priority-e-border, rgba(81, 207, 102, 0.2))',
     pomodoroRange: { min: 0, max: 1, recommended: 0 }  // <15 min = 0-1 pomodoros
   },
-  G: {
-    name: '已完成',
-    quota: Infinity,
-    description: '已完成的任务',
-    color: 'var(--priority-g-color, #51cf66)',
-    bgColor: 'var(--priority-g-bg, rgba(81, 207, 102, 0.08))',
-    borderColor: 'var(--priority-g-border, rgba(81, 207, 102, 0.2))',
-    pomodoroRange: { min: 0, max: Infinity, recommended: 0 }
-  },
-  H: {
-    name: '已取消',
-    quota: Infinity,
-    description: '已取消的任务',
-    color: 'var(--priority-h-color, #868e96)',
-    bgColor: 'var(--priority-h-bg, rgba(134, 142, 150, 0.08))',
-    borderColor: 'var(--priority-h-border, rgba(134, 142, 150, 0.2))',
-    pomodoroRange: { min: 0, max: Infinity, recommended: 0 }
-  }
 };
 
 // Unit info.
@@ -451,7 +465,7 @@ export type PomodoroState = 'idle' | 'work' | 'shortBreak' | 'longBreak';
 // The tier a task lands in when nothing more specific is known. It used to be
 // F (Idea Pool); with the candidate pool moved to todo.txt there is no
 // unsorted tier left, so an unqualified new task is an ordinary standard task.
-export const DEFAULT_PRIORITY: ActivePriority = 'C';
+export const DEFAULT_PRIORITY: Priority = 'C';
 
 // Create empty task
 export function createEmptyTask(priority: Priority = DEFAULT_PRIORITY): Task {
@@ -460,7 +474,7 @@ export function createEmptyTask(priority: Priority = DEFAULT_PRIORITY): Task {
     id: crypto.randomUUID(),
     content: '',
     priority,
-    completed: false,
+    status: 'open',
     completedAt: null,
     createdAt: now,
     unitStart: currentUnitStartLocal(),
@@ -507,7 +521,7 @@ export function createDefaultSettings(): Settings {
 // Create default active data
 export function createDefaultActiveData(): ActiveData {
   return {
-    version: '5.0',
+    version: '6.0',
     lastModified: new Date().toISOString(),
     tasks: [],
     reviews: [],
@@ -540,7 +554,7 @@ export function createDefaultPomodoroHistoryData(): PomodoroHistoryData {
 // Create default app data (combined)
 export function createDefaultAppData(): AppData {
   return {
-    version: '5.0',
+    version: '6.0',
     lastModified: new Date().toISOString(),
     tasks: [],
     reviews: [],
@@ -569,7 +583,9 @@ export function isThresholdPassed(task: Task): boolean {
 // 2-day unit it was completed in ends. Once the current unit advances past that
 // unit, the task is hidden. Tied to the unit cycle rather than a fixed duration.
 export function isWithinRetentionPeriod(task: Task): boolean {
-  if (!task.completedAt) return false;
+  // Completed only. A cancelled task also carries a `completedAt`, but nobody
+  // wants the thing they dropped lingering struck-through for two days.
+  if (task.status !== 'completed' || !task.completedAt) return false;
   return isCompletedInCurrentUnit(task.completedAt);
 }
 
@@ -581,36 +597,23 @@ export function getRetentionRemaining(task: Task): { hours: number; minutes: num
 }
 
 // The quota-bearing tiers of the current unit, in order.
-export const ACTIVE_PRIORITIES: ActivePriority[] = ['A', 'B', 'C', 'D', 'E'];
-
-// Hidden priorities (completed/cancelled)
-export const HIDDEN_PRIORITIES: HiddenPriority[] = ['G', 'H'];
-
-// Check if a task sits in a tier the user can put work in (A-E).
-export function isActivePriority(priority: Priority): priority is ActivePriority {
-  return (ACTIVE_PRIORITIES as readonly Priority[]).includes(priority);
-}
-
-// Check if a task can be operated on (complete / cancel / edit / re-prioritise).
 //
-// This used to be broader than isActivePriority because N and S sat outside the
-// A-F range while still being real, workable tasks — and several call sites
-// gated on the wrong one, leaving those two tiers with no way to finish a task.
-// With N and S gone the two predicates coincide; the name is kept because the
-// intent it expresses (may the user act on this?) is not the same question as
-// "does this tier have a quota".
-export function isOperablePriority(priority: Priority): boolean {
-  return isActivePriority(priority);
+// This is now every priority there is, which is the point. `isActivePriority`,
+// `isOperablePriority`, `isCountedPriority` and `isHiddenPriority` all used to
+// live here; each one existed only to answer "is this actually a tier, or is it
+// one of the two status values hiding in the enum?". That question no longer
+// has a reason to be asked — use `isOpen(task)` / `isFinished(task)` for the
+// the status axis, and take a `Priority` when you mean the tier.
+export const ACTIVE_PRIORITIES: Priority[] = ['A', 'B', 'C', 'D', 'E'];
+
+/** Empty per-tier tally, so callers do not hand-write the five keys. */
+export function emptyPriorityCounts(): PriorityCounts {
+  return { A: 0, B: 0, C: 0, D: 0, E: 0 };
 }
 
-// Check if a task should be COUNTED in cross-cutting aggregations such as
-// sidebar project/context/tag badges — i.e. any task that lives in the user's
-// working set (not yet completed or cancelled).
-export function isCountedPriority(priority: Priority): boolean {
-  return !isHiddenPriority(priority);
-}
-
-// Check if a task is completed (G) or cancelled (H)
-export function isHiddenPriority(priority: Priority): priority is HiddenPriority {
-  return (HIDDEN_PRIORITIES as readonly Priority[]).includes(priority);
+/** Narrow arbitrary input to a real tier. Anything unrecognised becomes C. */
+export function asPriority(value: unknown): Priority {
+  return (ACTIVE_PRIORITIES as readonly unknown[]).includes(value)
+    ? (value as Priority)
+    : DEFAULT_PRIORITY;
 }

@@ -6,7 +6,7 @@
   import { getI18nStore } from '$lib/i18n';
   import { fade, slide } from 'svelte/transition';
   import { isToday, isOverdue, getCurrentUnit } from '$lib/utils/unitCalc';
-  import { isActivePriority } from '$lib/types';
+  import { isOpen } from '$lib/types';
 
   const tasks = getTasksStore();
   const pomodoro = getPomodoroStore();
@@ -15,13 +15,13 @@
 
   // Tasks due today or overdue
   const todayTasks = $derived(tasks.tasks.filter(task =>
-    !task.completed &&
+    isOpen(task) &&
     task.dueDate &&
     (isToday(task.dueDate) || isOverdue(task.dueDate))
   ).sort((a, b) => a.priority.localeCompare(b.priority)));
 
   const completedTodayTasks = $derived(tasks.tasks.filter(task =>
-    task.completed && task.completedAt && isToday(task.completedAt)
+    task.status === 'completed' && task.completedAt && isToday(task.completedAt)
   ));
 
   // Hero: highest-priority active task (A first, else top B, else top C)
@@ -172,7 +172,7 @@
               {/each}
             </div>
 
-            {#if isActivePriority(heroTask.priority)}
+            {#if isOpen(heroTask)}
               <button class="hero-cta" onclick={handleStartHero} disabled={pomodoro.activeTaskId === heroTask.id}>
                 <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="6 4 20 12 6 20 6 4"></polygon></svg>
                 {pomodoro.activeTaskId === heroTask.id ? t('task.focusInProgress') : t('task.startFocus')}

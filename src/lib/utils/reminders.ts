@@ -1,5 +1,5 @@
 import type { AppData } from '$lib/types';
-import { isActivePriority } from '$lib/types';
+import { isOpen } from '$lib/types';
 import { isToday, isOverdue } from './unitCalc';
 import { t } from '$lib/i18n';
 
@@ -27,8 +27,7 @@ export async function maybeNotifyDueTasks(appData: AppData): Promise<void> {
   }
 
   const dueCount = appData.tasks.filter(task =>
-    !task.completed &&
-    isActivePriority(task.priority) &&
+    isOpen(task) &&
     task.dueDate &&
     (isToday(task.dueDate) || isOverdue(task.dueDate))
   ).length;

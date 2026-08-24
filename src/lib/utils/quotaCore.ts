@@ -1,5 +1,5 @@
-import type { ActivePriority, ActivePriorityCounts, Task, Priority } from '$lib/types';
-import { ACTIVE_PRIORITIES, PRIORITY_CONFIG, isActivePriority } from '$lib/types';
+import type { PriorityCounts, Task, Priority } from '$lib/types';
+import { ACTIVE_PRIORITIES, PRIORITY_CONFIG, emptyPriorityCounts, isOpen } from '$lib/types';
 
 // Pure quota logic — no i18n / Svelte / Tauri dependencies, so it is safe to
 // import from a plain Node context (the FocusFlow CLI). The i18n-flavoured
@@ -14,11 +14,11 @@ import { ACTIVE_PRIORITIES, PRIORITY_CONFIG, isActivePriority } from '$lib/types
 /**
  * Count active (non-completed) tasks by priority
  */
-export function countActiveByPriority(tasks: Task[]): ActivePriorityCounts {
-  const counts: ActivePriorityCounts = { A: 0, B: 0, C: 0, D: 0, E: 0 };
+export function countActiveByPriority(tasks: Task[]): PriorityCounts {
+  const counts = emptyPriorityCounts();
 
   for (const task of tasks) {
-    if (!task.completed && isActivePriority(task.priority)) {
+    if (isOpen(task)) {
       counts[task.priority]++;
     }
   }
@@ -29,9 +29,9 @@ export function countActiveByPriority(tasks: Task[]): ActivePriorityCounts {
 /**
  * Get remaining quota for each priority
  */
-export function getRemainingQuota(tasks: Task[]): ActivePriorityCounts {
+export function getRemainingQuota(tasks: Task[]): PriorityCounts {
   const counts = countActiveByPriority(tasks);
-  const remaining: ActivePriorityCounts = { A: 0, B: 0, C: 0, D: 0, E: 0 };
+  const remaining = emptyPriorityCounts();
 
   for (const priority of ACTIVE_PRIORITIES) {
     remaining[priority] = Math.max(0, PRIORITY_CONFIG[priority].quota - counts[priority]);
@@ -44,12 +44,11 @@ export function getRemainingQuota(tasks: Task[]): ActivePriorityCounts {
  * Check if adding a task of given priority is allowed
  */
 export function canAddTask(tasks: Task[], priority: Priority): boolean {
-  if (!isActivePriority(priority)) return false;
   return getRemainingQuota(tasks)[priority] > 0;
 }
 
 // Tiers an unseated single-slot task can fall back to, best first.
-const DEMOTION_LADDER: ActivePriority[] = ['B', 'C', 'D', 'E'];
+const DEMOTION_LADDER: Priority[] = ['B', 'C', 'D', 'E'];
 
 /**
  * Where an incumbent A should land when it is unseated, or null when every
@@ -60,7 +59,7 @@ const DEMOTION_LADDER: ActivePriority[] = ['B', 'C', 'D', 'E'];
  * real answer and callers must handle it by returning the task to the candidate
  * pool rather than quietly overfilling a tier.
  */
-export function demotionTargetFor(tasks: Task[]): ActivePriority | null {
+export function demotionTargetFor(tasks: Task[]): Priority | null {
   const remaining = getRemainingQuota(tasks);
   return DEMOTION_LADDER.find(p => remaining[p] > 0) ?? null;
 }
@@ -80,7 +79,7 @@ export interface HighlanderResult {
   /** The task list with incumbents demoted and evicted ones removed. */
   tasks: Task[];
   /** Incumbents that were pushed down a tier. */
-  demoted: Array<{ task: Task; to: ActivePriority }>;
+  demoted: Array<{ task: Task; to: Priority }>;
   /**
    * Incumbents with nowhere left to go. They are removed from the unit and
    * belong back in the candidate pool; the caller must say so.
@@ -108,7 +107,7 @@ export function applyHighlanderRule(tasks: Task[], newTask: Task): HighlanderRes
   const next: Task[] = [];
   for (const task of tasks) {
     const isIncumbent =
-      task.id !== newTask.id && task.priority === newTask.priority && !task.completed;
+      task.id !== newTask.id && task.priority === newTask.priority && isOpen(task);
 
     if (!isIncumbent) {
       next.push(task);
@@ -122,7 +121,7 @@ export function applyHighlanderRule(tasks: Task[], newTask: Task): HighlanderRes
     }
 
     remaining[target]--; // reserve the slot in case of multiple incumbents
-    const moved = { ...task, priority: target as Priority };
+    const moved = { ...task, priority: target };
     next.push(moved);
     demoted.push({ task: moved, to: target });
   }
@@ -134,7 +133,7 @@ export function applyHighlanderRule(tasks: Task[], newTask: Task): HighlanderRes
  * Get quota usage summary for display
  */
 export function getQuotaSummary(tasks: Task[]): Array<{
-  priority: ActivePriority;
+  priority: Priority;
   name: string;
   used: number;
   quota: number;
@@ -162,7 +161,7 @@ export function getQuotaSummary(tasks: Task[]): Array<{
  * Null is a real outcome now that there is no unbounded tier to fall back on:
  * 15 tasks is the whole unit, and the honest answer is "this does not fit".
  */
-export function suggestPriority(tasks: Task[]): ActivePriority | null {
+export function suggestPriority(tasks: Task[]): Priority | null {
   const remaining = getRemainingQuota(tasks);
 
   // Prefer lower priorities first (E, D, C, B, A)
@@ -177,10 +176,6 @@ export function suggestPriority(tasks: Task[]): ActivePriority | null {
  * Check if task can be promoted to higher priority
  */
 export function canPromote(tasks: Task[], task: Task): { canPromote: boolean; targetPriority: Priority | null } {
-  if (!isActivePriority(task.priority)) {
-    return { canPromote: false, targetPriority: null };
-  }
-
   const currentIndex = ACTIVE_PRIORITIES.indexOf(task.priority);
 
   if (currentIndex === 0) {
@@ -206,10 +201,6 @@ export function canPromote(tasks: Task[], task: Task): { canPromote: boolean; ta
  * Check if task can be demoted to lower priority
  */
 export function canDemote(task: Task): { canDemote: boolean; targetPriority: Priority | null } {
-  if (!isActivePriority(task.priority)) {
-    return { canDemote: false, targetPriority: null };
-  }
-
   const currentIndex = ACTIVE_PRIORITIES.indexOf(task.priority);
 
   if (currentIndex === ACTIVE_PRIORITIES.length - 1) {

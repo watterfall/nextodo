@@ -1,6 +1,7 @@
-import type { Task, Priority } from '$lib/types';
-import { DEFAULT_PRIORITY, isActivePriority, isHiddenPriority } from '$lib/types';
+import type { Task } from '$lib/types';
+import { DEFAULT_PRIORITY } from '$lib/types';
 import { demotionTargetFor } from './quotaCore';
+import { resolveStatus } from './migrateV6';
 
 /**
  * Data migration 4.0 → 5.0: the F / N / S tiers and embedded subtasks are gone.
@@ -24,18 +25,35 @@ import { demotionTargetFor } from './quotaCore';
  * Node-safe: no Svelte, no Tauri, no i18n.
  */
 
-// The legacy shape, read as data rather than as the current Priority union.
-interface LegacyTask extends Omit<Task, 'priority' | 'originalPriority'> {
+// The 4.0 shape, read as data rather than through any current union.
+interface LegacyTask extends Omit<Task, 'priority' | 'status'> {
   priority: string;
+  status?: undefined;
+  completed?: boolean;
   originalPriority?: string;
   subtasks?: Array<{ id: string; content: string; completed: boolean; completedAt?: string | null }>;
 }
 
+/**
+ * What this migration PRODUCES: the 5.0 shape, where completion is still a
+ * priority letter (G/H) plus a `completed` boolean, and the pre-completion tier
+ * is parked in `originalPriority`.
+ *
+ * It deliberately is NOT `Task`. `Task` means the current shape, and 5.0 is one
+ * step behind it — `migrateToV6` converts the output of this function onward.
+ * Typing both steps as `Task` is how a migration chain quietly stops running.
+ */
+export type V5Task = Omit<Task, 'priority' | 'status'> & {
+  priority: string;
+  completed?: boolean;
+  originalPriority?: string;
+};
+
 export interface V5Migration {
   /** Tasks that stay in the unit. */
-  tasks: Task[];
+  tasks: V5Task[];
   /** Tasks bound for the todo.txt candidate pool, not yet written out. */
-  pendingExport: Task[];
+  pendingExport: V5Task[];
   /** The `+project` tag lifted out of the old S task, if there was one. */
   focusProject: string | null;
   changed: boolean;
@@ -51,9 +69,13 @@ export function slugifyProject(text: string): string {
   return slug || 'focus';
 }
 
-/** Whether a stored priority letter is one this version still recognises. */
-function isKnownPriority(priority: string): priority is Priority {
-  return isActivePriority(priority as Priority) || isHiddenPriority(priority as Priority);
+// The priority letters 5.0 still recognised: the five tiers plus the two
+// completion states that had not yet been split onto their own axis.
+const KNOWN_V5_PRIORITIES = new Set(['A', 'B', 'C', 'D', 'E', 'G', 'H']);
+
+/** Whether a stored priority letter is one 5.0 still recognises. */
+function isKnownPriority(priority: string): boolean {
+  return KNOWN_V5_PRIORITIES.has(priority);
 }
 
 /**
@@ -66,7 +88,7 @@ function taskFromSubtask(
   parent: LegacyTask,
   subtask: NonNullable<LegacyTask['subtasks']>[number],
   project: string
-): Task {
+): V5Task {
   return {
     id: subtask.id,
     content: subtask.content,
@@ -90,8 +112,8 @@ function taskFromSubtask(
 export function migrateToV5(rawTasks: unknown[], currentFocusProject: string | null = null): V5Migration {
   const legacy = rawTasks as LegacyTask[];
 
-  const tasks: Task[] = [];
-  const pendingExport: Task[] = [];
+  const tasks: V5Task[] = [];
+  const pendingExport: V5Task[] = [];
   let focusProject = currentFocusProject;
   let changed = false;
 
@@ -109,7 +131,7 @@ export function migrateToV5(rawTasks: unknown[], currentFocusProject: string | n
       changed = true;
       // A future task keeps its threshold date; one without a date is simply
       // "not now", which the exporter writes as h:1.
-      pendingExport.push({ ...(task as unknown as Task), priority: DEFAULT_PRIORITY });
+      pendingExport.push({ ...(task as unknown as V5Task), priority: DEFAULT_PRIORITY });
       continue;
     }
 
@@ -127,9 +149,16 @@ export function migrateToV5(rawTasks: unknown[], currentFocusProject: string | n
       // The S task itself stays in the unit. It was the week's headline work,
       // so it lands as high as there is room for; if the unit is completely
       // full it goes to the candidate pool with everything else.
-      const target = demotionTargetFor(tasks);
-      const promoted: Task = {
-        ...(task as unknown as Task),
+      // `demotionTargetFor` reads the current shape, and these tasks are
+      // still 5.0 — no `status` field yet. Project them through the same
+      // resolution table migrateV6 uses, or every task would read as
+      // "not open", the quota would look empty and the ladder would always
+      // answer B regardless of the real load.
+      const target = demotionTargetFor(
+        tasks.map(t => ({ ...(t as unknown as Task), ...resolveStatus(t) }))
+      );
+      const promoted: V5Task = {
+        ...(task as unknown as V5Task),
         priority: target ?? DEFAULT_PRIORITY,
         projects: [...new Set([...task.projects, project])]
       };
@@ -144,13 +173,13 @@ export function migrateToV5(rawTasks: unknown[], currentFocusProject: string | n
     // it matches no view and no predicate. Send it to the candidate pool.
     if (!isKnownPriority(priority)) {
       changed = true;
-      pendingExport.push({ ...(task as unknown as Task), priority: DEFAULT_PRIORITY });
+      pendingExport.push({ ...(task as unknown as V5Task), priority: DEFAULT_PRIORITY });
       continue;
     }
 
     // A completed task's originalPriority may name a tier that no longer
     // exists; that would make it vanish from the retention display.
-    let migrated = task as unknown as Task;
+    let migrated = task as unknown as V5Task;
     if (task.originalPriority && !isKnownPriority(task.originalPriority)) {
       changed = true;
       migrated = { ...migrated, originalPriority: DEFAULT_PRIORITY };

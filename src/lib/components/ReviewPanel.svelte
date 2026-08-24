@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { ActivePriority, UnitReview } from '$lib/types';
+  import type { Priority, UnitReview } from '$lib/types';
   import { PRIORITY_CONFIG, countOrigins } from '$lib/types';
   import { formatDateISO } from '$lib/utils/unitCalc';
   import { getReviewsStore, createReview, getCompletionRate, getPriorityRates } from '$lib/stores/reviews.svelte';
@@ -17,7 +17,7 @@
     const start = formatDateISO(tasks.currentUnit.startDate);
     const end = formatDateISO(tasks.currentUnit.endDate);
     return countOrigins(
-      tasks.tasks.filter(t => t.unitStart >= start && t.unitStart <= end && t.priority !== 'H')
+      tasks.tasks.filter(t => t.unitStart >= start && t.unitStart <= end && t.status !== 'cancelled')
     );
   });
 
@@ -52,7 +52,7 @@
     return 'healthy';
   }
 
-  const priorities: ActivePriority[] = ['A', 'B', 'C', 'D', 'E'];
+  const priorities: Priority[] = ['A', 'B', 'C', 'D', 'E'];
 </script>
 
 <div class="review-panel">

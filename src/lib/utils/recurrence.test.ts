@@ -209,7 +209,7 @@ describe('createNextOccurrence', () => {
     const done = task('C', {
       id: 'orig',
       content: 'water plants',
-      completed: true,
+      status: 'completed',
       completedAt: '2026-01-04T10:00:00.000Z',
       dueDate: '2026-01-04',
       recurrence: rec(1, 'w', { strict: true }),
@@ -218,7 +218,7 @@ describe('createNextOccurrence', () => {
     const next = createNextOccurrence(done);
     expect(next).not.toBeNull();
     expect(next!.id).not.toBe('orig');
-    expect(next!.completed).toBe(false);
+    expect(next!.status).toBe('open');
     expect(next!.completedAt).toBeNull();
     expect(next!.dueDate).toBe('2026-01-11');
     expect(next!.unitStart).toBe('2026-01-11');
@@ -229,7 +229,7 @@ describe('createNextOccurrence', () => {
   // The strict/loose split is todo.txt's, and sleek implements the same one.
   it('counts a strict recurrence from the previous due date', () => {
     const late = task('C', {
-      completed: true,
+      status: 'completed',
       completedAt: '2026-01-20T09:00:00',
       dueDate: '2026-01-15',
       recurrence: rec(1, 'm', { strict: true }),
@@ -240,7 +240,7 @@ describe('createNextOccurrence', () => {
 
   it('counts a loose recurrence from the completion date', () => {
     const late = task('C', {
-      completed: true,
+      status: 'completed',
       completedAt: '2026-01-20T09:00:00',
       dueDate: '2026-01-15',
       recurrence: rec(1, 'd'),
@@ -260,7 +260,7 @@ describe('createNextOccurrence', () => {
   it('regenerates a loose recurrence that never had a due date', () => {
     // sleek does this too: the duplicate gets completion date + interval.
     const noDue = task('C', {
-      completed: true,
+      status: 'completed',
       completedAt: '2026-01-20T09:00:00',
       dueDate: null,
       recurrence: rec(1, 'w'),
@@ -302,10 +302,10 @@ describe('recurrenceLabel', () => {
 
 describe('getTasksNeedingRecurrence', () => {
   it('requires a due date only for strict recurrences', () => {
-    const strictOk = task('C', { id: 'strict', completed: true, dueDate: '2026-01-04', recurrence: rec(1, 'w', { strict: true }) });
-    const strictNoDue = task('C', { id: 'strict-nodue', completed: true, dueDate: null, recurrence: rec(1, 'w', { strict: true }) });
-    const looseNoDue = task('C', { id: 'loose-nodue', completed: true, dueDate: null, recurrence: rec(1, 'w') });
-    const notDone = task('C', { id: 'open', completed: false, dueDate: '2026-01-04', recurrence: rec(1, 'w') });
+    const strictOk = task('C', { id: 'strict', status: 'completed' as const, dueDate: '2026-01-04', recurrence: rec(1, 'w', { strict: true }) });
+    const strictNoDue = task('C', { id: 'strict-nodue', status: 'completed', dueDate: null, recurrence: rec(1, 'w', { strict: true }) });
+    const looseNoDue = task('C', { id: 'loose-nodue', status: 'completed', dueDate: null, recurrence: rec(1, 'w') });
+    const notDone = task('C', { id: 'open', status: 'open', dueDate: '2026-01-04', recurrence: rec(1, 'w') });
 
     const result = getTasksNeedingRecurrence([strictOk, strictNoDue, looseNoDue, notDone]);
     expect(result.map((t) => t.id).sort()).toEqual(['loose-nodue', 'strict']);
@@ -316,7 +316,7 @@ describe('processRecurringTasks', () => {
   it('creates the next occurrence for eligible tasks', () => {
     const done = task('C', {
       content: 'water plants',
-      completed: true,
+      status: 'completed',
       completedAt: '2026-01-04T10:00:00',
       dueDate: '2026-01-04',
       recurrence: rec(1, 'w', { strict: true }),
@@ -329,12 +329,12 @@ describe('processRecurringTasks', () => {
   it('skips creation when an occurrence already exists', () => {
     const done = task('C', {
       content: 'water plants',
-      completed: true,
+      status: 'completed',
       completedAt: '2026-01-04T10:00:00',
       dueDate: '2026-01-04',
       recurrence: rec(1, 'w', { strict: true }),
     });
-    const existing = task('C', { content: 'water plants', completed: false, dueDate: '2026-01-11' });
+    const existing = task('C', { content: 'water plants', status: 'open', dueDate: '2026-01-11' });
     expect(processRecurringTasks([done, existing])).toHaveLength(0);
   });
 });

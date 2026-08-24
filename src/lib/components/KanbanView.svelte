@@ -39,7 +39,7 @@
   const columnItems = $derived.by(() => {
     const r = { A: [], B: [], C: [], D: [], E: [] } as Record<ColumnPriority, Task[]>;
     for (const p of priorities) {
-      r[p] = (tasks.tasksByPriority[p] ?? []).filter(t => !t.completed);
+      r[p] = (tasks.tasksByPriority[p] ?? []).filter(t => t.status === 'open');
     }
     return r;
   });
@@ -96,7 +96,7 @@
   let showQuickAction = $state(true);
 
   function getCompletedForPriority(priority: Priority) {
-    return tasks.tasksByPriority[priority].filter(task => task.completed);
+    return tasks.tasksByPriority[priority].filter(task => task.status === 'completed');
   }
 
   function hasActiveTaskInColumn(priority: Priority) {
@@ -224,7 +224,7 @@
   <div class="kanban-main expanded">
     {#each priorities as priority}
       {@const config = PRIORITY_CONFIG[priority]}
-      {@const activeTasks = tasks.tasksByPriority[priority].filter(t => !t.completed)}
+      {@const activeTasks = tasks.tasksByPriority[priority].filter(t => t.status === 'open')}
       {@const completedTasks = getCompletedForPriority(priority)}
       {@const isFull = counts[priority] >= config.quota}
       {@const isDimmed = isFocusMode && !hasActiveTaskInColumn(priority)}

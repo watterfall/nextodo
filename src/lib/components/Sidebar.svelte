@@ -36,7 +36,7 @@
 
     // Count active tasks per priority
     function getPriorityCount(priority: Priority): number {
-      return tasks.tasks.filter(task => !task.completed && task.priority === priority).length;
+      return tasks.tasks.filter(task => task.status === 'open' && task.priority === priority).length;
     }
   
     // Count tasks per project/context/tag. Uses countedTasks so that tags
@@ -57,8 +57,8 @@
     // and visual progress underline on the badge.
     function getProjectCompletion(project: string): { active: number; completed: number; ratio: number } {
       const inProject = tasks.tasks.filter(t => t.projects.includes(project));
-      const completed = inProject.filter(t => t.priority === 'G').length;
-      const active = inProject.filter(t => t.priority !== 'G' && t.priority !== 'H').length;
+      const completed = inProject.filter(t => t.status === 'completed').length;
+      const active = inProject.filter(t => t.status === 'open').length;
       const total = active + completed;
       return { active, completed, ratio: total === 0 ? 0 : completed / total };
     }
