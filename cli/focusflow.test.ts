@@ -185,3 +185,64 @@ describe('focusflow CLI', () => {
     expect(() => run('done', 'no-such-task')).toThrow();
   });
 });
+
+describe('metrics', () => {
+  /** A finished task, `spanDays` from creation to completion. */
+  function finished(spanDays: number, endedDaysAgo: number, est = 0, actual = 0): Task {
+    const t = createEmptyTask('G');
+    const end = new Date();
+    end.setDate(end.getDate() - endedDaysAgo);
+    const start = new Date(end);
+    start.setDate(start.getDate() - spanDays);
+    t.completed = true;
+    t.priority = 'G';
+    t.originalPriority = 'C';
+    t.createdAt = start.toISOString();
+    t.completedAt = end.toISOString();
+    t.pomodoros = { estimated: est, completed: actual };
+    return t;
+  }
+
+  function openTask(ageDays: number): Task {
+    const t = createEmptyTask('C');
+    const created = new Date();
+    created.setDate(created.getDate() - ageDays);
+    t.createdAt = created.toISOString();
+    t.content = `waited ${ageDays} days`;
+    return t;
+  }
+
+  it('reports the oldest open task and the commitment count', () => {
+    seed([openTask(2), openTask(47), openTask(5)]);
+    const out = JSON.parse(run('metrics', '--json'));
+    expect(out.commitment).toBe(3);
+    expect(out.capacity).toBe(15);
+    expect(out.age.oldest.days).toBe(47);
+    expect(out.age.oldest.content).toBe('waited 47 days');
+  });
+
+  it('returns null medians below the minimum sample, with a countdown', () => {
+    seed([finished(3, 1), finished(3, 2)]);
+    const out = JSON.parse(run('metrics', '--json'));
+    expect(out.cycleTimeDays).toBeNull();
+    expect(out.estimationFactor).toBeNull();
+    expect(out.samplesUntilReady).toBe(out.minSample - 2);
+  });
+
+  it('reports cycle time and estimation factor once there is enough data', () => {
+    seed(Array.from({ length: 6 }, (_, i) => finished(4, i, 2, 3)));
+    const out = JSON.parse(run('metrics', '--json'));
+    expect(out.cycleTimeDays.value).toBe(4);
+    expect(out.cycleTimeDays.sampleSize).toBe(6);
+    expect(out.estimationFactor.value).toBe(1.5);
+    expect(out.samplesUntilReady).toBe(0);
+  });
+
+  it('prints a human-readable form without --json', () => {
+    seed([openTask(9)]);
+    const out = run('metrics');
+    expect(out).toContain('open          1/15');
+    expect(out).toContain('9d');
+    expect(out).toMatch(/need \d+ more completions/);
+  });
+});

@@ -57,9 +57,23 @@ export function parseTaskInput(input: string): ParsedTask {
   // be stripped from the content, it just yields no cue.
   const triggerMatch = content.match(/(^|\s)when:\s*(.*)$/i);
   if (triggerMatch) {
-    const cue = triggerMatch[2].trim();
+    let cue = triggerMatch[2].trim();
+
+    // "Rest of the line" means the rest of what the *user* typed. Callers
+    // append a default priority token — QuickAddRow puts the column's `!X` at
+    // the end, relying on the parser preferring the first `!X` so a typed one
+    // still wins — and without this that token lands inside the cue, giving
+    // a trigger of "午饭回来倒完水坐下后 !C" and no priority at all.
+    const appended: string[] = [];
+    let tail = cue.match(/(^|\s)(![ABCDE](?![A-Za-z])|【\s*[ABCDE]\s*】)$/i);
+    while (tail) {
+      appended.unshift(tail[2]);
+      cue = cue.slice(0, tail.index).trim();
+      tail = cue.match(/(^|\s)(![ABCDE](?![A-Za-z])|【\s*[ABCDE]\s*】)$/i);
+    }
+
     if (cue) trigger = cue;
-    content = content.slice(0, triggerMatch.index).trim();
+    content = [content.slice(0, triggerMatch.index).trim(), ...appended].join(' ').trim();
   }
 
   // Extract priority — prefer !X, fall back to 【X】 (Chinese full-width brackets, easier

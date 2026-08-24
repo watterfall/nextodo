@@ -15,6 +15,13 @@ import { execFileSync } from 'node:child_process';
 import { createTaskFromInput } from '$lib/utils/parser';
 import { createNextOccurrence } from '$lib/utils/recurrence';
 import { applyHighlanderRule, canAddTask, isSingleSlotPriority } from '$lib/utils/quotaCore';
+import {
+  ageDistribution,
+  cycleTimeMedian,
+  estimationFactor,
+  samplesUntilReady,
+  MIN_SAMPLE
+} from '$lib/utils/flowMetrics';
 import { createDefaultActiveData } from '$lib/types';
 import type { ActiveData, Task, Priority } from '$lib/types';
 
@@ -170,6 +177,50 @@ function cmdResolve(kind: 'done' | 'cancel', positional: string[], path: string)
   if (next) console.log(`  next occurrence: ~${next.dueDate}`);
 }
 
+/**
+ * Flow metrics, for the surface an agent actually reads.
+ *
+ * These are the numbers worth acting on programmatically: they say whether
+ * work is moving, and unlike a completion count they cannot be improved by
+ * doing more small things. The medians refuse to answer below five samples —
+ * `null` in JSON, an explicit note in text — because a median over three
+ * points would read as a finding and is not one.
+ */
+function cmdMetrics(flags: Record<string, string | boolean>, path: string): void {
+  const data = load(path);
+  const age = ageDistribution(data.tasks);
+  const cycle = cycleTimeMedian(data.tasks);
+  const estimation = estimationFactor(data.tasks);
+
+  if (flags.json) {
+    console.log(JSON.stringify({
+      commitment: age.count,
+      capacity: 15,
+      age: {
+        p50: age.p50,
+        p90: age.p90,
+        oldest: age.oldest
+          ? { id: age.oldest.task.id, content: age.oldest.task.content, days: age.oldest.days }
+          : null
+      },
+      cycleTimeDays: cycle,
+      estimationFactor: estimation,
+      minSample: MIN_SAMPLE,
+      samplesUntilReady: samplesUntilReady(data.tasks)
+    }, null, 2));
+    return;
+  }
+
+  console.log(`open          ${age.count}/15`);
+  console.log(`age p50/p90   ${age.p50 ?? '—'}d / ${age.p90 ?? '—'}d`);
+  if (age.oldest) {
+    console.log(`oldest        ${age.oldest.days}d  ${age.oldest.task.content}`);
+  }
+  const short = `(need ${samplesUntilReady(data.tasks)} more completions)`;
+  console.log(`cycle time    ${cycle ? `${cycle.value}d  n=${cycle.sampleSize}` : short}`);
+  console.log(`estimation    ${estimation ? `×${estimation.value.toFixed(2)}  n=${estimation.sampleSize}` : short}`);
+}
+
 function cmdAgentGuide(): void {
   console.log(`FocusFlow CLI — operate the FocusFlow task app from the command line.
 
@@ -184,9 +235,15 @@ Commands:
         thr:2026-06-01 | thr:+3d           hidden-until date
         🍅3 (or p3)    estimated pomodoros
         rec:[+]<n><d|b|w|m|y>   recurrence, same grammar as todo.txt
+        when:<cue>     situational start cue; takes the rest of the line,
+                       so put it last. Free text, never required.
   list [--priority X] [--json]      List the current unit's tasks (A-E).
   done <id|substring>               Mark a task complete.
   cancel <id|substring>             Cancel a task.
+  metrics [--json]                  Flow metrics: how much is open, how long
+      the oldest unfinished task has waited, median creation-to-completion
+      time, and the median actual/estimated pomodoro ratio. The two medians
+      report null below 5 samples rather than a number that looks like one.
   import-reminders [--list <name>] [--priority X]
       Import macOS Reminders (incomplete) as tasks (title→content, due→date).
   agent-guide                       Print this guide.
@@ -265,6 +322,7 @@ function main(): void {
     case 'list': return cmdList(flags, dataPath);
     case 'done': return cmdResolve('done', positional, dataPath);
     case 'cancel': return cmdResolve('cancel', positional, dataPath);
+    case 'metrics': return cmdMetrics(flags, dataPath);
     case 'import-reminders': return cmdImportReminders(flags, dataPath);
     case 'agent-guide':
     case 'help':

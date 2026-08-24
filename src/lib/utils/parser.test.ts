@@ -302,6 +302,28 @@ describe('when: — the situational start cue', () => {
     expect(task.content).toBe('call the bank');
     expect(task.trigger).toBe('right after lunch');
   });
+
+  it('gives back a priority token the caller appended after the cue', () => {
+    // QuickAddRow builds `${text} !${column}`, so with a cue at the end the
+    // token lands after it. It is app syntax, not part of what the user typed.
+    const p = parseTaskInput('校对发版说明 🍅2 when:午饭回来倒完水坐下后 !C');
+    expect(p.trigger).toBe('午饭回来倒完水坐下后');
+    expect(p.priority).toBe('C');
+    expect(p.estimatedPomodoros).toBe(2);
+    expect(p.content).toBe('校对发版说明');
+  });
+
+  it('still lets a typed priority beat the appended default', () => {
+    const p = parseTaskInput('写周报 !A when:明早开电脑后 !C');
+    expect(p.priority).toBe('A');
+    expect(p.trigger).toBe('明早开电脑后');
+  });
+
+  it('handles the full-width bracket form of the appended token', () => {
+    const p = parseTaskInput('订票 when:下班走出办公楼后 【B】');
+    expect(p.trigger).toBe('下班走出办公楼后');
+    expect(p.priority).toBe('B');
+  });
 });
 
 describe('re-exported recurrence engine', () => {
