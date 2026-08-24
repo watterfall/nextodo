@@ -168,6 +168,39 @@ describe('migrateToV5', () => {
     expect(ids([...result.tasks, ...result.pendingExport])).toEqual(['a', 'f', 'g', 'n', 's', 'sub']);
   });
 
+  it('does not tag a second S task with the first one\'s project', () => {
+    // Regression, found by dry-running the migration against a real 3.0 file:
+    // S was single-slot, so two S tasks is dirty data — but every one of them
+    // was picking up the focus project derived from the FIRST, filing two
+    // unrelated pieces of work under the same made-up project name.
+    const result = migrateToV5([
+      legacy('S', { id: 's1', content: '和Fran跟进后续', projects: [] }),
+      legacy('S', { id: 's2', content: 'OWL自我迭代智能体', projects: [] })
+    ]);
+
+    const first = result.tasks.find(t => t.id === 's1')!;
+    const second = result.tasks.find(t => t.id === 's2')!;
+
+    expect(result.focusProject).toBe('和Fran跟进后续');
+    expect(first.projects).toEqual(['和Fran跟进后续']);
+    expect(second.projects).toEqual([]);
+  });
+
+  it('does not tag a second S task\'s subtasks either', () => {
+    const result = migrateToV5([
+      legacy('S', { id: 's1', content: 'real focus', projects: ['focus'] }),
+      legacy('S', {
+        id: 's2',
+        content: 'unrelated',
+        projects: [],
+        subtasks: [{ id: 'sub', content: 'a step', completed: false }]
+      })
+    ]);
+
+    const sub = result.pendingExport.find(t => t.id === 'sub')!;
+    expect(sub.projects).toEqual([]);
+  });
+
   it('is a no-op on data that has already been migrated', () => {
     const clean = ['A', 'C', 'G'].map((p) => legacy(p, { id: `t${p}` }));
     const once = migrateToV5(clean);

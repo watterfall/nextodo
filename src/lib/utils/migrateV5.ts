@@ -87,7 +87,7 @@ function isKnownPriority(priority: string): boolean {
 function taskFromSubtask(
   parent: LegacyTask,
   subtask: NonNullable<LegacyTask['subtasks']>[number],
-  project: string
+  project: string | null
 ): V5Task {
   return {
     id: subtask.id,
@@ -97,7 +97,7 @@ function taskFromSubtask(
     completedAt: subtask.completedAt ?? null,
     createdAt: parent.createdAt,
     unitStart: parent.unitStart,
-    projects: [...new Set([...parent.projects, project])],
+    projects: project ? [...new Set([...parent.projects, project])] : [...parent.projects],
     contexts: [...parent.contexts],
     customTags: [...parent.customTags],
     dueDate: null,
@@ -124,6 +124,9 @@ export function migrateToV5(rawTasks: unknown[], currentFocusProject: string | n
     focusProject = sustained[0].projects[0] ?? slugifyProject(sustained[0].content);
   }
 
+  // Whether the one S task that owns the focus project has been processed.
+  let isFocusTaskSeen = false;
+
   for (const task of legacy) {
     const priority = task.priority;
 
@@ -137,11 +140,19 @@ export function migrateToV5(rawTasks: unknown[], currentFocusProject: string | n
 
     if (priority === 'S') {
       changed = true;
-      const project = focusProject ?? slugifyProject(task.content);
+
+      // Only the FIRST S task is the week's sustained project. S was a
+      // single-slot tier, so more than one is dirty data — and those extras
+      // must not inherit the first one's tag, or two unrelated pieces of work
+      // end up filed under the same made-up project name. (Real user data hit
+      // this immediately: two unrelated S tasks, both tagged with the first
+      // one's title.) The extras become ordinary tasks, tagged with nothing.
+      const project = isFocusTaskSeen ? null : (focusProject ?? slugifyProject(task.content));
+      isFocusTaskSeen = true;
 
       // Its subtasks become real tasks in the candidate pool, tagged with the
-      // focus project. They were bullets before; now they can each carry a
-      // priority, a due date and a pomodoro estimate.
+      // focus project when there is one. They were bullets before; now they can
+      // each carry a priority, a due date and a pomodoro estimate.
       for (const subtask of task.subtasks ?? []) {
         pendingExport.push(taskFromSubtask(task, subtask, project));
       }
@@ -160,7 +171,7 @@ export function migrateToV5(rawTasks: unknown[], currentFocusProject: string | n
       const promoted: V5Task = {
         ...(task as unknown as V5Task),
         priority: target ?? DEFAULT_PRIORITY,
-        projects: [...new Set([...task.projects, project])]
+        projects: project ? [...new Set([...task.projects, project])] : [...task.projects]
       };
       delete (promoted as Partial<LegacyTask>).subtasks;
 
