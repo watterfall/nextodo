@@ -84,15 +84,15 @@ record for this and is the authority for every format question.**
 | `ReviewPanel.svelte` | Unit review interface |
 | `ReviewWizard.svelte` | Step-by-step review wizard with challenge scoring |
 | `SettingsModal.svelte` | Application settings |
-| `BadgesModal.svelte` | Achievement/badge display modal |
-| `FreshStart.svelte` | Stale task cleanup suggestion modal |
+| `BadgesModal.svelte` | Achievement/badge display modal (only reachable when scoring is on) |
+| `FlowStrip.svelte` | The three flow metrics on the main view |
+| `OldestOpenRow.svelte` | Oldest unfinished task, resident in every view |
 | `TagPicker.svelte` | Tag selection widget |
 | `Confetti.svelte` | Celebration animation |
 | `TaskEditModal.svelte` | Modal for editing existing tasks with form fields |
 | `ConfirmationModal.svelte` | Reusable confirmation dialog for destructive actions |
 | `CalendarView.svelte` | Monthly calendar view with task scheduling |
 | `HistoryModal.svelte` | View completed and cancelled tasks history |
-| `CompletionSparkline.svelte` | Completion-rate sparkline from cycle history |
 | `LowCompletionBanner.svelte` | Low-completion micro-review banner |
 
 ### Store Architecture
@@ -120,6 +120,7 @@ record for this and is the authority for every format question.**
 | TodoFile | `todoFile.ts` | Reading/writing the shared todo.txt (Tauri command, localStorage in the browser) |
 | MigrateV5 | `migrateV5.ts` | The 4.0 → 5.0 data migration (Node-safe, so it is testable) |
 | CycleEngine | `cycleEngine.ts` | Dynamic cycle / low-completion merge logic |
+| FlowMetrics | `flowMetrics.ts` | Age / cycle time / estimation factor — Node-safe, shared with the CLI |
 | Reminders | `reminders.ts` | Daily due/overdue notification scheduling |
 | Dnd | `dnd.ts` | Native HTML5 drag-and-drop payloads |
 | Motion | `motion.ts` | Animation tokens (springs/durations/easings) — hand-rolled CSS, unrelated to the `motion` npm package |
@@ -153,7 +154,13 @@ npm run reinstall        # Clean reinstall
 
 A headless CLI lives at `cli/focusflow.ts` for scripting and agent-driven use. Build it with `npm run cli:build` (esbuild bundles it to `dist-cli/focusflow.mjs`) and run it with `npm run cli`.
 
-Subcommands: `add`, `list`, `done`, `cancel`, `import-reminders`, `agent-guide`.
+Subcommands: `add`, `list`, `done`, `cancel`, `metrics`, `import-reminders`, `agent-guide`.
+
+`metrics [--json]` is the agent-facing view of `flowMetrics.ts`: how much is
+open, how long the oldest unfinished task has waited, median creation-to-
+completion time, and the median actual/estimated pomodoro ratio. The two
+medians come back as `null` below 5 samples, with `samplesUntilReady` saying
+how many more are needed — never a number that would read as a finding.
 The CLI imports the same Node-safe modules the app uses — `quotaCore.ts` (quota
 and Highlander rules), `parser.ts` (input syntax) and `recurrence.ts` (next
 occurrence on `done`) — so those behaviours match the app exactly. It does **not**
@@ -205,14 +212,14 @@ import TaskCard from '$lib/components/TaskCard.svelte';
 
 All types are centralized in `src/lib/types/index.ts`. Key types:
 
-- **Task** - Core task entity with priority, dates, pomodoros, recurrence, threshold dates
+- **Task** - Core task entity with priority, dates, pomodoros, recurrence, threshold dates, and a `trigger` (situational start cue)
 - **Priority** - `'A' | 'B' | 'C' | 'D' | 'E' | 'G' | 'H'` (A-E with quotas 1-5; G=completed, H=cancelled)
 - **ActivePriority** - `Exclude<Priority, 'G' | 'H'>` → the quota-bearing A–E tiers
 - **TaskOrigin** - `'self' | 'assigned'` — proactive vs reactive, stored as an `@主` / `@被` context
 - **TaskSource** - where a pulled task's line lives in the todo.txt, for write-back
 - **AppData** - Combined in-memory data structure
 - **ActiveData** / **ArchiveData** / **PomodoroHistoryData** - Separated file structures
-- **Settings** - Application configuration
+- **Settings** - Application configuration (incl. `gamificationEnabled`, off by default, and `pomodoroWorkByPriority`)
 - **FilterState** - Current filter criteria (includes priority and pomodoro filters)
 - **UnitReview** - Bi-daily unit review data
 - **Badge** / **BadgeId** - Gamification achievement types
@@ -307,7 +314,19 @@ Task content !A +project @context #tag 🍅3 ~2025-01-15 thr:2025-01-10 rec:1w
 | `thr:date` | Threshold date (hidden until) | `thr:2025-01-10`, `thr:+7d` |
 | `rec:pattern` | Recurrence, todo.txt grammar | `rec:1d`, `rec:+1m`, `rec:b`, `rec:mon,wed,fri` |
 | `🍅N` or `pN` | Estimated pomodoros (must stand alone) | `🍅4`, `p3` — `step2` is **not** matched |
+| `when:<cue>` | Situational start cue (if-then). Takes the rest of the line | `when:明早坐下打开电脑后` |
 | Emoji tags | Direct emoji classification | `⚡高能量`, `💻编码` |
+
+**`when:` takes the rest of the line, so it goes last.** It is parsed before
+every other marker, so `写周报 !A +work when:坐下后` still gets its priority and
+project. "Rest of the line" means the rest of what the *user* typed: a trailing
+`!X` / `【X】` is handed back to the content, because `QuickAddRow` appends the
+column's priority that way and it must not end up inside the cue.
+
+The cue is **FocusFlow-only and never written to the todo.txt** — extension
+values there cannot contain spaces, and the cue belongs to the commitment
+("how will I start this in the next two days") rather than to the backlog entry.
+See `docs/EVIDENCE-REVIEW.md` §2.4.
 
 **Recurrence** follows todo.txt's `rec:` grammar exactly, so a recurrence typed
 here and one imported from sleek behave identically:
@@ -424,7 +443,41 @@ import DropZone from './DropZone.svelte';
 <DropZone onDropTask={(payload: TaskDragPayload) => handleDrop(payload)}>
 ```
 
+### Flow metrics
+
+`src/lib/utils/flowMetrics.ts` — Node-safe, no Svelte/Tauri/i18n, so the CLI
+(`focusflow metrics`) and the tests import it directly. Exposed on the tasks
+store as `flowAge` / `flowCycleTime` / `flowEstimation` / `flowSamplesNeeded`.
+
+```typescript
+ageDistribution(tasks, now?): { count, p50, p90, oldest }
+cycleTimeMedian(tasks, window = 20): { value, sampleSize } | null
+estimationFactor(tasks, { priority?, window? }): { value, sampleSize } | null
+commitmentCount(tasks): number
+samplesUntilReady(tasks): number
+ageInDays(iso, now?): number
+```
+
+Rules that hold across the module, and that new metrics must keep:
+
+- **Below `MIN_SAMPLE` (5), a median returns `null`, never a number.** The UI
+  prints "3 more" rather than a figure that looks like a finding.
+- **Local calendar days only** — both ends zeroed to local midnight, then
+  rounded. Never `toISOString()`.
+- **Cancelled (H) tasks are excluded from cycle time.** Otherwise abandoning
+  work improves the number.
+- **`estimationFactor` skips tasks with zero completed pomodoros** — that means
+  the timer was never started, not that the work took no effort.
+- **None of these gets a target value in the UI.** A target is what turns a
+  measure into something to perform. See `docs/EVIDENCE-REVIEW.md` §2.2.
+
 ### Gamification / Badges
+
+**Off by default** (`settings.gamificationEnabled`, false for new and existing
+installs). Off means nothing is counted, not counted-and-hidden. The reason is
+in `docs/EVIDENCE-REVIEW.md` §2.1: scoring pays per completion, so the fastest
+way to earn is many small tasks — exactly what the quota exists to prevent, and
+when two mechanisms disagree the visible one wins.
 
 Badge and leveling system defined in `src/lib/stores/gamification.svelte.ts`:
 
@@ -434,8 +487,13 @@ Badge and leveling system defined in `src/lib/stores/gamification.svelte.ts`:
 | `pomodoro_novice` | Focus Novice | Complete 5 pomodoros | 100 |
 | `pomodoro_master` | Focus Master | Complete 100 pomodoros | 1000 |
 | `challenge_crusher` | Challenge Crusher | Complete 5 A-priority tasks | 500 |
-| `consistency_is_key` | Consistency | Maintain a 3-day streak | 300 |
-| `sustainable_worker` | Sustainable Worker | 3 "perfect days" (healthy completion rate) | 400 |
+
+Streaks are gone and should not come back: a missed day is statistically
+invisible to the automaticity curve, while a streak counter turns it into a
+reason to abandon the whole thing. `migrateGamification()` in `storage.ts`
+drops the retired stat keys and the two deleted badges' unlock records on load
+— it has to live there rather than in the store, because the store only writes
+through its own persist callback and that never fires while scoring is off.
 
 **Level Progression:**
 
@@ -694,6 +752,7 @@ Theme is stored in settings and applied via CSS custom properties in `app.css`. 
 | File | Purpose | Approx Lines |
 |------|---------|--------------|
 | `docs/SLEEK-INTEROP.md` | Design record for the todo.txt interop — the authority | ~330 |
+| `docs/EVIDENCE-REVIEW.md` | Design record for the flow-metrics / gamification round, incl. what was deliberately not adopted | ~250 |
 | `src/App.svelte` | Root component, layout, routing | ~955 |
 | `src/lib/stores/tasks.svelte.ts` | Central state, candidate pool, write-back | ~1215 |
 | `src/lib/stores/ui.svelte.ts` | UI state, modals, keyboard shortcuts | ~250 |
@@ -704,6 +763,7 @@ Theme is stored in settings and applied via CSS custom properties in `app.css`. 
 | `src/lib/utils/unitCalc.ts` | Bi-daily unit calculations | ~285 |
 | `src/lib/utils/quotaCore.ts` | Node-safe quota core (shared with CLI) | ~220 |
 | `src/lib/utils/cycleEngine.ts` | Dynamic cycle / merge logic | ~175 |
+| `src/lib/utils/flowMetrics.ts` | Age / cycle time / estimation factor | ~200 |
 | `src/lib/utils/migrateV5.ts` | 4.0 → 5.0 data migration | ~170 |
 | `src/lib/utils/motion.ts` | Animation tokens | ~135 |
 | `src/lib/utils/todoFile.ts` | Shared todo.txt file access | ~80 |
