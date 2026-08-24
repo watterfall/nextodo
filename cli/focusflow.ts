@@ -22,7 +22,7 @@ import {
   samplesUntilReady,
   MIN_SAMPLE
 } from '$lib/utils/flowMetrics';
-import { createDefaultActiveData, isOpen } from '$lib/types';
+import { createDefaultActiveData, isOpen, DEFAULT_PRIORITY } from '$lib/types';
 import type { ActiveData, Task, Priority } from '$lib/types';
 
 const APP_ID = 'com.focusflow.app';
@@ -256,7 +256,10 @@ Exit code 0 on success, 1 on error. Errors go to stderr.`);
 
 function cmdImportReminders(flags: Record<string, string | boolean>, path: string): void {
   const listName = typeof flags.list === 'string' ? flags.list : null;
-  const priority = typeof flags.priority === 'string' ? flags.priority : 'F';
+  // Was 'F' — the Idea Pool tier, deleted two data versions ago. The parser
+  // now leaves an unknown `!F` in the content, so every imported reminder came
+  // out titled "买牛奶 !F" at the default tier anyway.
+  const priority = typeof flags.priority === 'string' ? flags.priority : DEFAULT_PRIORITY;
 
   // AppleScript: emit one reminder per line as  name\tdueISO  (incomplete only).
   const scope = listName
