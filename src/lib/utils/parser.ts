@@ -19,6 +19,7 @@ interface ParsedTask {
   thresholdDate: string | null;
   estimatedPomodoros: number;
   recurrence: Recurrence | null;
+  trigger: string | null;
 }
 
 /**
@@ -31,6 +32,8 @@ interface ParsedTask {
  * - thr:2024-12-01 or thr:+3d for threshold date
  * - rec:1d rec:1w rec:mon,wed,fri rec:1m@15 for recurrence
  * - 🍅3 or p3 for estimated pomodoros
+ * - when:<situational cue> for an if-then start trigger (takes the rest of the
+ *   line, so it has to come last)
  */
 export function parseTaskInput(input: string): ParsedTask {
   let content = input.trim();
@@ -42,6 +45,22 @@ export function parseTaskInput(input: string): ParsedTask {
   let thresholdDate: string | null = null;
   let estimatedPomodoros = 0;
   let recurrence: Recurrence | null = null;
+  let trigger: string | null = null;
+
+  // `when:` — the situational cue, extracted before anything else because it
+  // is the one field whose value is a phrase rather than a token. Every other
+  // marker here matches a run of non-space characters; a cue like "坐下打开电脑
+  // 后" has spaces in it and no closing delimiter that would not itself be
+  // legal inside a cue. So it takes the rest of the line, and the rule is that
+  // it goes last. Running it first is what makes `写报告 !A when:坐下后` work.
+  // `.*` rather than `.+`: a bare `when:` with nothing after it still has to
+  // be stripped from the content, it just yields no cue.
+  const triggerMatch = content.match(/(^|\s)when:\s*(.*)$/i);
+  if (triggerMatch) {
+    const cue = triggerMatch[2].trim();
+    if (cue) trigger = cue;
+    content = content.slice(0, triggerMatch.index).trim();
+  }
 
   // Extract priority — prefer !X, fall back to 【X】 (Chinese full-width brackets, easier
   // to type on CN IME). The bracket form requires anchor at start/end or surrounding
@@ -146,7 +165,8 @@ export function parseTaskInput(input: string): ParsedTask {
     dueDate,
     thresholdDate,
     estimatedPomodoros,
-    recurrence
+    recurrence,
+    trigger
   };
 }
 
@@ -255,6 +275,7 @@ export function createTaskFromInput(input: string): Task {
   task.thresholdDate = parsed.thresholdDate;
   task.pomodoros.estimated = parsed.estimatedPomodoros;
   task.recurrence = parsed.recurrence;
+  task.trigger = parsed.trigger;
 
   return task;
 }

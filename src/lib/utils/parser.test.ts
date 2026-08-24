@@ -264,6 +264,46 @@ describe('formatTaskDisplay', () => {
   });
 });
 
+describe('when: — the situational start cue', () => {
+  it('takes the rest of the line, spaces included', () => {
+    const p = parseTaskInput('draft the report when:after I sit down and open the laptop');
+    expect(p.content).toBe('draft the report');
+    expect(p.trigger).toBe('after I sit down and open the laptop');
+  });
+
+  it('runs before the other markers, so they still parse', () => {
+    const p = parseTaskInput('写周报 !A +work 🍅3 when:明早坐下打开电脑后');
+    expect(p.content).toBe('写周报');
+    expect(p.priority).toBe('A');
+    expect(p.projects).toEqual(['work']);
+    expect(p.estimatedPomodoros).toBe(3);
+    expect(p.trigger).toBe('明早坐下打开电脑后');
+  });
+
+  it('is null when absent, and never invented', () => {
+    expect(parseTaskInput('plain task').trigger).toBeNull();
+  });
+
+  it('ignores an empty cue rather than storing a blank string', () => {
+    const p = parseTaskInput('task when:   ');
+    expect(p.trigger).toBeNull();
+    expect(p.content).toBe('task');
+  });
+
+  it('does not match mid-word', () => {
+    // "somewhen:x" is not a cue marker, and the text must survive intact.
+    const p = parseTaskInput('rename somewhen:x in the parser');
+    expect(p.trigger).toBeNull();
+    expect(p.content).toBe('rename somewhen:x in the parser');
+  });
+
+  it('reaches the Task through createTaskFromInput', () => {
+    const task = createTaskFromInput('call the bank when:right after lunch');
+    expect(task.content).toBe('call the bank');
+    expect(task.trigger).toBe('right after lunch');
+  });
+});
+
 describe('re-exported recurrence engine', () => {
   // The engine itself is covered in recurrence.test.ts. All this needs to check
   // is that `from './parser'` still reaches it, since callers import it from

@@ -224,6 +224,8 @@ export function getSettingsStore() {
     get density() { return settings.density; },
     get unitBoundaryFlexHours() { return settings.unitBoundaryFlexHours; },
     get dueReminders() { return settings.dueReminders; },
-    get lowCompletionPrompt() { return settings.lowCompletionPrompt; }
+    get lowCompletionPrompt() { return settings.lowCompletionPrompt; },
+    get pomodoroWorkByPriority() { return settings.pomodoroWorkByPriority; },
+    get gamificationEnabled() { return settings.gamificationEnabled; }
   };
 }

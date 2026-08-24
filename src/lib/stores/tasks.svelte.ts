@@ -16,6 +16,7 @@ import { createTaskFromInput } from '$lib/utils/parser';
 import { processRecurringTasks, createNextOccurrence } from '$lib/utils/recurrence';
 import { evaluateCycle, rollUnfinishedIntoWindow } from '$lib/utils/cycleEngine';
 import { maybeNotifyDueTasks } from '$lib/utils/reminders';
+import { ageDistribution, cycleTimeMedian, estimationFactor, samplesUntilReady } from '$lib/utils/flowMetrics';
 import { getCurrentUnit, isToday, isOverdue, isThisWeek, currentUnitStartLocal, parseISODate, formatDateISO } from '$lib/utils/unitCalc';
 import { t } from '$lib/i18n';
 import { getGamificationStore } from './gamification.svelte';
@@ -930,14 +931,28 @@ export function setCurrentUnit(unit: UnitInfo): void {
   currentUnit = unit;
 }
 
-// Derived values - Step 1: Filter active priorities (A-F)
-// N (future-progress) is intentionally NOT included here; it is rendered via
-// the persistent PriorityTray, not in the main view chain.
+// Derived values - Step 1: the quota-bearing A-E tiers.
 const activeTasks = $derived(appData.tasks.filter(t => isActivePriority(t.priority)));
 
 // Tasks that count toward cross-cutting aggregations (sidebar project/context/
-// tag badges, etc.). Includes A-F + N + S — everything not hidden (G/H).
+// tag badges, etc.) — everything not hidden (G/H).
 const countedTasks = $derived(appData.tasks.filter(t => isCountedPriority(t.priority)));
+
+// Flow metrics: how work is moving, as opposed to how much of it there has been.
+//
+// Measured over the tasks in this unit only — the candidate pool is deliberately
+// excluded. A line sitting untouched in the todo.txt is inventory, and inventory
+// is supposed to sit; counting its age as debt would punish the user for keeping
+// a backlog, which is the one thing the backlog is for. What these numbers
+// measure is work already promised.
+const flowAge = $derived(ageDistribution(appData.tasks));
+// Completions live in active.json for 14 days before moving to cold storage, so
+// this window is "recently finished", not "ever finished". That is the right
+// window anyway: an estimation habit from six months ago is not evidence about
+// the current one.
+const flowCycleTime = $derived(cycleTimeMedian(appData.tasks));
+const flowEstimation = $derived(estimationFactor(appData.tasks));
+const flowSamplesNeeded = $derived(samplesUntilReady(appData.tasks));
 
 // Derived values - Step 2: Filter by threshold date
 const visibleTasks = $derived.by(() => {
@@ -1210,6 +1225,10 @@ export function getTasksStore() {
     get customTagGroups() { return appData.customTagGroups; },
     get settings() { return appData.settings; },
     get cycleState() { return appData.cycleState; },
-    get cycleHistory() { return appData.cycleHistory ?? []; }
+    get cycleHistory() { return appData.cycleHistory ?? []; },
+    get flowAge() { return flowAge; },
+    get flowCycleTime() { return flowCycleTime; },
+    get flowEstimation() { return flowEstimation; },
+    get flowSamplesNeeded() { return flowSamplesNeeded; }
   };
 }

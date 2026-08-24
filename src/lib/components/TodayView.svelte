@@ -2,7 +2,7 @@
   import { getTasksStore } from '$lib/stores/tasks.svelte';
   import { getPomodoroStore, startPomodoro } from '$lib/stores/pomodoro.svelte';
   import TaskCard from './TaskCard.svelte';
-  import CompletionSparkline from './CompletionSparkline.svelte';
+  import FlowStrip from './FlowStrip.svelte';
   import { getI18nStore } from '$lib/i18n';
   import { fade, slide } from 'svelte/transition';
   import { isToday, isOverdue, getCurrentUnit } from '$lib/utils/unitCalc';
@@ -128,9 +128,7 @@
               : (t('todayView.rhythm.day2') || '第 2 天 / 收尾')}
           </span>
         {/if}
-        {#if tasks.cycleHistory.length > 0}
-          <CompletionSparkline history={tasks.cycleHistory} />
-        {/if}
+        <FlowStrip />
       </div>
 
       <!-- Hero altar: A-task gets sanctified treatment (Highlander Rule made visible) -->

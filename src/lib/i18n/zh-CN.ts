@@ -622,6 +622,30 @@ export default {
     externalChangeIgnored: '检测到外部数据变更，但由于当前有活动会话已忽略。请手动保存并刷新以避免冲突。',
   },
 
+  // 流动指标：测的是「东西在不在动」，不是「做了多少」。
+  // 三个数都没有目标值，也不该有——一给目标就变成可以表演的东西。
+  flow: {
+    title: '流动指标',
+    commitment: '在办',
+    commitmentHint: '当前承诺的任务数 / 一个单元的上限 15。配额本来就是硬约束，这里只是让它可见',
+    oldest: '最老',
+    oldestHint: '最老的未完成任务已经等了多久',
+    oldestAge: '最老的未完成项 {n} 天',
+    cycleTime: '周期',
+    cycleTimeHint: '最近完成的任务，从创建到完成的中位天数。只看趋势，不设目标',
+    estimation: '估计',
+    estimationHint: '实际番茄数 / 估计番茄数 的中位数。×1.0 是准，×1.8 表示实际花的力气差不多是预估的两倍',
+    days: '天',
+    needMore: '还需 {n} 个',
+    doIt: '做掉',
+    dropIt: '杀掉',
+    askTrigger: '什么情境下开始？说一个你能察觉到的线索，不是时间点',
+    askTriggerPlaceholder: '例如：明早坐下打开电脑后',
+    revived: '已设定启动线索',
+    dropped: '已取消',
+    trigger: '启动线索',
+  },
+
   // Today View
   todayView: {
     greeting: {
@@ -630,7 +654,6 @@ export default {
       evening: '晚上好',
     },
     readyToFocus: '准备好专注了吗？',
-    completionHistory: '完成率',
     taskCount: '你有 {count} 个任务计划在今天完成。',
     progress: '今日进度',
     showInbox: '显示收集箱 (用于规划)',

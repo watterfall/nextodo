@@ -18,6 +18,7 @@
   import BadgesModal from '$lib/components/BadgesModal.svelte';
   import TaskEditModal from '$lib/components/TaskEditModal.svelte';
   import ConfirmationModal from '$lib/components/ConfirmationModal.svelte';
+  import OldestOpenRow from '$lib/components/OldestOpenRow.svelte';
 
   import {
     initializeData,
@@ -394,8 +395,10 @@
       </div>
     {/if}
 
-    <!-- S/F/N moved into each view's ZoneRail (right column in ListView,
-         bottom row in KanbanView) for spatial adjacency with A-E and easy DnD. -->
+    <!-- The oldest unfinished task, in every view. It sits outside the view
+         switcher on purpose: the whole value of the number is that you cannot
+         change tabs to stop seeing it. -->
+    <OldestOpenRow />
 
     <!-- Main Layout Switcher - Views fill available space -->
     <div class="content-layout">

@@ -31,6 +31,7 @@
   let thresholdDate = $state(task.thresholdDate || '');
   let estimatedPomodoros = $state<number>(task.pomodoros.estimated);
   let recurrence = $state(formatRecurrence(task.recurrence));
+  let trigger = $state(task.trigger || '');
   let contentInput: HTMLInputElement | null = null;
 
   onMount(() => {
@@ -202,7 +203,8 @@
         ...task.pomodoros,
         estimated: estimatedPomodoros || 0
       },
-      recurrence: recurrenceObj
+      recurrence: recurrenceObj,
+      trigger: trigger.trim() || null
     };
 
     await updateTask(task.id, updates);
@@ -354,6 +356,25 @@
             {/each}
           </datalist>
         </div>
+      </div>
+
+      <!-- The start cue gets a full-width row above the dates, because it is
+           the thing that actually starts the task and the dates are not. Never
+           required; a task without one is perfectly normal and nothing here
+           says otherwise. -->
+      <div class="field-group field-group-wide">
+        <label class="field-label" for="edit-trigger-input">
+          <span class="label-icon">⟶</span>
+          {t('flow.trigger')}
+        </label>
+        <input
+          id="edit-trigger-input"
+          type="text"
+          class="field-input"
+          bind:value={trigger}
+          placeholder={t('flow.askTriggerPlaceholder')}
+          title={t('flow.askTrigger')}
+        />
       </div>
 
       <div class="form-grid">
@@ -517,6 +538,11 @@
 
   .field-group.content-field {
     margin-bottom: 8px;
+  }
+
+  /* Full width, above the date grid — a cue is a sentence, not a field value. */
+  .field-group-wide {
+    margin-bottom: 12px;
   }
 
   .field-label {

@@ -262,6 +262,17 @@
     {/if}
 
     <div class="task-content">
+      <!-- The start cue goes ABOVE the content, not down in the metadata row.
+           It is not a property of the task, it is the condition under which
+           the task begins, and it has to be read before the content for that
+           to work. Tasks that have one look different from tasks that only
+           have a due date, because they are a different kind of plan. -->
+      {#if task.trigger && !compact}
+        <span class="task-trigger" title={task.trigger}>
+          <span class="trigger-arrow" aria-hidden="true">⟶</span>{task.trigger}
+        </span>
+      {/if}
+
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <span
         class="task-text"
@@ -800,6 +811,24 @@
   .task-content {
     flex: 1;
     min-width: 0;
+  }
+
+  /* Visually distinct from a due date on purpose: a cue is a condition, a due
+     date is a deadline, and confusing the two is the whole reason time
+     triggers fail when the schedule slips. */
+  .task-trigger {
+    display: block;
+    margin-bottom: 2px;
+    font-size: 11.5px;
+    line-height: 1.4;
+    color: var(--primary);
+    opacity: 0.85;
+    word-break: break-word;
+  }
+
+  .trigger-arrow {
+    margin-right: 4px;
+    opacity: 0.7;
   }
 
   .task-text {

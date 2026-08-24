@@ -622,6 +622,31 @@ export default {
     externalChangeIgnored: 'External data change detected but ignored due to active session. Please save and reload manually to avoid conflicts.',
   },
 
+  // Flow metrics: measures of whether work is moving, not of how much has been
+  // done. None of the three has a target value, and none should get one — a
+  // target is what turns a measure into something to perform.
+  flow: {
+    title: 'Flow',
+    commitment: 'open',
+    commitmentHint: 'Tasks currently promised, against the 15 a unit holds. The quota is already a hard cap; this just makes the load visible',
+    oldest: 'oldest',
+    oldestHint: 'How long the oldest unfinished task has been waiting',
+    oldestAge: 'Oldest open item: {n}d',
+    cycleTime: 'cycle',
+    cycleTimeHint: 'Median days from creation to completion, over recent finishes. Watch the trend; do not set a target',
+    estimation: 'estimate',
+    estimationHint: 'Median actual/estimated pomodoros. ×1.0 is calibrated; ×1.8 means things take about twice the effort you predict',
+    days: 'd',
+    needMore: '{n} more',
+    doIt: 'Do it',
+    dropIt: 'Drop it',
+    askTrigger: 'What situation will start this? Name a cue you will notice — not a time',
+    askTriggerPlaceholder: 'e.g. after I sit down and open the laptop',
+    revived: 'Cue set',
+    dropped: 'Dropped',
+    trigger: 'Start cue',
+  },
+
   // Today View
   todayView: {
     greeting: {
@@ -630,7 +655,6 @@ export default {
       evening: 'Good evening',
     },
     readyToFocus: 'Ready to focus?',
-    completionHistory: 'Completion',
     taskCount: 'You have {count} tasks planned for today.',
     progress: "Today's Progress",
     showInbox: 'Show Inbox (for planning)',
