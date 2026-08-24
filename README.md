@@ -10,11 +10,18 @@
 
 **FocusFlow** is a focus-first task management desktop application that combines GTD (Getting Things Done) methodology with the Pomodoro technique. Built with modern technologies for cross-platform support.
 
+It works **alongside [sleek](https://github.com/ransome1/sleek)**, or any other
+todo.txt editor. Your backlog stays in a plain `todo.txt`; FocusFlow is the
+surface where you pick the handful of things you will actually do in the next
+two days. Completing one marks it `x` in that same file.
+
 ### Features
 
-- **6-Tier Priority System (A-F)** - With quotas: A=1, B=2, C=3, D=4, E=5, F=Idea Pool (unlimited)
-- **Highlander Rule** - Only one A-priority task at a time
-- **Bi-Daily Work Units** - Sun-Mon, Tue-Wed, Thu-Fri cycles with Saturday reviews
+- **5-Tier Priority System (A-E)** - With quotas: A=1, B=2, C=3, D=4, E=5. Fifteen tasks per unit, and nothing more fits
+- **Shared todo.txt candidate pool** - Pull work out of the file sleek edits; completing writes `x` back to the same line
+- **Proactive vs reactive** - Mark whether you chose the work or were handed it (`@主` / `@被`), and see the ratio at review time
+- **Highlander Rule** - Only one A-priority task at a time; a second one unseats the first rather than being refused
+- **Bi-Daily Work Units** - Mon-Tue, Wed-Thu, Fri-Sat cycles with Sunday reviews
 - **Pomodoro Timer** - Integrated focus sessions with break management
 - **Immersive Mode** - Full-screen distraction-free pomodoro sessions
 - **Recurring Tasks** - Daily, weekly, monthly patterns with threshold dates
@@ -90,13 +97,13 @@ Complete project report !A +work @office ~2025-01-15 🍅4
 
 | Syntax | Description | Example |
 |--------|-------------|---------|
-| `!A-F` | Priority level | `!A`, `!B`, `!C`, `!D`, `!E`, `!F` |
+| `!A-E` | Priority level | `!A`, `!B`, `!C`, `!D`, `!E` |
 | `+name` | Project tag | `+work`, `+personal` |
 | `@name` | Context tag | `@office`, `@home` |
 | `#name` | Custom tag | `#urgent`, `#review` |
 | `~date` | Due date | `~2025-01-15`, `~tomorrow`, `~+3d` |
 | `thr:date` | Threshold date (hidden until) | `thr:2025-01-10`, `thr:+7d` |
-| `rec:pattern` | Recurrence pattern | `rec:1d`, `rec:1w`, `rec:mon,wed,fri` |
+| `rec:pattern` | Recurrence, todo.txt grammar | `rec:1d`, `rec:+1m`, `rec:b`, `rec:mon,wed,fri` |
 | `🍅N` or `pN` | Estimated pomodoros | `🍅4`, `p3` |
 
 **Recurrence patterns:**
@@ -140,11 +147,17 @@ MIT
 
 **FocusFlow** 是一款专注优先的任务管理桌面应用，将 GTD（Getting Things Done）方法论与番茄工作法相结合。采用现代技术栈，支持跨平台运行。
 
+它和 **[sleek](https://github.com/ransome1/sleek)**（或任何 todo.txt 编辑器）配合使用：
+待办清单留在纯文本 `todo.txt` 里，FocusFlow 只负责「未来两天真正要做的那几件事」。
+在这里完成一条，会在同一个文件的同一行前面写上 `x`。
+
 ### 特性
 
-- **六级优先级系统 (A-F)** - 配额限制：A=1, B=2, C=3, D=4, E=5, F=灵感池（无限）
-- **高地人规则** - 同时只能有一个 A 级任务
-- **双日工作单元** - 周日-周一、周二-周三、周四-周五循环，周六回顾
+- **五级优先级系统 (A-E)** - 配额限制：A=1, B=2, C=3, D=4, E=5。一个单元最多 15 条，满了就是满了
+- **共享 todo.txt 候选池** - 从 sleek 编辑的那个文件里拉取；完成时把 `x` 写回同一行
+- **主动 / 被动** - 标记这件事是自己规划的还是别人交办的（`@主` / `@被`），复盘时看比例
+- **高地人规则** - 同时只能有一个 A 级任务；再加一个会挤掉旧的，而不是拒绝
+- **双日工作单元** - 周一-周二、周三-周四、周五-周六循环，周日复盘
 - **番茄钟计时器** - 集成专注时段与休息管理
 - **沉浸模式** - 全屏无干扰番茄专注
 - **循环任务** - 支持每日、每周、每月模式与阈值日期
@@ -220,13 +233,13 @@ npm run check
 
 | 语法 | 说明 | 示例 |
 |------|------|------|
-| `!A-F` | 优先级 | `!A`, `!B`, `!C`, `!D`, `!E`, `!F` |
+| `!A-E` | 优先级 | `!A`, `!B`, `!C`, `!D`, `!E` |
 | `+名称` | 项目标签 | `+工作`, `+个人` |
 | `@名称` | 场景标签 | `@办公室`, `@家` |
 | `#名称` | 自定义标签 | `#紧急`, `#待审` |
 | `~日期` | 截止日期 | `~2025-01-15`, `~tomorrow`, `~+3d` |
 | `thr:日期` | 阈值日期（在此之前隐藏） | `thr:2025-01-10`, `thr:+7d` |
-| `rec:模式` | 循环模式 | `rec:1d`, `rec:1w`, `rec:mon,wed,fri` |
+| `rec:模式` | 循环，沿用 todo.txt 语法 | `rec:1d`, `rec:+1m`, `rec:b`, `rec:mon,wed,fri` |
 | `🍅N` 或 `pN` | 预估番茄数 | `🍅4`, `p3` |
 
 **循环模式：**

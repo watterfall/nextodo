@@ -434,10 +434,6 @@ export default {
     quotaInfo: '{current}/{max}',
     movedTo: '已移到 {priority} · {name}',
     moveFailed: '移动失败',
-    demotedTo: '原持续项目「{name}」已降到 {priority} 区',
-    subtaskPromotedTo: '子任务已提升到 {priority}',
-    promotedTo: '已提升到 {name} ({priority})',
-    promoteFailed: '提升失败',
   },
 
   reminders: {
@@ -456,19 +452,8 @@ export default {
     editDetails: '编辑详情',
     markComplete: '标记完成',
     cancelTask: '取消任务',
-    subtasksDone: '{done}/{total} 子任务完成',
   },
 
-  rail: {
-    sHint: '拖任务到此 · 或输入 !S 创建本周持续推进项目',
-    fHint: '收集想法 · 拖到这里或输入 !F',
-    nHint: '暂不打扰 · 拖到这里或输入 !N',
-    dragToPromote: '拖动到 A-E/F/N 任意区即提升为独立任务',
-    promoteHint: '提升为独立任务（或直接拖到目标区）',
-    promoteTo: '提升到',
-    check: '标记完成',
-    uncheck: '取消勾选',
-  },
 
   week: {
     title: '本周概览',
@@ -540,7 +525,6 @@ export default {
     restore: '恢复',
     permanentDelete: '永久删除',
     evolve: '演化',
-    activate: '激活',
     moveToFuture: '移入未来推进',
   },
 
@@ -563,7 +547,6 @@ export default {
     restored: '已恢复',
     error: '操作失败',
     returnedToPool: '「{name}」已退回候选池——没有档位放得下它',
-    demotedTo: '「{name}」被挤到 {priority} 档',
     writeBackMissing: '「{name}」在 todo.txt 里找不到对应行，只在本地标记完成',
     writeBackAmbiguous: '「{name}」在 todo.txt 里有多行同名，已标记第一条未完成的',
     writeBackFailed: '写回 todo.txt 失败：{detail}',
@@ -582,7 +565,6 @@ export default {
     taskCancelled: '任务已取消',
     taskPermanentlyDeleted: '任务已永久删除',
     taskEvolved: '任务已演化，新任务已创建',
-    taskActivated: '任务已激活到 {priority} 区',
     activateChooseTarget: '激活到哪个优先级？',
     evolveTaskTitle: '演化任务',
     evolveTaskHint: '完成当前任务并创建演化版本',
@@ -593,10 +575,7 @@ export default {
     drasticPriorityChange: '从 {from} 级到 {to} 级是较大的优先级跨越，确定要继续吗？',
     movedTo: '已移到 {priority} · {name}',
     moveFailed: '移动失败',
-    promoteFailed: '提升失败',
-    promotedTo: '子任务已提升到 {priority} · {name}',
     quotaFull: '{name}（{priority}）已达配额上限 {quota} 个',
-    sustainedExists: '本周已有一个持续推进项目（点击替换或先完成现有的）',
     dropHere: '拖任务到此',
   },
 

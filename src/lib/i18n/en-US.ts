@@ -434,10 +434,6 @@ export default {
     quotaInfo: '{current}/{max}',
     movedTo: 'Moved to {priority} · {name}',
     moveFailed: 'Move failed',
-    demotedTo: 'Previous sustained project "{name}" moved to {priority}',
-    subtaskPromotedTo: 'Subtask promoted to {priority}',
-    promotedTo: 'Promoted to {name} ({priority})',
-    promoteFailed: 'Promote failed',
   },
 
   reminders: {
@@ -456,19 +452,8 @@ export default {
     editDetails: 'Edit details',
     markComplete: 'Mark complete',
     cancelTask: 'Cancel task',
-    subtasksDone: '{done}/{total} subtasks done',
   },
 
-  rail: {
-    sHint: "Drop a task here, or type !S to start this week's sustained project",
-    fHint: 'Collect ideas · drop here or type !F',
-    nHint: 'Not now · drop here or type !N',
-    dragToPromote: 'Drag to any A-E/F/N zone to promote into a standalone task',
-    promoteHint: 'Promote to a standalone task (or drag to a zone)',
-    promoteTo: 'Promote to',
-    check: 'Mark complete',
-    uncheck: 'Uncheck',
-  },
 
   week: {
     title: 'This Week',
@@ -540,7 +525,6 @@ export default {
     restore: 'Restore',
     permanentDelete: 'Delete permanently',
     evolve: 'Evolve',
-    activate: 'Activate',
     moveToFuture: 'Move to Future Progress',
   },
 
@@ -563,7 +547,6 @@ export default {
     restored: 'Restored',
     error: 'Operation failed',
     returnedToPool: '“{name}” went back to the candidate pool — no tier had room',
-    demotedTo: '“{name}” moved down to {priority}',
     writeBackMissing: '“{name}” has no matching line in todo.txt; marked complete here only',
     writeBackAmbiguous: '“{name}” matched several lines in todo.txt; marked the first open one',
     writeBackFailed: 'Could not write back to todo.txt: {detail}',
@@ -582,7 +565,6 @@ export default {
     taskCancelled: 'Task cancelled',
     taskPermanentlyDeleted: 'Task permanently deleted',
     taskEvolved: 'Task evolved, new task created',
-    taskActivated: 'Task activated to {priority} zone',
     activateChooseTarget: 'Activate to which priority?',
     evolveTaskTitle: 'Evolve Task',
     evolveTaskHint: 'Complete current task and create an evolved version',
@@ -593,10 +575,7 @@ export default {
     drasticPriorityChange: 'Changing from {from} to {to} is a significant priority shift. Continue anyway?',
     movedTo: 'Moved to {priority} · {name}',
     moveFailed: 'Move failed',
-    promoteFailed: 'Promote failed',
-    promotedTo: 'Subtask promoted to {priority} · {name}',
     quotaFull: '{name} ({priority}) is at its quota of {quota}',
-    sustainedExists: 'You already have a Sustained project this week (replace it or finish the current one first)',
     dropHere: 'Drop task here',
   },
 

@@ -469,14 +469,23 @@ function migrateTasks(tasks: Task[]): Task[] {
   }));
 }
 
+// Settings this version no longer has. The spread below is deliberately
+// permissive — it carries unknown keys through so a downgrade cannot destroy
+// something a newer build wrote — but a key we have actually removed is dead
+// weight that would otherwise sit in the file forever.
+const REMOVED_SETTINGS = ['eZoneAgingDays', 'showFutureTasks'];
+
 /**
  * Migrate settings to add new fields
  */
 function migrateSettings(settings: any): AppData['settings'] {
   const defaults = createDefaultSettings();
+  const carried = { ...(settings ?? {}) };
+  for (const key of REMOVED_SETTINGS) delete carried[key];
+
   return {
     ...defaults,
-    ...settings,
+    ...carried,
     theme: settings?.theme ?? defaults.theme,
     language: settings?.language ?? defaults.language,
     autoArchiveDays: settings?.autoArchiveDays ?? defaults.autoArchiveDays,

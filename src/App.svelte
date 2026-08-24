@@ -363,6 +363,17 @@
     <!-- Low-completion micro-review prompt (W4b) -->
     <LowCompletionBanner />
 
+    <!-- Tasks the 4.0 -> 5.0 migration parked because there was no todo.txt to
+         write them to. This has to be visible in the main view: the data is
+         safe but invisible until it is exported, and a banner buried inside the
+         candidate-pool panel would only be seen by someone already looking. -->
+    {#if tasks.pendingExport.length > 0}
+      <button class="pending-export-banner" onclick={() => (isInboxOpen = true)}>
+        <span>{t('inbox.pendingExport', { count: tasks.pendingExport.length })}</span>
+        <span class="pending-export-cta">{t('inbox.exportNow')} →</span>
+      </button>
+    {/if}
+
     <!-- Badges Inline Section (Visible when badges open) -->
     {#if ui.isBadgesOpen}
       <div class="badges-inline-container">
@@ -914,5 +925,31 @@
     background: var(--bg-primary);
     box-shadow: 0 18px 48px rgba(0, 0, 0, 0.4);
     overflow: hidden;
+  }
+  .pending-export-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+    padding: 10px 14px;
+    margin-bottom: 10px;
+    border: 1px solid var(--priority-b-border, rgba(255, 146, 43, 0.28));
+    border-radius: 8px;
+    background: var(--priority-b-bg, rgba(255, 146, 43, 0.12));
+    color: var(--text-primary);
+    font-size: 13px;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .pending-export-banner:hover {
+    border-color: var(--priority-b-color, #ff922b);
+  }
+
+  .pending-export-cta {
+    flex-shrink: 0;
+    font-weight: 600;
+    color: var(--priority-b-color, #ff922b);
   }
 </style>

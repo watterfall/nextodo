@@ -2,10 +2,17 @@
 
 ## Project Overview
 
-**FocusFlow** is a focus-first task management desktop application that combines GTD (Getting Things Done) methodology with the Pomodoro technique. Built with Tauri, Svelte 5, and Rust, it provides cross-platform support with an A–F quota-based priority system (plus N/S long-horizon lanes), bi-daily work units, and periodic reviews.
+**FocusFlow** is a focus-first task management desktop application that combines GTD (Getting Things Done) methodology with the Pomodoro technique. Built with Tauri, Svelte 5, and Rust, it provides cross-platform support with an A–E quota-based priority system, bi-daily work units, and periodic reviews.
+
+**The candidate pool lives outside the app.** Unsorted and long-horizon work sits
+in a plain `todo.txt` — the same file [sleek](https://github.com/ransome1/sleek)
+edits — and FocusFlow pulls out of it into the current 2-day unit. That is why
+there are only five tiers: "not sorted yet" and "important, later" are states of
+a line in that file, not priorities here. **`docs/SLEEK-INTEROP.md` is the design
+record for this and is the authority for every format question.**
 
 **Version:** 2.0.0
-**Data Version:** 4.0
+**Data Version:** 5.0
 **License:** MIT
 
 ## Architecture
@@ -61,7 +68,7 @@
 |-----------|---------|
 | `App.svelte` | Root component, layout, routing |
 | `Sidebar.svelte` | Navigation, filters, project/context lists |
-| `ZoneRail.svelte` | S/F/N priority rail (Sustained / Idea Pool / Future lanes) |
+| `InboxPanel.svelte` | Candidate pool — pull lines out of the shared todo.txt into this unit |
 | `TaskCard.svelte` | Individual task display and actions |
 | `TaskForm.svelte` | Quick task input form |
 | `TaskInput.svelte` | Syntax-highlighted task input |
@@ -109,6 +116,9 @@
 | Recurrence | `recurrence.ts` | Recurring task logic |
 | Quota | `quota.ts` | i18n-aware quota validation (thin wrapper over quotaCore) |
 | QuotaCore | `quotaCore.ts` | Node-safe quota core shared with the CLI (no i18n/Svelte/Tauri deps) |
+| TodoTxt | `todotxt.ts` | todo.txt parse/serialize, byte-compatible with the parser sleek uses |
+| TodoFile | `todoFile.ts` | Reading/writing the shared todo.txt (Tauri command, localStorage in the browser) |
+| MigrateV5 | `migrateV5.ts` | The 4.0 → 5.0 data migration (Node-safe, so it is testable) |
 | CycleEngine | `cycleEngine.ts` | Dynamic cycle / low-completion merge logic |
 | Reminders | `reminders.ts` | Daily due/overdue notification scheduling |
 | Dnd | `dnd.ts` | Native HTML5 drag-and-drop payloads |
@@ -150,6 +160,12 @@ occurrence on `done`) — so those behaviours match the app exactly. It does **n
 run gamification (no XP or badges for a CLI completion) and does not touch
 `cycleState`; the app reconciles recurrence on next launch either way.
 
+**The CLI operates on the unit, not on the candidate pool.** It reads and writes
+`active.json` only; the shared `todo.txt` is the app's concern. That means a task
+added here has no `source`, so completing it writes no `x` anywhere — which is
+correct, because it never came from a line. For scripting against the candidate
+pool, edit the todo.txt directly: it is a text file, and that is the point.
+
 The CLI is covered by `cli/focusflow.test.ts`, which builds the bundle and drives
 it as a subprocess against a temp data file, and is type-checked via
 `tsc -p cli/tsconfig.json` (wired into `npm run typecheck`).
@@ -190,8 +206,10 @@ import TaskCard from '$lib/components/TaskCard.svelte';
 All types are centralized in `src/lib/types/index.ts`. Key types:
 
 - **Task** - Core task entity with priority, dates, pomodoros, recurrence, threshold dates
-- **Priority** - `'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H' | 'N' | 'S'` (A-E with quotas 1-5, F=Idea Pool ∞; N=Future Progress — long-term important, non-urgent, hidden by default (∞); S=Sustained Progress — one week-long project broken into subtasks (quota 1); G=completed, H=cancelled)
-- **ActivePriority** - `Exclude<Priority, 'G' | 'H' | 'N' | 'S'>` → the visible, quota-bearing A–F tiers
+- **Priority** - `'A' | 'B' | 'C' | 'D' | 'E' | 'G' | 'H'` (A-E with quotas 1-5; G=completed, H=cancelled)
+- **ActivePriority** - `Exclude<Priority, 'G' | 'H'>` → the quota-bearing A–E tiers
+- **TaskOrigin** - `'self' | 'assigned'` — proactive vs reactive, stored as an `@主` / `@被` context
+- **TaskSource** - where a pulled task's line lives in the todo.txt, for write-back
 - **AppData** - Combined in-memory data structure
 - **ActiveData** / **ArchiveData** / **PomodoroHistoryData** - Separated file structures
 - **Settings** - Application configuration
@@ -200,6 +218,7 @@ All types are centralized in `src/lib/types/index.ts`. Key types:
 - **Badge** / **BadgeId** - Gamification achievement types
 - **PomodoroSession** - Timer session with interruption tracking
 - **ViewMode** - `'today' | 'kanban' | 'list' | 'calendar'` (main view modes)
+- **Recurrence** - `{ n, unit: 'd'|'b'|'w'|'m'|'y', strict, customPattern?, nextDue }` — the todo.txt `rec:` grammar, one for one
 
 ### Factory Functions
 
@@ -219,21 +238,24 @@ createDefaultAppData(): AppData
 ```typescript
 // From types/index.ts
 isThresholdPassed(task: Task): boolean     // Check if threshold date allows visibility
-calculateFZoneAge(task: Task): number      // Units task has been in F-zone (Idea Pool)
-calculateEZoneAge(task: Task): number      // Backward compat alias for calculateFZoneAge
 isWithinRetentionPeriod(task: Task): boolean  // Check if completed task is in retention window
 getRetentionRemaining(task: Task): { hours, minutes } | null  // Remaining retention time
-isActivePriority(priority: Priority): boolean  // Check if priority is A-F (visible)
-isHiddenPriority(priority: Priority): boolean  // Check if priority is G or H (hidden)
+isActivePriority(priority: Priority): boolean  // A-E
+isOperablePriority(priority: Priority): boolean  // may the user act on it (== isActivePriority now)
+isHiddenPriority(priority: Priority): boolean  // G or H
+taskOrigin(task: Task): TaskOrigin | null  // read the @主 / @被 marker
+withOrigin(contexts: string[], origin): string[]  // set/replace/clear it
+countOrigins(tasks: Task[]): OriginCounts  // proactive / reactive / unmarked
 
 // From utils/quota.ts
 countActiveByPriority(tasks: Task[]): Record<Priority, number>
 getRemainingQuota(tasks: Task[]): Record<Priority, number>
 canAddTask(tasks: Task[], priority: Priority): boolean
 validateQuota(tasks: Task[], priority: Priority): string | null
-applyHighlanderRule(tasks: Task[], newTask: Task): Task[]  // handles A and S
-isSingleSlotPriority(priority: Priority): boolean          // A or S
-demotionTargetFor(tasks: Task[]): ActivePriority           // first tier with room
+applyHighlanderRule(tasks: Task[], newTask: Task): HighlanderResult  // { tasks, demoted, evicted }
+isSingleSlotPriority(priority: Priority): boolean          // A, and only A
+demotionTargetFor(tasks: Task[]): ActivePriority | null    // first tier with room, null when full
+suggestPriority(tasks: Task[]): ActivePriority | null      // null when the unit is full
 ```
 
 ## Data Architecture
@@ -244,7 +266,7 @@ Data is split across three JSON files for performance:
 
 | File | Content | Update Frequency |
 |------|---------|------------------|
-| `active.json` | Active tasks, trash, settings, reviews, badges | High (hot data) |
+| `active.json` | Active tasks, trash, settings, reviews, badges, pendingExport | High (hot data) |
 | `archive.json` | Completed/archived tasks | Low (cold data) |
 | `pomodoro_history.json` | Pomodoro session records | Medium |
 
@@ -277,32 +299,35 @@ Task content !A +project @context #tag 🍅3 ~2025-01-15 thr:2025-01-10 rec:1w
 
 | Syntax | Purpose | Example |
 |--------|---------|---------|
-| `!A-F`, `!N`, `!S` | Priority | `!A` … `!F`, `!N`, `!S`. Full-width `【A】` also works (CN IME) |
+| `!A-E` | Priority | `!A` … `!E`. Full-width `【A】` also works (CN IME) |
 | `+name` | Project tag | `+work`, `+personal` |
 | `@name` | Context tag | `@home`, `@office` |
 | `#name` | Custom tag | `#urgent`, `#review` |
 | `~date` | Due date | `~2025-01-15`, `~tomorrow`, `~+3d` |
 | `thr:date` | Threshold date (hidden until) | `thr:2025-01-10`, `thr:+7d` |
-| `rec:pattern` | Recurrence | `rec:1d`, `rec:1w`, `rec:mon,wed,fri` |
+| `rec:pattern` | Recurrence, todo.txt grammar | `rec:1d`, `rec:+1m`, `rec:b`, `rec:mon,wed,fri` |
 | `🍅N` or `pN` | Estimated pomodoros (must stand alone) | `🍅4`, `p3` — `step2` is **not** matched |
 | Emoji tags | Direct emoji classification | `⚡高能量`, `💻编码` |
 
-**Recurrence patterns:**
-- `1d`, `2d`, `3d` - Daily intervals
-- `1w`, `2w` - Weekly intervals
-- `1m`, `3m` - Monthly/quarterly
-- `mon,wed,fri` - Specific weekdays
-- `1m@15` - Monthly on 15th
-- `1m@last` - Monthly on last day
+**Recurrence** follows todo.txt's `rec:` grammar exactly, so a recurrence typed
+here and one imported from sleek behave identically:
+
+```
+rec:[+]<n?><d|b|w|m|y>
+```
+
+- `d` days, `b` **business** days (weekends skipped), `w` weeks, `m` months, `y` years
+- the count may be omitted: `rec:d` ≡ `rec:1d`
+- a leading `+` means **strict**: count from the previous DUE date rather than
+  the completion date. Loose is todo.txt's default and therefore ours.
+
+Two forms have no todo.txt syntax and live only here, in `customPattern`. They
+are never written into a shared file:
+
+- `mon,wed,fri` — weekday list
+- `1m@15`, `1m@last` — day-of-month selector
 
 ### Priority Quotas
-
-**Single-slot tiers.** A (the unit's core challenge) and S (the week's
-sustained project) each hold exactly one task. Adding a second one does NOT fail:
-`applyHighlanderRule` unseats the incumbent and moves it to the highest tier
-that still has room (B → C → D → E → F). Both tiers go through the same code
-path, so treat them identically at every call site — skip the quota check for
-either, and let Highlander place the loser.
 
 | Priority | Quota | Description |
 |----------|-------|-------------|
@@ -311,19 +336,57 @@ either, and let Highlander place the loser.
 | C | 3 | Standard tasks (1-2.5 hours, 2-5 pomodoros) |
 | D | 4 | Temporary/unplanned tasks (25-75 min, 1-3 pomodoros) |
 | E | 5 | Quick tasks (<15 min, 0-1 pomodoros) |
-| F | ∞ | Idea Pool - collect ideas, unsorted tasks |
-| N | ∞ | Future Progress - long-term important, non-urgent (hidden by default) |
-| S | 1 | Sustained Progress - one week-long project, broken into subtasks |
 | G | ∞ | Completed tasks (hidden, moved here on completion) |
 | H | ∞ | Cancelled tasks (hidden, moved here on cancellation) |
 
+**A unit holds 15 tasks and nothing more.** There is no unbounded tier — the
+Idea Pool is a todo.txt now — so an add that does not fit cannot be absorbed.
+This is the single most important consequence of the sleek alignment, and every
+quota call site has to handle it:
+
+- `demotionTargetFor` returns `null` when B–E are all full.
+- `applyHighlanderRule` returns `{ tasks, demoted, evicted }`. An **evicted**
+  incumbent has been removed from the unit and belongs back in the candidate
+  pool. Callers must say so, or the task simply looks like it vanished.
+- `suggestPriority` returns `null` for a full unit.
+
+**A is single-slot.** Adding a second A does NOT fail: Highlander unseats the
+incumbent and moves it to the highest tier that still has room (B → C → D → E),
+or evicts it. Skip the quota check for A and let Highlander place the loser.
+`isSingleSlotPriority` exists so this stays one rule; S used to be the other
+single-slot tier and is gone.
+
+**Over-quota is tolerated, not impossible.** An explicit restore (undoing a
+completion) may put a tier one over. Quota is a planning guardrail, not a data
+invariant — every reader clamps with `Math.max(0, …)` and the meter shows the
+overflow.
+
 Use quota utilities from `src/lib/utils/quota.ts` for validation.
+
+### The todo.txt candidate pool
+
+Unsorted and long-horizon work lives in a `todo.txt` shared with sleek, not in
+a tier here. `docs/SLEEK-INTEROP.md` is the authority; the rules that bite in code:
+
+- **Pulling copies, it does not move.** The source line stays where it is. A
+  pulled task keeps the verbatim line in `task.source.raw`, which is the only
+  identity todo.txt has — the line IS the record.
+- **Only two things are ever written back**, both single-token and idempotent:
+  `x <date>` on completion (with `(P)` moved into `pri:P`, exactly as sleek
+  does), and the `@主` / `@被` origin marker on pull.
+- **Never guess a source line.** `findSourceLine` matches verbatim first, then
+  on tag-stripped content, and returns `-1` otherwise. Writing to a
+  near-miss rewrites somebody else's task; not writing back is the cheaper
+  failure, and the user is told.
+- `todotxt.ts` transcribes jstodotxt's grammar, not the todo.txt spec prose.
+  The two differ in edge cases and it is sleek's behaviour that has to
+  round-trip.
 
 ### Completed Task Retention
 
 Completed tasks (G priority) stay visible, struck through, until **the end of the
 2-day unit they were completed in** — not for a per-priority number of hours. A
-task finished on the Sunday of a Sun–Mon unit stays visible through Monday
+task finished on the Monday of a Mon–Tue unit stays visible through Tuesday
 23:59, regardless of whether it was an A or an E.
 
 Use `isWithinRetentionPeriod()` and `getRetentionRemaining()` from types to check
@@ -337,8 +400,12 @@ cancelled (H) tasks after 2 days.
 ### Bi-Daily Units
 
 Time is organized into bi-daily units:
-- Sun-Mon, Tue-Wed, Thu-Fri (work units)
-- Saturday (review day)
+- Mon-Tue, Wed-Thu, Fri-Sat (work units)
+- Sunday (review day)
+
+The week therefore runs Monday-to-Sunday, and `getWeekUnits` / `isThisWeek`
+both anchor on Monday. Anchoring one of them on Sunday would put the review day
+in a different week from the three units it reviews.
 
 See `src/lib/utils/unitCalc.ts` for unit calculations.
 
@@ -407,6 +474,15 @@ migrate_legacy_data(app_handle) -> Result<bool>
 
 // Archive operations
 append_archive_tasks(app_handle, new_tasks_json: &str) -> Result<()>
+
+// The shared todo.txt candidate pool.
+//
+// These deliberately do NOT go through tauri-plugin-fs: it scopes paths at
+// build time, and this path is chosen by the user at runtime. Using the plugin
+// would mean a blanket `fs:allow-*-recursive` capability opening the whole
+// filesystem to the webview.
+read_external_file(path: String) -> Result<Option<String>>   // None when absent
+write_external_file(path: String, content: String) -> Result<()>  // temp + rename, same dir
 
 // System
 get_system_info() -> SystemInfo
@@ -478,7 +554,11 @@ way. If you add date logic, never format via `toISOString()`; use
 
 Prefer testing the Node-safe modules (`quotaCore.ts`, `parser.ts`, `recurrence.ts`, `unitCalc.ts`) directly — they have no Svelte/Tauri dependencies. `src/lib/i18n/parity.test.ts` asserts the two locale files expose identical key sets; without it, a key missing from `en-US` silently renders Chinese, because components fall back with `t('x') || '中文'`.
 
-Not yet covered by tests: `storage.ts` (persistence, migrations, atomic writes) and the Svelte stores. For E2E, Playwright remains the suggested future addition.
+Not yet covered by tests: `storage.ts`'s IO paths and the Svelte stores. The
+logic that used to hide inside them has been pulled into Node-safe modules that
+are tested directly — `migrateV5.ts` (the whole 4.0 → 5.0 migration),
+`todotxt.ts` (parsing and write-back primitives), `quotaCore.ts`. For E2E,
+Playwright remains the suggested future addition.
 
 ## Important Considerations
 
@@ -529,6 +609,7 @@ Tauri capabilities (in `src-tauri/capabilities/default.json`):
 - `fs:allow-appdata-read-recursive` - Read from app data
 - `fs:allow-appdata-write-recursive` - Write to app data
 - `notification:default` - System notifications
+- `dialog:allow-open` - File picker for choosing the todo.txt (open only; no save dialog)
 
 ### Keyboard Shortcuts
 
@@ -571,8 +652,13 @@ Theme is stored in settings and applied via CSS custom properties in `app.css`. 
 2. Update factory functions (e.g., `createDefaultActiveData`)
 3. Add migration logic in `src/lib/utils/storage.ts`:
    - `migrateTasks()` for task field additions
-   - `migrateSettings()` for settings field additions
-   - `migrateData()` for version-based migrations
+   - `migrateSettings()` for settings field additions (add a removed key to
+     `REMOVED_SETTINGS` so it does not sit in the file forever)
+   - `upgradeToV5()` for the current version step — note that `migrateData()`
+     only handles the legacy single-file layout, so a migration wired there
+     alone never runs for a real user
+   - Anything non-trivial belongs in its own Node-safe module (see
+     `migrateV5.ts`) so it can be tested without Tauri
 4. Update Rust serialization if backend handles the data
 
 ### Adding a New Store
@@ -607,23 +693,29 @@ Theme is stored in settings and applied via CSS custom properties in `app.css`. 
 
 | File | Purpose | Approx Lines |
 |------|---------|--------------|
-| `src/App.svelte` | Root component, layout, routing | ~865 |
-| `src/lib/stores/tasks.svelte.ts` | Central state management | ~1140 |
+| `docs/SLEEK-INTEROP.md` | Design record for the todo.txt interop — the authority | ~330 |
+| `src/App.svelte` | Root component, layout, routing | ~955 |
+| `src/lib/stores/tasks.svelte.ts` | Central state, candidate pool, write-back | ~1215 |
 | `src/lib/stores/ui.svelte.ts` | UI state, modals, keyboard shortcuts | ~250 |
-| `src/lib/utils/storage.ts` | Data persistence layer | ~660 |
-| `src/lib/utils/parser.ts` | Task input parsing | ~410 |
-| `src/lib/utils/quotaCore.ts` | Node-safe quota core (shared with CLI) | ~165 |
-| `src/lib/utils/cycleEngine.ts` | Dynamic cycle / merge logic | ~155 |
+| `src/lib/utils/storage.ts` | Data persistence layer | ~740 |
+| `src/lib/utils/todotxt.ts` | todo.txt parse/serialize (sleek-compatible) | ~410 |
+| `src/lib/utils/recurrence.ts` | Recurrence engine (todo.txt `rec:` grammar) | ~395 |
+| `src/lib/utils/parser.ts` | Task input parsing | ~325 |
+| `src/lib/utils/unitCalc.ts` | Bi-daily unit calculations | ~285 |
+| `src/lib/utils/quotaCore.ts` | Node-safe quota core (shared with CLI) | ~220 |
+| `src/lib/utils/cycleEngine.ts` | Dynamic cycle / merge logic | ~175 |
+| `src/lib/utils/migrateV5.ts` | 4.0 → 5.0 data migration | ~170 |
 | `src/lib/utils/motion.ts` | Animation tokens | ~135 |
-| `src/lib/types/index.ts` | Type definitions | ~590 |
-| `src/lib/components/Sidebar.svelte` | Navigation and filters | ~1180 |
-| `src/lib/components/ZoneRail.svelte` | S/F/N priority rail | ~815 |
-| `src/lib/components/TodayView.svelte` | Today-focused task view | ~915 |
+| `src/lib/utils/todoFile.ts` | Shared todo.txt file access | ~80 |
+| `src/lib/types/index.ts` | Type definitions | ~610 |
+| `src/lib/components/Sidebar.svelte` | Navigation and filters | ~850 |
+| `src/lib/components/TodayView.svelte` | Today-focused task view | ~760 |
+| `src/lib/components/InboxPanel.svelte` | Candidate pool / pull surface | ~480 |
 | `src/lib/components/CalendarView.svelte` | Monthly calendar view | ~375 |
 | `src/lib/components/HistoryModal.svelte` | Completed/cancelled tasks viewer | ~395 |
 | `src/lib/stores/gamification.svelte.ts` | Badge system | ~230 |
-| `cli/focusflow.ts` | Headless focusflow CLI | ~255 |
-| `src-tauri/src/commands.rs` | Backend IPC handlers | ~415 |
+| `cli/focusflow.ts` | Headless focusflow CLI | ~280 |
+| `src-tauri/src/commands.rs` | Backend IPC handlers | ~505 |
 | `src-tauri/src/watcher.rs` | File system watcher | ~80 |
 
 ## Rust Dependencies
@@ -635,6 +727,7 @@ Key dependencies in `src-tauri/Cargo.toml`:
 | `tauri` | Desktop application framework |
 | `tauri-plugin-fs` | File system access |
 | `tauri-plugin-notification` | System notifications |
+| `tauri-plugin-dialog` | File picker (open only) |
 | `serde` / `serde_json` | JSON serialization |
 | `chrono` | Date/time handling |
 | `notify` | File system watching |
@@ -651,3 +744,4 @@ Key npm packages:
 | `@tauri-apps/api` | Tauri frontend bindings |
 | `@tauri-apps/plugin-fs` | File system plugin |
 | `@tauri-apps/plugin-notification` | Notification plugin |
+| `@tauri-apps/plugin-dialog` | File picker for choosing the shared todo.txt |
