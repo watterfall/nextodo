@@ -146,12 +146,17 @@ function cmdResolve(kind: 'done' | 'cancel', positional: string[], path: string)
   // Mirror the app: completing a recurring task regenerates it, cancelling does
   // not, and only completion sets `completed`. Cancelled tasks keep it false so
   // both surfaces write the same record shape.
-  const next = kind === 'done' ? createNextOccurrence(task) : null;
+  //
+  // One instant serves both the stamp and the next occurrence — a loose
+  // recurrence counts from the completion date, and the regeneration runs
+  // before `completedAt` exists on the task.
+  const resolvedAt = new Date();
+  const next = kind === 'done' ? createNextOccurrence(task, resolvedAt) : null;
 
   task.originalPriority = task.priority;
   task.priority = kind === 'done' ? 'G' : 'H';
   task.completed = kind === 'done';
-  task.completedAt = new Date().toISOString();
+  task.completedAt = resolvedAt.toISOString();
 
   if (next) data.tasks.push(next);
   save(path, data);

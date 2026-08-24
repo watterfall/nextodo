@@ -4,6 +4,7 @@ import {
   createTaskFromInput,
   formatTaskDisplay,
   calculateNextDue,
+  parseRecurrence,
 } from './parser';
 import { createEmptyTask } from '$lib/types';
 import type { Task } from '$lib/types';
@@ -153,18 +154,23 @@ describe('parseTaskInput — dates', () => {
 describe('parseTaskInput — recurrence', () => {
   it('parses a standard weekly pattern', () => {
     const r = parseTaskInput('standup rec:1w');
-    expect(r.recurrence).toEqual({ pattern: '1w', nextDue: null });
+    expect(r.recurrence).toEqual({ n: 1, unit: 'w', strict: false, nextDue: null });
+  });
+
+  it('accepts the todo.txt forms so sleek syntax works verbatim', () => {
+    expect(parseTaskInput('standup rec:d').recurrence).toEqual({ n: 1, unit: 'd', strict: false, nextDue: null });
+    expect(parseTaskInput('rent rec:+1m').recurrence).toEqual({ n: 1, unit: 'm', strict: true, nextDue: null });
+    expect(parseTaskInput('report rec:b').recurrence).toEqual({ n: 1, unit: 'b', strict: false, nextDue: null });
   });
 
   it('parses a weekday-list custom pattern', () => {
     const r = parseTaskInput('gym rec:mon,wed,fri');
-    expect(r.recurrence?.pattern).toBeNull();
     expect(r.recurrence?.customPattern).toBe('mon,wed,fri');
   });
 
   it('keeps the @day part of rec:1m@15 instead of leaking it into contexts', () => {
     const r = parseTaskInput('rent rec:1m@15');
-    expect(r.recurrence?.pattern).toBe('1m');
+    expect(r.recurrence?.unit).toBe('m');
     expect(r.recurrence?.customPattern).toBe('1m@15');
     expect(r.contexts).toEqual([]);
   });
@@ -189,7 +195,7 @@ describe('parseTaskInput — combined', () => {
     expect(r.estimatedPomodoros).toBe(5);
     expect(r.dueDate).toBe('2026-01-20');
     expect(r.thresholdDate).toBe('2026-01-10');
-    expect(r.recurrence?.pattern).toBe('1w');
+    expect(r.recurrence).toEqual({ n: 1, unit: 'w', strict: false, nextDue: null });
   });
 });
 
@@ -224,43 +230,12 @@ describe('formatTaskDisplay', () => {
   });
 });
 
-describe('calculateNextDue (parser recurrence engine)', () => {
-  it('advances standard day/week patterns', () => {
-    expect(calculateNextDue({ pattern: '1d', nextDue: null }, new Date(2026, 0, 4))).toBe('2026-01-05');
-    expect(calculateNextDue({ pattern: '2w', nextDue: null }, new Date(2026, 0, 4))).toBe('2026-01-18');
-    expect(calculateNextDue({ pattern: '1w', nextDue: null }, new Date(2026, 0, 4))).toBe('2026-01-11');
-  });
-
-  it('advances a month pattern', () => {
-    expect(calculateNextDue({ pattern: '1m', nextDue: null }, new Date(2026, 0, 15))).toBe('2026-02-15');
-  });
-
-  it('resolves a weekday custom pattern to the next matching day', () => {
-    // From Sunday (day 0) → next is Monday
-    expect(
-      calculateNextDue({ pattern: null, customPattern: 'mon,wed,fri', nextDue: null }, new Date(2026, 0, 4))
-    ).toBe('2026-01-05');
-    // From Friday (day 5) → wraps to Monday of next week
-    expect(
-      calculateNextDue({ pattern: null, customPattern: 'mon,wed,fri', nextDue: null }, new Date(2026, 0, 9))
-    ).toBe('2026-01-12');
-  });
-
-  it('resolves 1m@15 to the 15th of next month', () => {
-    expect(
-      calculateNextDue({ pattern: '1m', customPattern: '1m@15', nextDue: null }, new Date(2026, 0, 20))
-    ).toBe('2026-02-15');
-  });
-
-  it('resolves 1m@last to the last day of next month', () => {
-    expect(
-      calculateNextDue({ pattern: '1m', customPattern: '1m@last', nextDue: null }, new Date(2026, 0, 10))
-    ).toBe('2026-02-28');
-  });
-
-  it('leaves the passed-in fromDate untouched', () => {
-    const from = new Date(2026, 0, 4);
-    calculateNextDue({ pattern: '1d', nextDue: null }, from);
-    expect(from.getDate()).toBe(4);
+describe('re-exported recurrence engine', () => {
+  // The engine itself is covered in recurrence.test.ts. All this needs to check
+  // is that `from './parser'` still reaches it, since callers import it from
+  // both places and a broken re-export would be silent at runtime.
+  it('exposes the same calculateNextDue as ./recurrence', () => {
+    expect(calculateNextDue(parseRecurrence('1d'), new Date(2026, 0, 4))).toBe('2026-01-05');
+    expect(parseRecurrence('+3m')).toEqual({ n: 3, unit: 'm', strict: true, nextDue: null });
   });
 });

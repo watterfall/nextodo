@@ -5,7 +5,7 @@
   import { openEditModal, getUIStore, showToast, setDraggingTask } from '$lib/stores/ui.svelte';
   import { clearDragPayload, startTaskDrag } from '$lib/utils/dnd';
   import { startPomodoro, getPomodoroStore } from '$lib/stores/pomodoro.svelte';
-  import { recurrenceLabelKey } from '$lib/utils/recurrence';
+  import { recurrenceLabel } from '$lib/utils/recurrence';
   import { isOverdue, parseISODate } from '$lib/utils/unitCalc';
   import { getI18nStore } from '$lib/i18n';
 
@@ -22,6 +22,13 @@
   const ui = getUIStore();
   const pomodoro = getPomodoroStore();
   const i18n = getI18nStore();
+
+  // Recurrence renders through an i18n key + params (e.g. "every {n} days"),
+  // because the engine is Node-safe and cannot reach the i18n store itself.
+  let recurrenceText = $derived.by(() => {
+    const label = recurrenceLabel(task.recurrence);
+    return label ? i18n.t(label.key, label.params) : '';
+  });
 
   let isActive = $derived(pomodoro.activeTaskId === task.id);
   let isFocusMode = $derived(pomodoro.state === 'work' && pomodoro.activeTaskId !== null);
@@ -344,9 +351,9 @@
           {dueDateLabel}
         </span>
       {/if}
-      {#if task.recurrence?.pattern}
+      {#if recurrenceText}
         <span class="recurrence">
-          {i18n.t(recurrenceLabelKey(task.recurrence.pattern))}
+          {recurrenceText}
         </span>
       {/if}
     </div>

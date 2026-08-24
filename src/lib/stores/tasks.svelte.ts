@@ -278,9 +278,15 @@ export async function completeTask(taskId: string): Promise<void> {
   const taskToComplete = appData.tasks.find(t => t.id === taskId && isOperablePriority(t.priority));
   let nextRecurringTask: Task | null = null;
 
+  // One completion instant, used both to stamp the task and to seed the next
+  // occurrence. A loose recurrence counts from the completion date, and the
+  // regeneration happens before `completedAt` is written — so the moment has to
+  // be passed in explicitly rather than read back off the task.
+  const completedOn = new Date();
+
   // Create next occurrence before modifying the task
-  if (taskToComplete?.recurrence?.pattern && taskToComplete.dueDate) {
-    nextRecurringTask = createNextOccurrence(taskToComplete);
+  if (taskToComplete) {
+    nextRecurringTask = createNextOccurrence(taskToComplete, completedOn);
   }
 
   // Record task completion for gamification (before modifying priority)
@@ -1074,11 +1080,11 @@ const futureTasksCount = $derived(
 );
 
 const dailyRecurringCount = $derived(
-  activeTasks.filter(t => t.recurrence?.pattern === '1d').length
+  activeTasks.filter(t => t.recurrence?.n === 1 && t.recurrence.unit === 'd').length
 );
 
 const weeklyRecurringCount = $derived(
-  activeTasks.filter(t => t.recurrence?.pattern === '1w').length
+  activeTasks.filter(t => t.recurrence?.n === 1 && t.recurrence.unit === 'w').length
 );
 
 const completedTodayCount = $derived(

@@ -1,9 +1,13 @@
-import type { Task, Priority, Recurrence, RecurrencePattern } from '$lib/types';
+import type { Task, Priority, Recurrence } from '$lib/types';
 import { createEmptyTask } from '$lib/types';
+import { parseRecurrence } from './recurrence';
 
 // The recurrence engine lives in ./recurrence — re-exported here so existing
-// `from './parser'` importers keep working against one implementation.
-export { calculateNextDue } from './recurrence';
+// `from './parser'` importers keep working against one implementation. The
+// `rec:` operand is parsed there too: this file used to carry a second, subtly
+// different table of patterns, which is exactly the drift the consolidation
+// was meant to end.
+export { calculateNextDue, parseRecurrence } from './recurrence';
 
 interface ParsedTask {
   content: string;
@@ -211,53 +215,6 @@ function parseDateString(dateStr: string): string | null {
     }
 
     return formatDate(date);
-  }
-
-  return null;
-}
-
-/**
- * Parse recurrence pattern
- */
-function parseRecurrence(patternStr: string): Recurrence | null {
-  const lowerStr = patternStr.toLowerCase();
-
-  // Standard patterns
-  const standardPatterns: Record<string, RecurrencePattern> = {
-    '1d': '1d', 'daily': '1d', '每天': '1d',
-    '2d': '2d', '隔天': '2d',
-    '3d': '3d',
-    '1w': '1w', 'weekly': '1w', '每周': '1w',
-    '2w': '2w', 'biweekly': '2w', '隔周': '2w',
-    '1m': '1m', 'monthly': '1m', '每月': '1m',
-    '3m': '3m', 'quarterly': '3m', '每季': '3m'
-  };
-
-  if (standardPatterns[lowerStr]) {
-    return {
-      pattern: standardPatterns[lowerStr],
-      nextDue: null
-    };
-  }
-
-  // Custom patterns like mon,wed,fri or 1m@15 or 3m@last
-  const weekdayMatch = lowerStr.match(/^(mon|tue|wed|thu|fri|sat|sun)(,(mon|tue|wed|thu|fri|sat|sun))*$/);
-  if (weekdayMatch) {
-    return {
-      pattern: null,
-      customPattern: lowerStr,
-      nextDue: null
-    };
-  }
-
-  // Monthly on specific day: 1m@15 (15th of each month)
-  const monthlyDayMatch = lowerStr.match(/^(\d+)m@(\d+|last)$/);
-  if (monthlyDayMatch) {
-    return {
-      pattern: monthlyDayMatch[1] === '1' ? '1m' : '3m',
-      customPattern: lowerStr,
-      nextDue: null
-    };
   }
 
   return null;

@@ -6,6 +6,7 @@ import {
   createDefaultPomodoroHistoryData,
   createDefaultSettings
 } from '$lib/types';
+import { migrateRecurrence } from './recurrence';
 
 type DataFileType = 'active' | 'archive' | 'pomodoro_history';
 type PersistedFileType = 'active' | 'pomodoro_history';
@@ -411,7 +412,9 @@ function migrateTasks(tasks: Task[]): Task[] {
     contexts: task.contexts.map(c => c.replace(/^@/, '')),
     customTags: task.customTags.map(t => t.replace(/^#/, '')),
     thresholdDate: task.thresholdDate ?? null,
-    recurrence: task.recurrence ?? null,
+    // Recurrence was reshaped to match the todo.txt `rec:` grammar; the old
+    // `{ pattern, customPattern }` pair collapses into `{ n, unit, strict }`.
+    recurrence: migrateRecurrence(task.recurrence),
     pomodoros: task.pomodoros ?? { estimated: 0, completed: 0 }
   }));
 }

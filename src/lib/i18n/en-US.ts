@@ -676,14 +676,23 @@ export default {
     },
   },
   recurrence: {
-    pattern: {
-      '1d': 'Daily',
-      '2d': 'Every 2 days',
-      '3d': 'Every 3 days',
-      '1w': 'Weekly',
-      '2w': 'Every 2 weeks',
-      '1m': 'Monthly',
-      '3m': 'Quarterly',
+    // n === 1 reads better with its own wording than "Every 1 day".
+    every: {
+      d: 'Daily',
+      b: 'Every business day',
+      w: 'Weekly',
+      m: 'Monthly',
+      y: 'Yearly',
     },
+    everyN: {
+      d: 'Every {n} days',
+      b: 'Every {n} business days',
+      w: 'Every {n} weeks',
+      m: 'Every {n} months',
+      y: 'Every {n} years',
+    },
+    weekdays: 'Every {days}',
+    dayOfMonth: 'Monthly on the {day}th',
+    lastDayOfMonth: 'Last day of the month',
   },
 };

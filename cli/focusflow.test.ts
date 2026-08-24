@@ -83,14 +83,14 @@ describe('focusflow CLI', () => {
     expect(task.completedAt).not.toBeNull();
   });
 
-  it('regenerates a recurring task on done, like the app does', () => {
+  it('regenerates a strict recurring task from its previous due date', () => {
     seed([
       {
         ...createEmptyTask('C'),
         id: 'standup',
         content: 'daily standup',
         dueDate: '2026-03-15',
-        recurrence: { pattern: '1d', nextDue: null },
+        recurrence: { n: 1, unit: 'd', strict: true, nextDue: null },
       },
     ]);
 
@@ -106,6 +106,31 @@ describe('focusflow CLI', () => {
     expect(next.content).toBe('daily standup');
     expect(next.dueDate).toBe('2026-03-16');
     expect(next.completed).toBe(false);
+  });
+
+  it('regenerates a loose recurring task from the completion date', () => {
+    // todo.txt's default. The CLI stamps completedAt *after* it regenerates, so
+    // this also pins that the completion instant is threaded through explicitly
+    // rather than read back off the task.
+    seed([
+      {
+        ...createEmptyTask('C'),
+        id: 'chore',
+        content: 'water plants',
+        dueDate: '2020-01-01', // long overdue; a loose recurrence must ignore it
+        recurrence: { n: 1, unit: 'd', strict: false, nextDue: null },
+      },
+    ]);
+
+    run('done', 'chore');
+
+    const tomorrow = new Date();
+    tomorrow.setHours(0, 0, 0, 0);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const expected = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, '0')}-${String(tomorrow.getDate()).padStart(2, '0')}`;
+
+    const next = read().tasks.find((t) => t.id !== 'chore')!;
+    expect(next.dueDate).toBe(expected);
   });
 
   it('cancels without marking the task completed', () => {
@@ -126,7 +151,7 @@ describe('focusflow CLI', () => {
         id: 'standup',
         content: 'daily standup',
         dueDate: '2026-03-15',
-        recurrence: { pattern: '1d', nextDue: null },
+        recurrence: { n: 1, unit: 'd', strict: true, nextDue: null },
       },
     ]);
 

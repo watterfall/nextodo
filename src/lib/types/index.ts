@@ -12,15 +12,24 @@ export type SustainedPriority = Extract<Priority, 'S'>;
 export type HiddenPriority = Extract<Priority, 'G' | 'H'>;
 export type ActivePriorityCounts = Record<ActivePriority, number>;
 
-// Recurrence patterns - extended to support more patterns
-export type RecurrencePattern =
-  | '1d' | '2d' | '3d' | '1w' | '2w' | '1m' | '3m'
-  | null;
+// Recurrence, aligned 1:1 with the todo.txt `rec:` attribute so that a
+// recurrence typed here and one imported from a sleek todo.txt behave
+// identically. Grammar:  rec:[+]<n?><d|b|w|m|y>   e.g. rec:1d rec:3m rec:+1m rec:b
+export type RecurrenceUnit = 'd' | 'b' | 'w' | 'm' | 'y';
 
-// Extended recurrence for flexible patterns
 export interface Recurrence {
-  pattern: RecurrencePattern;
-  // For patterns like mon,wed,fri or 1m@15
+  // Interval count, always >= 1. todo.txt lets the number be omitted
+  // (`rec:d` means daily), which parses to n = 1.
+  n: number;
+  // d = days, b = business days (weekends skipped), w = weeks, m = months, y = years
+  unit: RecurrenceUnit;
+  // todo.txt's `rec:+` prefix: count the next occurrence from the previous DUE
+  // date instead of the completion date. Loose (false) is the todo.txt default
+  // and what sleek does, so it is the default for new tasks here too.
+  strict: boolean;
+  // Refinements todo.txt has no syntax for, so they stay FocusFlow-side and are
+  // never written back to a shared file: `mon,wed,fri` (weekday list) and
+  // `1m@15` / `1m@last` (day-of-month selector).
   customPattern?: string;
   nextDue: string | null;
 }

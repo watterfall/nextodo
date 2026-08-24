@@ -6,6 +6,7 @@
   import { closeEditModal, showToast, showConfirmation } from '$lib/stores/ui.svelte';
   import { getI18nStore } from '$lib/i18n';
   import { highlightSyntax } from '$lib/utils/parser';
+  import { formatRecurrence, parseRecurrence } from '$lib/utils/recurrence';
 
   interface Props {
     task: Task;
@@ -29,7 +30,7 @@
   let dueDate = $state(task.dueDate || '');
   let thresholdDate = $state(task.thresholdDate || '');
   let estimatedPomodoros = $state<number>(task.pomodoros.estimated);
-  let recurrence = $state(task.recurrence?.pattern || task.recurrence?.customPattern || '');
+  let recurrence = $state(formatRecurrence(task.recurrence));
   let contentInput: HTMLInputElement | null = null;
 
   onMount(() => {
@@ -205,16 +206,11 @@
       ? [...tags.trim().split(/[,\s]+/).filter(Boolean), ...existingEnergyTags]
       : existingEnergyTags;
 
-    // Build recurrence object
-    let recurrenceObj = null;
-    if (recurrence) {
-      const standardPatterns = ['1d', '2d', '3d', '1w', '2w', '1m', '3m'];
-      if (standardPatterns.includes(recurrence)) {
-        recurrenceObj = { pattern: recurrence as any, nextDue: null };
-      } else {
-        recurrenceObj = { pattern: null, customPattern: recurrence, nextDue: null };
-      }
-    }
+    // One parser for every entry point. The hand-rolled branch this replaces
+    // treated any unrecognised string as a `customPattern`, so a typo became a
+    // recurrence that could never resolve to a date; parseRecurrence returns
+    // null instead.
+    const recurrenceObj = parseRecurrence(recurrence);
 
     const updates: Partial<Task> = {
       content: content.trim(),

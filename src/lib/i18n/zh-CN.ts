@@ -676,14 +676,23 @@ export default {
     },
   },
   recurrence: {
-    pattern: {
-      '1d': '每日',
-      '2d': '每2天',
-      '3d': '每3天',
-      '1w': '每周',
-      '2w': '每两周',
-      '1m': '每月',
-      '3m': '每季度',
+    // n === 1 reads better with its own wording than "每 1 天".
+    every: {
+      d: '每日',
+      b: '每个工作日',
+      w: '每周',
+      m: '每月',
+      y: '每年',
     },
+    everyN: {
+      d: '每 {n} 天',
+      b: '每 {n} 个工作日',
+      w: '每 {n} 周',
+      m: '每 {n} 个月',
+      y: '每 {n} 年',
+    },
+    weekdays: '每周 {days}',
+    dayOfMonth: '每月 {day} 号',
+    lastDayOfMonth: '每月最后一天',
   },
 };
