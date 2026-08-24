@@ -27,6 +27,10 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_notification::init())
+        // Only used to let the user pick their todo.txt / done.txt. The files
+        // themselves are read and written by read_external_file /
+        // write_external_file, not by a filesystem plugin.
+        .plugin(tauri_plugin_dialog::init())
         .manage(watcher_state.clone())
         .setup(move |app| {
             // Start file watcher for auto-reload
@@ -51,7 +55,9 @@ fn main() {
             commands::trigger_reload,
             commands::append_archive_tasks,
             commands::suspend_watcher,
-            commands::resume_watcher
+            commands::resume_watcher,
+            commands::read_external_file,
+            commands::write_external_file
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

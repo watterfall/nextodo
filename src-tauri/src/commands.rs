@@ -411,3 +411,96 @@ pub fn resume_watcher(watcher_state: State<'_, Arc<WatcherState>>) -> Result<(),
     println!("File watcher resumed");
     Ok(())
 }
+
+// ---------------------------------------------------------------------------
+// External file access (the shared todo.txt candidate pool)
+// ---------------------------------------------------------------------------
+//
+// These deliberately do NOT go through tauri-plugin-fs. That plugin scopes
+// every path against an allowlist declared at build time, and the file we need
+// is one the user picks at runtime — it lives wherever their sleek todo.txt
+// lives. Keeping the access here means the scope rule is stated explicitly in
+// one place, instead of granting a blanket `fs:allow-*-recursive` capability
+// that would open the whole filesystem to the webview.
+
+/// Reject a path that is not a plain file we are willing to touch.
+///
+/// The webview supplies this path, so it is untrusted input even when it
+/// normally arrives from a file picker.
+fn validate_external_path(path: &str, must_exist: bool) -> Result<PathBuf, String> {
+    if path.trim().is_empty() {
+        return Err("Path is empty".to_string());
+    }
+
+    let candidate = PathBuf::from(path);
+    if !candidate.is_absolute() {
+        return Err("Path must be absolute".to_string());
+    }
+
+    if candidate.exists() {
+        if !candidate.is_file() {
+            return Err(format!("Not a file: {}", path));
+        }
+    } else if must_exist {
+        return Err(format!("File not found: {}", path));
+    }
+
+    Ok(candidate)
+}
+
+/// Read a UTF-8 text file the user has pointed the app at.
+///
+/// Returns None when the file does not exist yet, so a freshly configured but
+/// not-yet-created todo.txt reads as "empty" rather than as an error.
+#[tauri::command]
+pub fn read_external_file(path: String) -> Result<Option<String>, String> {
+    let file_path = validate_external_path(&path, false)?;
+
+    if !file_path.exists() {
+        return Ok(None);
+    }
+
+    fs::read_to_string(&file_path)
+        .map(Some)
+        .map_err(|e| format!("Failed to read {}: {}", path, e))
+}
+
+/// Write a UTF-8 text file atomically, via a temp file in the same directory.
+///
+/// Same-directory matters: a rename across filesystems is not atomic, and the
+/// user's todo.txt may well sit on a different volume from the app data dir.
+#[tauri::command]
+pub fn write_external_file(path: String, content: String) -> Result<(), String> {
+    let file_path = validate_external_path(&path, false)?;
+
+    let parent = file_path
+        .parent()
+        .ok_or_else(|| format!("Path has no parent directory: {}", path))?;
+    if !parent.exists() {
+        return Err(format!("Directory does not exist: {}", parent.display()));
+    }
+
+    let temp_path = parent.join(format!(
+        ".{}.focusflow.tmp",
+        file_path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("todo.txt")
+    ));
+
+    {
+        let mut temp_file = fs::File::create(&temp_path)
+            .map_err(|e| format!("Failed to create temp file: {}", e))?;
+        temp_file
+            .write_all(content.as_bytes())
+            .map_err(|e| format!("Failed to write temp file: {}", e))?;
+        temp_file
+            .sync_all()
+            .map_err(|e| format!("Failed to sync temp file: {}", e))?;
+    }
+
+    fs::rename(&temp_path, &file_path).map_err(|e| {
+        let _ = fs::remove_file(&temp_path);
+        format!("Failed to replace {}: {}", path, e)
+    })
+}

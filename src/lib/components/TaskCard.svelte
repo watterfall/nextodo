@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Task, Priority } from '$lib/types';
-  import { PRIORITY_CONFIG, isThresholdPassed, isActivePriority, isOperablePriority } from '$lib/types';
+  import { PRIORITY_CONFIG, ORIGIN_CONTEXT, isThresholdPassed, isActivePriority, isOperablePriority, taskOrigin } from '$lib/types';
   import { getTasksStore, completeTask, uncompleteTask, cancelTask, changePriority, evolveTask, toggleFilterAttribute, isFilterActive } from '$lib/stores/tasks.svelte';
   import { openEditModal, getUIStore, showToast, setDraggingTask } from '$lib/stores/ui.svelte';
   import { clearDragPayload, startTaskDrag } from '$lib/utils/dnd';
@@ -157,6 +157,13 @@
     !!tasks.settings.focusProject && task.projects.includes(tasks.settings.focusProject)
   );
 
+  // Proactive / reactive. Stored as an @主 / @被 context so it round-trips
+  // through the shared todo.txt, but shown as a localized chip — and filtered
+  // out of the ordinary context list below, or it would appear twice.
+  const origin = $derived(taskOrigin(task));
+  const originMarkers = Object.values(ORIGIN_CONTEXT);
+  const plainContexts = $derived(task.contexts.filter(c => !originMarkers.includes(c)));
+
   // Check if task is dormant (has threshold date in the future)
   const isDormant = $derived(!isThresholdPassed(task));
   const thresholdLabel = $derived(task.thresholdDate ? i18n.getRelativeDate(parseISODate(task.thresholdDate)) : null);
@@ -279,7 +286,16 @@
               onclick={(e) => { e.stopPropagation(); toggleFilterAttribute('project', project); }}
             >{displayInfo.display}</button>
           {/each}
-          {#each task.contexts as context}
+          {#if origin}
+            <button
+              class="meta-tag origin"
+              class:reactive={origin === 'assigned'}
+              class:active={isFilterActive('context', ORIGIN_CONTEXT[origin])}
+              title={i18n.t(`origin.${origin}Hint`)}
+              onclick={(e) => { e.stopPropagation(); toggleFilterAttribute('context', ORIGIN_CONTEXT[origin]); }}
+            >{i18n.t(`origin.${origin}`)}</button>
+          {/if}
+          {#each plainContexts as context}
             {@const displayInfo = getDisplayText(context)}
             <button
               class="meta-tag context"
@@ -1245,4 +1261,16 @@
     height: 13px;
   }
 
+  /* Origin chip. Proactive is quiet; reactive is the one worth noticing, since
+     "how much got pushed onto me" is the number the review panel reports. */
+  .meta-tag.origin {
+    border-color: transparent;
+    background: var(--bg-tertiary);
+    color: var(--text-muted);
+  }
+
+  .meta-tag.origin.reactive {
+    background: var(--priority-d-bg, rgba(134, 142, 150, 0.14));
+    color: var(--priority-b-color, #ff922b);
+  }
 </style>

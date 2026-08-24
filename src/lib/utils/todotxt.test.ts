@@ -10,7 +10,7 @@ import {
   findSourceLine,
   splitLines,
 } from './todotxt';
-import { createEmptyTask } from '$lib/types';
+import { createEmptyTask, countOrigins, taskOrigin, withOrigin } from '$lib/types';
 import type { Task } from '$lib/types';
 
 // Fixed "today" so speaking dates (due:tomorrow) are deterministic.
@@ -344,6 +344,54 @@ describe('todoTxtFromTask', () => {
       })
     );
     expect(line).toBe('x 2026-01-07 2026-01-05 finish report pri:B');
+  });
+});
+
+describe('origin marker (@主 / @被)', () => {
+  it('round-trips through a todo.txt line as an ordinary context', () => {
+    // The whole reason it is a context and not a field: it survives the file
+    // for free, and sleek counts and filters it with no configuration.
+    const task = { ...createEmptyTask('C'), content: 'write the report', contexts: withOrigin([], 'assigned') };
+    const line = todoTxtFromTask(task);
+    expect(line).toContain('@被');
+
+    const { task: back } = taskFromTodoTxt(line);
+    expect(taskOrigin(back)).toBe('assigned');
+  });
+
+  it('reads back as null when the line carries no marker', () => {
+    expect(taskOrigin(taskFromTodoTxt('plain line @office').task)).toBeNull();
+  });
+
+  it('replaces rather than accumulates when the user changes their mind', () => {
+    const contexts = withOrigin(withOrigin(['office'], 'self'), 'assigned');
+    expect(contexts).toEqual(['office', '被']);
+  });
+
+  it('clears the marker when given null', () => {
+    expect(withOrigin(['office', '主'], null)).toEqual(['office']);
+  });
+
+  it('counts unmarked tasks separately from either side', () => {
+    // Folding "forgot to mark it" into proactive would inflate exactly the
+    // number the marker exists to measure.
+    const tasks = [
+      { ...createEmptyTask('C'), contexts: withOrigin([], 'self') },
+      { ...createEmptyTask('C'), contexts: withOrigin([], 'assigned') },
+      { ...createEmptyTask('C'), contexts: withOrigin([], 'assigned') },
+      { ...createEmptyTask('C'), contexts: ['office'] },
+    ];
+    expect(countOrigins(tasks)).toEqual({ self: 1, assigned: 2, unmarked: 1 });
+    expect(countOrigins([])).toEqual({ self: 0, assigned: 0, unmarked: 0 });
+  });
+
+  it('survives a completion write-back untouched', () => {
+    // markLineComplete only prepends `x` and moves the priority; every other
+    // token on the line has to come through unchanged.
+    const line = '(B) 2026-01-05 write the report +work @被';
+    const done = markLineComplete(line, '2026-01-07');
+    expect(done).toBe('x 2026-01-07 2026-01-05 write the report +work @被 pri:B');
+    expect(taskOrigin(taskFromTodoTxt(done).task)).toBe('assigned');
   });
 });
 

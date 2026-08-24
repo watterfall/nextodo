@@ -1,5 +1,5 @@
 import type { ActivePriorityCounts, UnitReview, Task } from '$lib/types';
-import { ACTIVE_PRIORITIES, isActivePriority } from '$lib/types';
+import { ACTIVE_PRIORITIES, isActivePriority, countOrigins } from '$lib/types';
 
 // Reviews state
 let reviews = $state<UnitReview[]>([]);
@@ -42,6 +42,11 @@ export function createReview(
     pomodorosTotal += task.pomodoros.completed;
   }
 
+  // Only A-E tasks count, matching the planned/completed tallies above.
+  const originCounts = countOrigins(
+    unitTasks.filter(t => isActivePriority(t.originalPriority || t.priority))
+  );
+
   const review: UnitReview = {
     id: crypto.randomUUID(),
     unitStart,
@@ -50,7 +55,8 @@ export function createReview(
     stats: {
       planned,
       completed,
-      pomodorosTotal
+      pomodorosTotal,
+      origin: originCounts
     },
     reflection,
     nextUnitFocus

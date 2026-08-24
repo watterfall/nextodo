@@ -38,6 +38,52 @@ export interface Recurrence {
   nextDue: string | null;
 }
 
+// Whether the user chose this work ("proactive") or was handed it ("reactive").
+//
+// It is stored as an ordinary todo.txt context — `@主` / `@被` — rather than as
+// a field on Task, so there is one source of truth: it round-trips through the
+// shared file for free, and sleek's sidebar counts and filters it with no
+// configuration. Single characters because the marker is written on every line
+// it applies to; the UI renders a localized label, never the raw character.
+export type TaskOrigin = 'self' | 'assigned';
+
+export const ORIGIN_CONTEXT: Record<TaskOrigin, string> = {
+  self: '主',
+  assigned: '被'
+};
+
+export interface OriginCounts {
+  self: number;
+  assigned: number;
+  /** Counted separately so a forgotten marker cannot inflate either side. */
+  unmarked: number;
+}
+
+/** The origin marker on a task, or null when it carries neither. */
+export function taskOrigin(task: Task): TaskOrigin | null {
+  if (task.contexts.includes(ORIGIN_CONTEXT.self)) return 'self';
+  if (task.contexts.includes(ORIGIN_CONTEXT.assigned)) return 'assigned';
+  return null;
+}
+
+/** Tally proactive / reactive / unmarked across a task list. */
+export function countOrigins(tasks: Task[]): OriginCounts {
+  const counts: OriginCounts = { self: 0, assigned: 0, unmarked: 0 };
+  for (const task of tasks) {
+    const origin = taskOrigin(task);
+    if (origin) counts[origin]++;
+    else counts.unmarked++;
+  }
+  return counts;
+}
+
+/** Replace whichever origin marker a context list carries, if any. */
+export function withOrigin(contexts: string[], origin: TaskOrigin | null): string[] {
+  const markers = Object.values(ORIGIN_CONTEXT);
+  const rest = contexts.filter(c => !markers.includes(c));
+  return origin ? [...rest, ORIGIN_CONTEXT[origin]] : rest;
+}
+
 // Where a task came from, when it was pulled out of a todo.txt candidate pool.
 //
 // todo.txt has no stable identity — the line IS the record — so the verbatim
@@ -97,6 +143,10 @@ export interface UnitReview {
     planned: ActivePriorityCounts;
     completed: ActivePriorityCounts;
     pomodorosTotal: number;
+    // How much of the period was work the user chose versus work handed to
+    // them. Optional because reviews recorded before the origin marker existed
+    // have no honest value to put here — absent is not the same as zero.
+    origin?: OriginCounts;
   };
   reflection: string;
   nextUnitFocus: string;

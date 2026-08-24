@@ -6,6 +6,7 @@
   import { exportData, importData, createBackup } from '$lib/utils/storage';
   import { getTasksStore, replaceAllData } from '$lib/stores/tasks.svelte';
   import { showToast } from '$lib/stores/ui.svelte';
+  import { pickTodoFile } from '$lib/utils/todoFile';
 
   interface Props {
     isOpen: boolean;
@@ -62,6 +63,21 @@
   let pomodoroLongBreak = $state(settings.pomodoroLongBreak);
   let autoArchiveDays = $state(settings.autoArchiveDays);
   let focusProject = $state(settings.focusProject ?? '');
+  let todoFilePath = $state(settings.todoFilePath ?? '');
+  let doneFilePath = $state(settings.doneFilePath ?? '');
+  let writeBackOrigin = $state(settings.writeBackOrigin);
+
+  // The picker is only available inside Tauri; in the browser it returns null
+  // and the user types the path instead. That is why the text field is the
+  // primary control and the button is an accelerator, not the only way in.
+  async function browseFor(which: 'todo' | 'done') {
+    const picked = await pickTodoFile(
+      which === 'todo' ? t('settings.todoFilePath') : t('settings.doneFilePath')
+    );
+    if (!picked) return;
+    if (which === 'todo') todoFilePath = picked;
+    else doneFilePath = picked;
+  }
   let unitBoundaryFlexHours = $state(settings.unitBoundaryFlexHours ?? 12);
   let showMethodology = $state(false);
 
@@ -73,6 +89,9 @@
       pomodoroLongBreak = settings.pomodoroLongBreak;
       autoArchiveDays = settings.autoArchiveDays;
       focusProject = settings.focusProject ?? '';
+      todoFilePath = settings.todoFilePath ?? '';
+      doneFilePath = settings.doneFilePath ?? '';
+      writeBackOrigin = settings.writeBackOrigin;
       unitBoundaryFlexHours = settings.unitBoundaryFlexHours ?? 12;
     }
   });
@@ -89,6 +108,9 @@
       pomodoroLongBreak,
       autoArchiveDays,
       focusProject: focusProject.trim() || null,
+      todoFilePath: todoFilePath.trim() || null,
+      doneFilePath: doneFilePath.trim() || null,
+      writeBackOrigin,
       unitBoundaryFlexHours,
     });
     onClose();
@@ -280,6 +302,59 @@
         </section>
 
         <!-- Data Settings -->
+        <section class="settings-section">
+          <h3 class="section-title">{t('settings.candidatePool')}</h3>
+
+          <div class="setting-row">
+            <div class="setting-info">
+              <span class="setting-label">{t('settings.todoFilePath')}</span>
+              <span class="setting-desc">{t('settings.todoFilePathDesc')}</span>
+            </div>
+            <div class="input-group path-group">
+              <input
+                type="text"
+                class="setting-input setting-input-text path-input"
+                bind:value={todoFilePath}
+                placeholder="/Users/you/Documents/todo.txt"
+                spellcheck="false"
+              />
+              <button type="button" class="browse-btn" onclick={() => browseFor('todo')}>
+                {t('settings.browse')}
+              </button>
+            </div>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-info">
+              <span class="setting-label">{t('settings.doneFilePath')}</span>
+              <span class="setting-desc">{t('settings.doneFilePathDesc')}</span>
+            </div>
+            <div class="input-group path-group">
+              <input
+                type="text"
+                class="setting-input setting-input-text path-input"
+                bind:value={doneFilePath}
+                placeholder="/Users/you/Documents/done.txt"
+                spellcheck="false"
+              />
+              <button type="button" class="browse-btn" onclick={() => browseFor('done')}>
+                {t('settings.browse')}
+              </button>
+            </div>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-info">
+              <span class="setting-label">{t('settings.writeBackOrigin')}</span>
+              <span class="setting-desc">{t('settings.writeBackOriginDesc')}</span>
+            </div>
+            <div class="theme-buttons">
+              <button class="theme-btn" class:active={writeBackOrigin} onclick={() => (writeBackOrigin = true)}>{t('settings.on')}</button>
+              <button class="theme-btn" class:active={!writeBackOrigin} onclick={() => (writeBackOrigin = false)}>{t('settings.off')}</button>
+            </div>
+          </div>
+        </section>
+
         <section class="settings-section">
           <h3 class="section-title">{t('settings.data.title')}</h3>
 
@@ -1054,5 +1129,32 @@
       flex: 1;
       justify-content: center;
     }
+  }
+  .path-group {
+    display: flex;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  .path-input {
+    flex: 1;
+    min-width: 0;
+    font-family: var(--font-mono);
+    font-size: 12px;
+  }
+
+  .browse-btn {
+    flex-shrink: 0;
+    padding: 4px 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font-size: 12px;
+    cursor: pointer;
+  }
+
+  .browse-btn:hover {
+    background: var(--bg-tertiary);
   }
 </style>

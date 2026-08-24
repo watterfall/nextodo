@@ -14,6 +14,7 @@
   import Confetti from '$lib/components/Confetti.svelte';
   import ImmersivePomodoro from '$lib/components/ImmersivePomodoro.svelte';
   import HistoryModal from '$lib/components/HistoryModal.svelte';
+  import InboxPanel from '$lib/components/InboxPanel.svelte';
   import BadgesModal from '$lib/components/BadgesModal.svelte';
   import TaskEditModal from '$lib/components/TaskEditModal.svelte';
   import ConfirmationModal from '$lib/components/ConfirmationModal.svelte';
@@ -21,6 +22,7 @@
   import {
     initializeData,
     getTasksStore,
+    clearWriteBackNotice,
     setSearchQuery,
     incrementPomodoro,
     reloadData,
@@ -70,7 +72,26 @@
   let isSettingsOpen = $state(false);
   let isReviewOpen = $state(false);
   let isHistoryOpen = $state(false);
+  let isInboxOpen = $state(false);
   // isBadgesOpen moved to ui store for better control
+
+  // Surface todo.txt write-back problems. Completing a task always succeeds
+  // locally; if the shared file could not be updated the user has to hear about
+  // it, because the fix is to edit that file by hand.
+  $effect(() => {
+    const notice = tasks.lastWriteBackNotice;
+    if (!notice) return;
+
+    const message =
+      notice.kind === 'missing'
+        ? t('message.writeBackMissing', { name: notice.taskName })
+        : notice.kind === 'ambiguous'
+          ? t('message.writeBackAmbiguous', { name: notice.taskName })
+          : t('message.writeBackFailed', { detail: notice.detail ?? '' });
+
+    showToast(message, notice.kind === 'error' ? 'error' : 'info', 6000);
+    clearWriteBackNotice();
+  });
 
   onMount(async () => {
     // Initialize i18n first
@@ -204,6 +225,7 @@
     onOpenSettings={() => { isSettingsOpen = true; }}
     onOpenReview={() => { isReviewOpen = true; }}
     onOpenHistory={() => { isHistoryOpen = true; }}
+    onOpenInbox={() => { isInboxOpen = true; }}
     onOpenBadges={() => { setBadgesOpen(true); }}
   />
 
@@ -436,6 +458,21 @@
   <!-- History Modal (completed/cancelled tasks) -->
   {#if isHistoryOpen}
     <HistoryModal onClose={() => isHistoryOpen = false} />
+  {/if}
+
+  <!-- Candidate pool: pull work out of the shared todo.txt into this unit -->
+  {#if isInboxOpen}
+    <div
+      class="inbox-overlay"
+      role="button"
+      tabindex="-1"
+      onclick={(e) => { if (e.target === e.currentTarget) isInboxOpen = false; }}
+      onkeydown={(e) => { if (e.key === 'Escape') isInboxOpen = false; }}
+    >
+      <div class="inbox-sheet">
+        <InboxPanel onClose={() => isInboxOpen = false} />
+      </div>
+    </div>
   {/if}
 
   <!-- Task Edit Modal -->
@@ -853,5 +890,29 @@
     .task-form-container {
       padding: 12px 16px;
     }
+  }
+  /* Candidate-pool sheet — a centred panel rather than a full modal, because
+     pulling is a repeated action and the unit behind it stays useful context. */
+  .inbox-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: rgba(0, 0, 0, 0.45);
+    border: none;
+  }
+
+  .inbox-sheet {
+    width: min(720px, 100%);
+    max-height: min(640px, 90vh);
+    display: flex;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    background: var(--bg-primary);
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.4);
+    overflow: hidden;
   }
 </style>

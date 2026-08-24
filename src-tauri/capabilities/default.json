@@ -8,6 +8,7 @@
     "fs:default",
     "fs:allow-appdata-read-recursive",
     "fs:allow-appdata-write-recursive",
-    "notification:default"
+    "notification:default",
+    "dialog:allow-open"
   ]
 }

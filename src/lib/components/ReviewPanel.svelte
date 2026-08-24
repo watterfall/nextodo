@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { ActivePriority, UnitReview } from '$lib/types';
-  import { PRIORITY_CONFIG } from '$lib/types';
+  import { PRIORITY_CONFIG, countOrigins } from '$lib/types';
+  import { formatDateISO } from '$lib/utils/unitCalc';
   import { getReviewsStore, createReview, getCompletionRate, getPriorityRates } from '$lib/stores/reviews.svelte';
   import { getTasksStore } from '$lib/stores/tasks.svelte';
   import { getI18nStore } from '$lib/i18n';
@@ -9,6 +10,16 @@
   const tasks = getTasksStore();
   const i18n = getI18nStore();
   const t = i18n.t;
+
+  // Live proactive/reactive split for the period being reviewed. Shown before
+  // the review is saved, because it is the number worth reflecting on.
+  const currentOrigins = $derived.by(() => {
+    const start = formatDateISO(tasks.currentUnit.startDate);
+    const end = formatDateISO(tasks.currentUnit.endDate);
+    return countOrigins(
+      tasks.tasks.filter(t => t.unitStart >= start && t.unitStart <= end && t.priority !== 'H')
+    );
+  });
 
   let reflection = $state('');
   let nextUnitFocus = $state('');
@@ -19,8 +30,12 @@
 
     createReview(
       tasks.tasks,
-      tasks.currentUnit.startDate.toISOString().split('T')[0],
-      tasks.currentUnit.endDate.toISOString().split('T')[0],
+      // Local calendar parts, never toISOString(): the unit's dates are built
+      // with local-midnight constructors, so a UTC conversion shifts the day
+      // backwards for every zone east of UTC and files the review under the
+      // wrong period.
+      formatDateISO(tasks.currentUnit.startDate),
+      formatDateISO(tasks.currentUnit.endDate),
       reflection,
       nextUnitFocus
     );
@@ -65,6 +80,20 @@
 
   {#if showCreateForm}
     <div class="create-form">
+      <!-- The proactive/reactive split for the period being reviewed. This is
+           the number the marker exists for: how much of the period was work
+           you chose. -->
+      <div class="origin-live">
+        <span>{t('origin.label')}</span>
+        <strong>
+          {t('origin.ratio', {
+            self: currentOrigins.self,
+            assigned: currentOrigins.assigned,
+            unmarked: currentOrigins.unmarked,
+          })}
+        </strong>
+      </div>
+
       <div class="form-group">
         <label class="form-label" for="review-reflection">{t('review.reflection')}</label>
         <textarea
@@ -155,6 +184,15 @@
           <span class="pomodoro-total">
             🍅 {review.stats.pomodorosTotal} {t('review.pomodorosTotal')}
           </span>
+          {#if review.stats.origin}
+            <span class="origin-total">
+              {t('origin.ratio', {
+                self: review.stats.origin.self,
+                assigned: review.stats.origin.assigned,
+                unmarked: review.stats.origin.unmarked,
+              })}
+            </span>
+          {/if}
         </div>
       </div>
     {:else}
@@ -502,5 +540,26 @@
   .empty-hint {
     font-size: 12px;
     margin: 0;
+  }
+  .origin-total {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Live split for the period currently being reviewed. Unmarked is shown
+     rather than folded into either side: a forgotten marker must not inflate
+     the proactive number, which is the whole point of tracking this. */
+  .origin-live {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    margin-bottom: 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--bg-secondary);
+    font-size: 12px;
+    color: var(--text-secondary);
   }
 </style>

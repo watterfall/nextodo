@@ -1,12 +1,22 @@
-import type { Task, Priority, FilterState, UnitInfo, AppData, ActiveData, PomodoroHistoryData } from '$lib/types';
-import { createDefaultAppData, isThresholdPassed, isActivePriority, isCountedPriority, isHiddenPriority, isOperablePriority, DEFAULT_PRIORITY, isWithinRetentionPeriod } from '$lib/types';
+import type { Task, Priority, TaskOrigin, FilterState, UnitInfo, AppData, ActiveData, PomodoroHistoryData } from '$lib/types';
+import { createDefaultAppData, isThresholdPassed, isActivePriority, isCountedPriority, isHiddenPriority, isOperablePriority, DEFAULT_PRIORITY, ORIGIN_CONTEXT, withOrigin, isWithinRetentionPeriod } from '$lib/types';
 import { loadAppData, saveAppData, reloadFile, archiveTasks } from '$lib/utils/storage';
+import { readTodoFile, writeTodoFile, appendTodoLines } from '$lib/utils/todoFile';
+import {
+  splitLines,
+  findSourceLine,
+  markLineComplete,
+  addContextToLine,
+  removeContextFromLine,
+  taskFromTodoTxt,
+  todoTxtFromTask
+} from '$lib/utils/todotxt';
 import { applyHighlanderRule, canAddTask, validateQuota, isSingleSlotPriority } from '$lib/utils/quota';
 import { createTaskFromInput } from '$lib/utils/parser';
 import { processRecurringTasks, createNextOccurrence } from '$lib/utils/recurrence';
 import { evaluateCycle, rollUnfinishedIntoWindow } from '$lib/utils/cycleEngine';
 import { maybeNotifyDueTasks } from '$lib/utils/reminders';
-import { getCurrentUnit, isDateInUnit, isToday, isOverdue, isThisWeek, currentUnitStartLocal, parseISODate } from '$lib/utils/unitCalc';
+import { getCurrentUnit, isToday, isOverdue, isThisWeek, currentUnitStartLocal, parseISODate, formatDateISO } from '$lib/utils/unitCalc';
 import { t } from '$lib/i18n';
 import { getGamificationStore } from './gamification.svelte';
 
@@ -335,6 +345,236 @@ export async function completeTask(taskId: string): Promise<void> {
   }
 
   await persist();
+
+  // Mark the source line complete in the shared todo.txt. Deliberately after
+  // persist: a failure here must not lose the completion the user just made,
+  // and the file write is reported separately.
+  if (taskToComplete?.source) {
+    const outcome = await writeBackCompletion(taskToComplete, completedOn);
+    if (outcome) lastWriteBackNotice = outcome;
+  }
+}
+
+// ============================================================================
+// todo.txt candidate pool
+// ============================================================================
+
+/**
+ * Result of the last write-back attempt, for the UI to surface.
+ *
+ * Write-back failures are never silent and never fatal: the completion stands
+ * in FocusFlow either way, and the user is told the shared file could not be
+ * updated so they can fix it by hand.
+ */
+export interface WriteBackNotice {
+  kind: 'missing' | 'ambiguous' | 'error';
+  taskName: string;
+  detail?: string;
+}
+
+let lastWriteBackNotice = $state<WriteBackNotice | null>(null);
+
+export function clearWriteBackNotice(): void {
+  lastWriteBackNotice = null;
+}
+
+/**
+ * Mark a pulled task's source line complete, in place.
+ *
+ * Everything else on that line survives — this is a single-token edit, not a
+ * re-serialisation of the task. See docs/SLEEK-INTEROP.md §5.
+ */
+async function writeBackCompletion(task: Task, completedOn: Date): Promise<WriteBackNotice | null> {
+  const source = task.source;
+  if (!source) return null;
+
+  try {
+    const paths = [source.file, appData.settings.doneFilePath].filter(Boolean) as string[];
+
+    for (const path of paths) {
+      const content = await readTodoFile(path);
+      if (content === null) continue;
+
+      const lines = splitLines(content);
+      const match = findSourceLine(lines, source.raw);
+      if (match.index === -1) continue;
+
+      lines[match.index] = markLineComplete(lines[match.index], formatDateISO(completedOn));
+      await writeTodoFile(path, `${lines.join('\n')}\n`);
+
+      return match.ambiguous
+        ? { kind: 'ambiguous', taskName: task.content }
+        : null;
+    }
+
+    // The line is gone — the user may have deleted or rewritten it in sleek.
+    // Guessing at a replacement would rewrite somebody else's task.
+    return { kind: 'missing', taskName: task.content };
+  } catch (error) {
+    return { kind: 'error', taskName: task.content, detail: String(error) };
+  }
+}
+
+export interface Candidate {
+  /** The parsed task, not yet added to the unit. */
+  task: Task;
+  /** The source line, verbatim. */
+  raw: string;
+  hidden: boolean;
+}
+
+export interface CandidateList {
+  candidates: Candidate[];
+  /** Lines skipped because they are already in the unit. */
+  alreadyPulled: number;
+  error?: string;
+}
+
+/**
+ * Read the candidate pool.
+ *
+ * Completed lines are skipped (they are not candidates), and so are lines
+ * already pulled into the unit — matched on the verbatim source text, the same
+ * key the write-back uses.
+ */
+export async function loadCandidates(includeHidden = false): Promise<CandidateList> {
+  const path = appData.settings.todoFilePath;
+  if (!path) {
+    return { candidates: [], alreadyPulled: 0, error: t('inbox.noFileConfigured') };
+  }
+
+  try {
+    const content = await readTodoFile(path);
+    if (content === null) return { candidates: [], alreadyPulled: 0 };
+
+    const pulled = new Set(
+      appData.tasks.filter(task => task.source?.file === path).map(task => task.source!.raw)
+    );
+
+    const candidates: Candidate[] = [];
+    let alreadyPulled = 0;
+
+    for (const raw of splitLines(content)) {
+      const imported = taskFromTodoTxt(raw, DEFAULT_PRIORITY);
+      if (imported.task.completed) continue;
+      if (imported.hidden && !includeHidden) continue;
+      if (pulled.has(raw)) {
+        alreadyPulled++;
+        continue;
+      }
+      candidates.push({ task: imported.task, raw, hidden: imported.hidden });
+    }
+
+    return { candidates, alreadyPulled };
+  } catch (error) {
+    return { candidates: [], alreadyPulled: 0, error: String(error) };
+  }
+}
+
+/**
+ * Pull one candidate into the current unit.
+ *
+ * The source line stays where it is — pulling copies. The only thing written
+ * back is the origin marker, and only when `writeBackOrigin` is on, so that
+ * `@主` / `@被` is visible and filterable on the sleek side too.
+ */
+export async function pullCandidate(
+  candidate: Candidate,
+  priority: Priority,
+  origin: TaskOrigin | null
+): Promise<AddTaskResult> {
+  const path = appData.settings.todoFilePath;
+  if (!path) return { success: false, error: t('inbox.noFileConfigured') };
+
+  const task: Task = {
+    ...candidate.task,
+    priority,
+    unitStart: currentUnitStartLocal(),
+    contexts: withOrigin(candidate.task.contexts, origin),
+    source: { file: path, raw: candidate.raw, pulledAt: new Date().toISOString() }
+  };
+
+  const result = await addTaskDirect(task, true);
+  if (!result.success) return result;
+
+  if (origin && appData.settings.writeBackOrigin) {
+    await markOriginOnSourceLine(path, candidate.raw, origin, task.id);
+  }
+
+  return result;
+}
+
+/**
+ * Append the origin context to the source line, and remember the new text.
+ *
+ * The stored `source.raw` has to move with it: the line on disk has changed, so
+ * a later write-back matching on the old text would fall through to the fuzzy
+ * path for no reason.
+ */
+async function markOriginOnSourceLine(
+  path: string,
+  raw: string,
+  origin: TaskOrigin,
+  taskId: string
+): Promise<void> {
+  try {
+    const content = await readTodoFile(path);
+    if (content === null) return;
+
+    const lines = splitLines(content);
+    const match = findSourceLine(lines, raw);
+    if (match.index === -1) return;
+
+    let line = lines[match.index];
+    for (const marker of Object.values(ORIGIN_CONTEXT)) {
+      line = removeContextFromLine(line, marker);
+    }
+    line = addContextToLine(line, ORIGIN_CONTEXT[origin]);
+    if (line === lines[match.index]) return;
+
+    lines[match.index] = line;
+    await writeTodoFile(path, `${lines.join('\n')}\n`);
+
+    appData.tasks = appData.tasks.map(task =>
+      task.id === taskId && task.source ? { ...task, source: { ...task.source, raw: line } } : task
+    );
+    await persist();
+  } catch (error) {
+    // Cosmetic on the sleek side; the task is already in the unit either way.
+    console.error('Failed to mark origin on source line:', error);
+  }
+}
+
+/**
+ * Write the tasks parked by the 4.0 → 5.0 migration out to the candidate pool.
+ *
+ * `pendingExport` is only cleared once the write succeeds, so a failure here
+ * leaves the data exactly where it was rather than dropping it.
+ */
+export async function exportPendingTasks(): Promise<{ exported: number; error?: string }> {
+  const path = appData.settings.todoFilePath;
+  if (!path) return { exported: 0, error: t('inbox.noFileConfigured') };
+
+  const pending = appData.pendingExport ?? [];
+  if (pending.length === 0) return { exported: 0 };
+
+  try {
+    const lines = pending.map(task => {
+      const line = todoTxtFromTask(task);
+      // A task with no threshold date was a "not now" item with no date
+      // attached; h:1 is how todo.txt says that.
+      return task.thresholdDate || task.completed ? line : `${line} h:1`;
+    });
+
+    await appendTodoLines(path, lines);
+
+    appData.pendingExport = undefined;
+    await persist();
+
+    return { exported: lines.length };
+  } catch (error) {
+    return { exported: 0, error: String(error) };
+  }
 }
 
 // Evolve a task: complete the original and create a new evolved task
@@ -946,6 +1186,8 @@ export function getTasksStore() {
     get cancelledTasks() { return cancelledTasks; },
     get focusProjectTasks() { return focusProjectTasks; },
     get focusProjectProgress() { return focusProjectProgress; },
+    get pendingExport() { return appData.pendingExport ?? []; },
+    get lastWriteBackNotice() { return lastWriteBackNotice; },
     get isLoading() { return isLoading; },
     get lastError() { return lastError; },
     get currentUnit() { return currentUnit; },
