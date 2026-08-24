@@ -72,7 +72,7 @@ export function parseTaskInput(input: string): ParsedTask {
   // Extract threshold date (thr:date)
   const thresholdMatch = content.match(/thr:(\S+)/i);
   if (thresholdMatch) {
-    thresholdDate = parseDateString(thresholdMatch[1]);
+    thresholdDate = parseDateInput(thresholdMatch[1]);
     content = content.replace(/thr:\S+/gi, '').trim();
   }
 
@@ -86,30 +86,36 @@ export function parseTaskInput(input: string): ParsedTask {
   // Extract due date (~date)
   const dueDateMatch = content.match(/~(\S+)/);
   if (dueDateMatch) {
-    dueDate = parseDateString(dueDateMatch[1]);
+    dueDate = parseDateInput(dueDateMatch[1]);
     content = content.replace(/~\S+/g, '').trim();
   }
 
+  // `+project`, `@context` and `#tag` must start at the beginning of the input
+  // or right after whitespace — the same boundary rule todo.txt uses.
+  //
+  // Without it these matched mid-word, and the matched run was then DELETED
+  // from the content: "mail bob@example.com about c++ and issue#42" parsed as
+  // context "example.com", project "+" and tag "42", leaving the user with
+  // "mail bob about c and issue". Aligning with todo.txt fixes that and keeps
+  // typed input and imported lines parsing identically.
+
   // Extract projects (+project)
-  const projectMatches = content.matchAll(/\+(\S+)/g);
-  for (const match of projectMatches) {
-    projects.push(match[1]);
+  for (const match of content.matchAll(/(^|\s)\+(\S+)/g)) {
+    projects.push(match[2]);
   }
-  content = content.replace(/\+\S+/g, '').trim();
+  content = content.replace(/(^|\s)\+\S+/g, '$1').trim();
 
   // Extract contexts (@context)
-  const contextMatches = content.matchAll(/@(\S+)/g);
-  for (const match of contextMatches) {
-    contexts.push(match[1]);
+  for (const match of content.matchAll(/(^|\s)@(\S+)/g)) {
+    contexts.push(match[2]);
   }
-  content = content.replace(/@\S+/g, '').trim();
+  content = content.replace(/(^|\s)@\S+/g, '$1').trim();
 
   // Extract custom tags (#tag or emoji tags)
-  const tagMatches = content.matchAll(/#(\S+)/g);
-  for (const match of tagMatches) {
-    customTags.push(match[1]);
+  for (const match of content.matchAll(/(^|\s)#(\S+)/g)) {
+    customTags.push(match[2]);
   }
-  content = content.replace(/#\S+/g, '').trim();
+  content = content.replace(/(^|\s)#\S+/g, '$1').trim();
 
   // Extract pomodoros (🍅3 or p3). Must run BEFORE emoji tags so 🍅3 is not
   // captured as a tag. The token must stand alone: an unanchored /p\d+/ matched
@@ -145,9 +151,13 @@ export function parseTaskInput(input: string): ParsedTask {
 }
 
 /**
- * Parse relative or absolute date string
+ * Parse a relative or absolute date operand into YYYY-MM-DD, or null.
+ *
+ * Exported because the todo.txt importer needs the same rules: sleek writes
+ * speaking dates like `due:tomorrow` into the file and only resolves them on
+ * read, so both sides have to agree on what "tomorrow" means.
  */
-function parseDateString(dateStr: string): string | null {
+export function parseDateInput(dateStr: string): string | null {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
@@ -280,14 +290,12 @@ export function highlightSyntax(input: string): string {
   html = html.replace(/!([ABCDEFNS])(?![A-Za-z])/gi, '<span class="syntax-priority">!$1</span>');
   html = html.replace(/【\s*([ABCDEFNS])\s*】/gi, '<span class="syntax-priority">【$1】</span>');
 
-  // Highlight projects
-  html = html.replace(/(\+\S+)/g, '<span class="syntax-project">$1</span>');
-
-  // Highlight contexts
-  html = html.replace(/(@\S+)/g, '<span class="syntax-context">$1</span>');
-
-  // Highlight tags
-  html = html.replace(/(#\S+)/g, '<span class="syntax-tag">$1</span>');
+  // Projects / contexts / tags use the same whitespace boundary as the parser,
+  // so the preview cannot highlight something that will not actually be
+  // extracted — an email address used to light up as a context.
+  html = html.replace(/(^|\s)(\+\S+)/g, '$1<span class="syntax-project">$2</span>');
+  html = html.replace(/(^|\s)(@\S+)/g, '$1<span class="syntax-context">$2</span>');
+  html = html.replace(/(^|\s)(#\S+)/g, '$1<span class="syntax-tag">$2</span>');
 
   // Highlight threshold date
   html = html.replace(/(thr:\S+)/gi, '<span class="syntax-threshold">$1</span>');
@@ -304,9 +312,16 @@ export function highlightSyntax(input: string): string {
   return html;
 }
 
+/**
+ * Escape the three characters that would otherwise be read as markup.
+ *
+ * This used to go through `document.createElement`, which made the whole module
+ * DOM-dependent even though the CLI imports it — the crash was latent only
+ * because nothing outside the browser happened to call `highlightSyntax`.
+ * A `textContent` → `innerHTML` round trip escapes exactly `&`, `<` and `>`,
+ * so this matches what it replaced.
+ */
 function escapeHtml(text: string): string {
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 

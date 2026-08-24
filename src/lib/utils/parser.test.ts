@@ -5,6 +5,7 @@ import {
   formatTaskDisplay,
   calculateNextDue,
   parseRecurrence,
+  highlightSyntax,
 } from './parser';
 import { createEmptyTask } from '$lib/types';
 import type { Task } from '$lib/types';
@@ -148,6 +149,34 @@ describe('parseTaskInput — dates', () => {
     const plus = parseTaskInput('x thr:+7d');
     expect(plus.thresholdDate).toBe('2026-01-11');
     expect(plus.projects).toEqual([]);
+  });
+});
+
+describe('parseTaskInput — tag boundaries', () => {
+  // Regression: these matched mid-word and the matched run was then DELETED
+  // from the content, so this input became "mail bob about c and issue" with
+  // a bogus context, project and tag. The boundary rule is todo.txt's, so
+  // typed input and imported lines now agree.
+  it('does not mistake an email, c++ or issue#42 for tags', () => {
+    const r = parseTaskInput('mail bob@example.com about c++ and issue#42');
+    expect(r.content).toBe('mail bob@example.com about c++ and issue#42');
+    expect(r.contexts).toEqual([]);
+    expect(r.projects).toEqual([]);
+    expect(r.customTags).toEqual([]);
+  });
+
+  it('still extracts standalone tags', () => {
+    const r = parseTaskInput('thing +proj @ctx #tag');
+    expect(r.content).toBe('thing');
+    expect(r.projects).toEqual(['proj']);
+    expect(r.contexts).toEqual(['ctx']);
+    expect(r.customTags).toEqual(['tag']);
+  });
+
+  it('highlights only what it will actually extract', () => {
+    const html = highlightSyntax('mail bob@example.com +proj');
+    expect(html).toContain('<span class="syntax-project">+proj</span>');
+    expect(html).not.toContain('syntax-context');
   });
 });
 
