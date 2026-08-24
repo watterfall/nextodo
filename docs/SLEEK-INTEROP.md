@@ -106,13 +106,13 @@ sleek 的归档是把所有 `x ` 开头的行从 `todo.txt` 剪切、追加到�
 | `thresholdDate` | `t:` | ⇄ | 同上 |
 | `recurrence` | `rec:` | ⇄ | 见 §4 |
 | `pomodoros.estimated` | `pm:` | ⇄ | |
-| `originalPriority` | `pri:` | ⇄ | 语义完全一致 |
+| `priority`（完成行） | `pri:` | ⇄ | todo.txt 的完成行带不了 `(A)`，sleek 把档位挪进 `pri:`。6.0 起本项目的档位也不再被完成覆盖，所以两边直接对上，不需要中转字段 |
 | — | `h:1` | ← | 隐藏行默认不进候选列表；可在拉取面板里勾选"包含隐藏" |
 | `pomodoros.completed` | — | ✗ | FocusFlow 独有 |
 | `notes` | — | ✗ | FocusFlow 独有。sleek 用 `0x10` 占位符支持行内换行，本次不实现 |
 | `unitStart` | — | ✗ | FocusFlow 独有 |
 | `id` | — | ✗ | todo.txt 的身份就是那一行文本，见 §5 |
-| 取消态 `H` | — | ✗ | todo.txt 只有完成/未完成二态。取消是 FocusFlow 本地状态，**不写回**，源行原样留在 todo.txt 里 |
+| `status: 'cancelled'` | — | ✗ | todo.txt 只有完成/未完成二态。取消是 FocusFlow 本地状态，**不写回**，源行原样留在 todo.txt 里 |
 
 ---
 
@@ -213,10 +213,17 @@ source?: {
 ### 6.1 优先级
 
 ```ts
-type Priority = 'A' | 'B' | 'C' | 'D' | 'E' | 'G' | 'H';
+type Priority = 'A' | 'B' | 'C' | 'D' | 'E';
+type TaskStatus = 'open' | 'completed' | 'cancelled';
 ```
 
-从 10 个降到 7 个，其中 A–E 是真正的档位，G/H 是完成/取消状态。
+从 10 个降到 5 个。
+
+> **本节写于档位还是 7 个的时候**（A–E 加上 G/H 两个完成态）。数据版本 6.0 把
+> 完成从优先级里拆了出来：`priority` 永远是 A–E 且**完成后不变**，发生了什么由
+> `status` 记。这对互通是好消息——sleek 的 `pri:` 本来就是「完成行上的档位」，
+> 现在两边是同一个概念，不再需要 `originalPriority` 这种中转字段。
+> 理由见 `docs/EVIDENCE-REVIEW.md` §3。
 
 | 档位 | 配额 | 含义 |
 |------|------|------|
@@ -233,7 +240,7 @@ type Priority = 'A' | 'B' | 'C' | 'D' | 'E' | 'G' | 'H';
 `demotionTargetFor` 原来在 B–E 全满时兜底到 F（无限档）。F 删掉之后签名变成：
 
 ```ts
-demotionTargetFor(tasks: Task[]): ActivePriority | null   // null = 无处可放
+demotionTargetFor(tasks: Task[]): Priority | null   // null = 无处可放
 ```
 
 拿到 `null` 时的处理是**把任务退回候选池**：从 FocusFlow 移除，todo.txt 里的源行原封不动。

@@ -30,7 +30,7 @@ two days. Completing one marks it `x` in that same file.
 - **Smart Parsing** - Quick task input with intuitive syntax
 - **Multiple Views** - Kanban, List, and Calendar views
 - **Drag & Drop** - Intuitive task reordering and scheduling
-- **Gamification System** - XP, levels and badges, **off by default**. Scoring pays per completion, so the fastest way to earn is many small tasks — exactly what the quota exists to prevent
+- **No scoring** - No XP, no levels, no badges, no streaks. A per-completion score pays you for finishing many small things, which is what the quota exists to prevent; a streak counter turns a missed day into a reason to quit
 - **Theme Support** - Dark, light, and system themes
 - **Data Separation** - Hot/cold data architecture for performance
 - **Bilingual** - Chinese and English interface
@@ -134,7 +134,7 @@ Data is stored in the app data directory:
 - **Linux**: `~/.local/share/com.focusflow.app`
 
 Files:
-- `active.json` - Active tasks, settings, reviews, gamification data
+- `active.json` - Active tasks, settings, reviews
 - `archive.json` - Completed/archived tasks
 - `pomodoro_history.json` - Pomodoro session records
 
@@ -169,7 +169,7 @@ MIT
 - **智能解析** - 直观的快速输入语法
 - **多视图** - 看板、列表、日历视图
 - **拖拽操作** - 直观的任务排序和日程安排
-- **成就系统** - 经验值、等级和徽章，**默认关闭**。计分奖励「完成得多」，而配额限制「承诺得少」，两者方向相反
+- **不计分** - 没有经验值、等级、徽章、连续打卡。计分奖励「完成得多」，而配额限制「承诺得少」，两者方向相反；连续打卡则把漏一天变成放弃的理由
 - **主题支持** - 深色、浅色和跟随系统
 - **数据分离** - 冷热数据架构提升性能
 - **双语界面** - 中文和英文界面

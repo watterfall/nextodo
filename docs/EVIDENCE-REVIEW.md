@@ -63,14 +63,19 @@
 
 ## 2. 逐条落地
 
-### 建议 1 · 删 streak，游戏化默认关闭 — ✅ 按原样做
+### 建议 1 · 删 streak，游戏化默认关闭 — ✅ 做了，之后作者决定**彻底删除**
 
 - `currentStreak` / `longestStreak` / `perfectDays` / `earlyBirdCount` /
   `nightOwlCount` 全部从 `GamificationStats` 删除
 - 两个永远解锁不了的徽章（`consistency_is_key`、`sustainable_worker`）删除
-- 新增 `settings.gamificationEnabled`，**新装和已有安装都默认 `false`**
-- 关闭时**不计分**，而不是「计分但不显示」。后者留着一个在跑的分数，任何人打开开关
-  都会看到一次跳变，那本身就是一次推动。已有的 XP 和徽章原样留在盘上。
+- 先落成 `settings.gamificationEnabled`，**新装和已有安装都默认 `false`**；
+  关闭时**不计分**，而不是「计分但不显示」（后者留着一个在跑的分数，任何人打开开关
+  都会看到一次跳变，那本身就是一次推动）
+- **然后作者选了彻底删除。** `gamification.svelte.ts`、`BadgesModal.svelte`、
+  `Confetti.svelte`、XP / 等级 / 徽章、`settings.gamificationEnabled`、
+  ui store 的 `isBadgesOpen`、两个语言文件里的相关 key，全部删掉，净 −992 行、
+  bundle 小 12 kB。`gamificationEnabled` 进 `REMOVED_SETTINGS`，`gamification`
+  数据块因为存盘路径是逐字段构造而非展开，下一次普通保存就会自然脱落。
 
 **一个实现上的坑，值得记下来。** 清理退役字段的逻辑一开始写在游戏化 store 的
 `load()` / `getData()` 里。但那个 store **只通过自己的 persist 回调写盘**，而回调只在
@@ -175,21 +180,59 @@ CLI 和测试直接 import），21 个单元测试：
 25 这个数字没有实证依据（来自发明者的厨房计时器），而对照研究显示 12–3 和 24–6 差别不大
 ——起作用的是「有外部结构」本身。所以功能保留，那个数字的权威性去掉。
 
-### 建议 6 · 优先级档位收敛 — 🟡 大部分已完成，**剩一半待定**
+### 建议 6 · 优先级档位收敛 — ✅ 全部做完
 
-已完成（随 sleek 改造）：
+第一半随 sleek 改造：
 
 - A–E 保留，配额不动
 - F 与 N 删除。它们表达的都是「还没进入本单元」，那是共享文件里一行的状态
 - S 变成 `+project`（`settings.focusProject`），子任务变成带同一标签的普通任务
-- `Priority` 枚举 7 项 ≤ 评审要求的 7 项
 
-**未完成**：评审还要求「G / H 改为独立的 `status` 字段」。这一条**没做**，
-理由和风险都在 §3，需要作者定夺。
+第二半在作者拍板后做掉了（数据版本 5.0 → 6.0）：
+
+```ts
+type Priority   = 'A' | 'B' | 'C' | 'D' | 'E';          // 五个档位，没别的
+type TaskStatus = 'open' | 'completed' | 'cancelled';   // 发生了什么，独立一轴
+```
+
+**G/H 从来就不是档位**，它们是任务*发生了什么*，和「有多重要」正交。把它们塞在
+同一个枚举里，直接后果是**完成会覆盖优先级**——于是必须再开一个
+`originalPriority` 把档位存起来，每个想知道「这原来是什么级别的活儿」的地方都得
+读回来；而每个接受 `Priority` 的函数都要处理两个它什么也做不了的值。
+
+两个补偿字段一起没了：
+
+- `originalPriority`：档位现在能穿过完成，没有东西需要放回去
+- `completed` 布尔：它是 `status === 'completed'` 的第二种可独立设置的写法，
+  而 CLI 和 app 对怎么设它已经出现分歧了
+
+四个 helper 也没了——`isActivePriority` / `isOperablePriority` /
+`isCountedPriority` / `isHiddenPriority`，它们唯一的工作是问「这到底是不是一个
+真档位」。这个问题不再需要问，换成 `isOpen(task)` / `isFinished(task)`，
+问的是状态，那才是真正要问的东西。
+
+**变简单而不只是搬家的几处：**
+
+- `uncompleteTask` 原来是「查 originalPriority，查不到落默认档」，现在就是翻个状态
+- `recentlyCompletedTasksByPriority` 不再需要解析档位——完成的任务显示在它被完成的
+  那一栏，因为它压根没离开过
+- `todotxt`：sleek 完成行上的 `pri:` **就是**档位，两边直接对上
+- 复盘和周期完成率现在把取消的任务从分子分母**两边**都排除，而不是当成没做完。
+  放弃是对计划做的决定，把它记成失败正是让人不敢清队列的原因
+
+**迁移 `migrateV6.ts`**（Node-safe，16 个测试）**无条件运行**，因为它是构造性
+幂等的——已经带 `status` 的记录原样通过。这样即使文件是别的工具写的、或者是两个
+版本之间某个 build 写的，也能落到一个能读的形态。它认三种老写法：`G`/`H` 加
+`originalPriority`、活档位上的裸 `completed: true`（老 CLI 写出来的半截记录）、
+以及已经带 status 的。认不出的档位夹到默认值，而不是去毒化每一个按它索引的
+`Record<Priority, …>`。
+
+**一个类型上的教训**：`migrateV5` 现在声明返回 `V5Task` 而不是 `Task`。把迁移链的
+每一步都标成「当前形态」，正是迁移会静默不跑的原因。
 
 ---
 
-## 3. 留给作者的两个问题
+## 3. 开放问题的处置
 
 评审第四部分列了 5 个开放问题。其中三个在这个仓库里已经有答案：
 
@@ -200,33 +243,23 @@ CLI 和测试直接 import），21 个单元测试：
 - **Q5（多设备 / `createdAt` 可信度）**：本地文件 + 共享 todo.txt，没有多端合并。
   拉取的任务 `createdAt` 取自 todo.txt 行的创建日期，见 §2.3。
 
-剩下两个是真的需要人来定：
+另外两个问题提给了作者，两个都拍了板：
 
-### Q1 · 游戏化最终怎么处置？
+### Q1 · 游戏化最终怎么处置？ → **彻底删除**
 
-现在是**默认关闭的开关**。三种终局：
+我实现的是「默认关闭的开关」并推荐保持现状，因为它是「彻底删除」的超集：默认关闭
+之后再删代码是零风险的，反过来不成立。作者选了删。这是产品定位问题不是证据问题，
+所以是作者的决定；落地见 §2 的建议 1。
 
-1. 保持现状（开关后面）
-2. 彻底删除 `gamification.svelte.ts`、`BadgesModal.svelte`、XP / 等级 / 徽章 / Confetti
-3. 保留但改成只对 A/B 计分
+### Q3 · G / H 要不要抽成独立的 `status` 字段？ → **现在就做**
 
-我实现的是 1，因为它是 2 的超集：默认关闭之后再删代码是零风险的，反过来不成立。
-**这是产品定位问题，不是证据问题**——如果 FocusFlow 有非自用的用户群，砍掉参与度机制
-可能影响留存。
+我的建议是暂时不做，理由是收益（代码整洁）小于波及面。作者的理由更硬：
+**刚做完 5.0 迁移，现在做只需要再来一次数据迁移，以后做要两次。** 这条压过了
+我的顾虑，做掉了；落地见 §2 的建议 6。
 
-### Q3 · G / H 要不要抽成独立的 `status` 字段？
-
-评审的理由成立：completed / cancelled 是**状态**不是优先级，混在 `Priority` 枚举里
-会让所有涉及优先级的逻辑都处理特例。
-
-**我的建议是暂时不做**，但这条要作者拍板，因为理由是权衡而不是对错：
-
-- 支持做：类型建模确实是错的；而且刚做完 5.0 迁移，**现在做只需要再来一次迁移，
-  以后做要两次**
-- 支持不做：`Priority` 现在只剩 2 个特例值（G/H），且 `isActivePriority` /
-  `isHiddenPriority` / `ActivePriority` 这几个 helper 已经把它们隔离干净了；
-  todo.txt 模型本身也已经把完成当成独立维度处理（`x` 前缀 + `pri:`），
-  所以外部一致性没有受损。改动会波及几乎所有组件，收益是代码整洁，不是行为修正。
+这里值得记一笔：我给的判断是「`isActivePriority` 这几个 helper 已经把 G/H 隔离
+干净了」。真做完之后回头看，这个判断本身就是症状——那几个 helper 存在的唯一理由
+就是隔离这两个不该在枚举里的值，**把补丁的存在当成不用修的理由**是绕圈子。
 
 ### Q3′ · trigger 要不要配主动通知？
 
@@ -271,18 +304,40 @@ CLI 和测试直接 import），21 个单元测试：
 
 ---
 
-## 6. 验收
+## 6. 顺带修掉的第三个 bug：冷存储会弹回热存储
 
-- 单元测试 **203 → 237**（flowMetrics 21、parser `when:` 9、CLI metrics 4）；
+补 `storage.ts` 的 IO 测试时发现的，和评审无关，但严重程度高于本轮任何一条建议。
+
+`archiveTasks()` 把完成超过 14 天的任务从 `active.json` 挪进 `archive.json`，
+免得热文件无限膨胀。但**两条加载路径都把这个归档当成「老格式数据」**：把里面每一条
+都折回活动任务集，然后（localStorage 那边）删掉 key。于是 `cleanupOldTasks` 刚挪
+出去的任务，下次启动原样回来，再被归档一次，如此循环。
+
+Tauri 那条路径更糟：折回之后**不删文件**。所以每次启动，整个归档集都会被重新注入
+`active.json`，然后 `cleanupOldTasks` 又把它们（连同重复）追加进 `archive.json`
+——两个文件都在无界增长，而这是桌面端的主路径。
+
+修法：**加载路径不再读 `archive.json`**。冷存储就该是冷的。行内的 `trash` 数组还是
+会折回（那确实是 3.0 之前的老布局），归档不折。
+
+## 7. 验收
+
+- 单元测试 **203 → 277**：flowMetrics 21、parser `when:` 9、CLI metrics 4、
+  migrateV6 16、storage 25，加上 G/H 重构后重写的若干条；
   `npm test` 双时区（本地 + `TZ=Asia/Shanghai`）
 - `npm run typecheck` / `npm run check`（svelte-check）/ `npm run build` / `cargo check` 全绿
+- **storage.ts 现在有测试了**，跑的是真实的 localStorage 分支：node 环境下没有
+  `window`，`isTauri()` 自然选那条路，只 stub `localStorage` 本身，所以 key 布局、
+  迁移链、实际写出的形状都在测试之内。Tauri 分支故意不测——它是同一份代码把
+  `localStorage` 换成 `invoke()`，stub 它等于测 stub。
 - 浏览器实测（seed 真数据后逐项确认）：
-  - 47 天的任务在常驻行显示年龄和内容；「做掉」存下线索并把任务挪进当前单元，
-    **todo.txt 源行一字未动**
-  - 流动指标读出 `4/15 在办 · 47天 最老 · 4天 周期 · ×1.5 估计`，四个数都可手算复核
-  - 一个「已有的 5.0 安装」（settings 里没有新 key）加载后拿到
-    `gamificationEnabled: false` 和完整的 `pomodoroWorkByPriority`
-  - 计分开关实时生效：打开后徽章按钮出现、完成任务 XP 从 420 涨到 530；
-    关闭后再完成一个任务，**XP 停在 530 而任务确实完成了**
-  - 退役的 `currentStreak` 等 5 个 key 和已删徽章的解锁记录，在下一次普通保存后
-    从文件里消失，XP 420 原样保留
+  - **本轮第一批**：47 天的任务在常驻行显示年龄和内容；「做掉」存下线索并把任务挪进
+    当前单元，**todo.txt 源行一字未动**；流动指标读出
+    `4/15 在办 · 47天 最老 · 4天 周期 · ×1.5 估计`，四个数都可手算复核
+  - **5.0 → 6.0 迁移**，每个分支各一例：10 进 10 出；`G` + `originalPriority: B`
+    回来是 B + completed，notes 和番茄数原样；`H` + `D` 回来是 D + cancelled；
+    `originalPriority` 是 `F`（两个版本前就死掉的档位）夹到 C 而不是消失；
+    老 CLI 的半截记录解析成 completed；废弃字段从文件里消失；
+    **恢复一个已完成的 B 回到 B**，而不是回到默认档
+  - 游戏化删除后：设置里的开关消失、徽章按钮消失、`gamification` 数据块和
+    `gamificationEnabled` 都从文件里脱落

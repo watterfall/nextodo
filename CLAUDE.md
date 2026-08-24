@@ -12,7 +12,7 @@ a line in that file, not priorities here. **`docs/SLEEK-INTEROP.md` is the desig
 record for this and is the authority for every format question.**
 
 **Version:** 2.0.0
-**Data Version:** 5.0
+**Data Version:** 6.0
 **License:** MIT
 
 ## Architecture
@@ -36,9 +36,9 @@ record for this and is the authority for every format question.**
 /
 ├── src/                          # Frontend (Svelte/TypeScript)
 │   ├── lib/
-│   │   ├── components/           # Svelte components (27 files)
-│   │   ├── stores/               # Svelte 5 runes state management (6 stores)
-│   │   ├── utils/                # Business logic utilities (10 files)
+│   │   ├── components/           # Svelte components (26 files)
+│   │   ├── stores/               # Svelte 5 runes state management (5 stores)
+│   │   ├── utils/                # Business logic utilities (15 files)
 │   │   ├── types/                # TypeScript type definitions
 │   │   └── i18n/                 # Internationalization (4 files)
 │   ├── App.svelte                # Root component
@@ -84,11 +84,9 @@ record for this and is the authority for every format question.**
 | `ReviewPanel.svelte` | Unit review interface |
 | `ReviewWizard.svelte` | Step-by-step review wizard with challenge scoring |
 | `SettingsModal.svelte` | Application settings |
-| `BadgesModal.svelte` | Achievement/badge display modal (only reachable when scoring is on) |
 | `FlowStrip.svelte` | The three flow metrics on the main view |
 | `OldestOpenRow.svelte` | Oldest unfinished task, resident in every view |
 | `TagPicker.svelte` | Tag selection widget |
-| `Confetti.svelte` | Celebration animation |
 | `TaskEditModal.svelte` | Modal for editing existing tasks with form fields |
 | `ConfirmationModal.svelte` | Reusable confirmation dialog for destructive actions |
 | `CalendarView.svelte` | Monthly calendar view with task scheduling |
@@ -104,7 +102,6 @@ record for this and is the authority for every format question.**
 | Pomodoro | `pomodoro.svelte.ts` | Timer state, work/break sessions |
 | UI | `ui.svelte.ts` | UI state (modals, search, task editing, keyboard shortcuts) |
 | Reviews | `reviews.svelte.ts` | Unit review management |
-| Gamification | `gamification.svelte.ts` | Badge/achievement tracking |
 
 ### Utility Modules
 
@@ -119,6 +116,7 @@ record for this and is the authority for every format question.**
 | TodoTxt | `todotxt.ts` | todo.txt parse/serialize, byte-compatible with the parser sleek uses |
 | TodoFile | `todoFile.ts` | Reading/writing the shared todo.txt (Tauri command, localStorage in the browser) |
 | MigrateV5 | `migrateV5.ts` | The 4.0 → 5.0 data migration (Node-safe, so it is testable) |
+| MigrateV6 | `migrateV6.ts` | The 5.0 → 6.0 migration: completion moves off the priority axis |
 | CycleEngine | `cycleEngine.ts` | Dynamic cycle / low-completion merge logic |
 | FlowMetrics | `flowMetrics.ts` | Age / cycle time / estimation factor — Node-safe, shared with the CLI |
 | Reminders | `reminders.ts` | Daily due/overdue notification scheduling |
@@ -163,8 +161,7 @@ medians come back as `null` below 5 samples, with `samplesUntilReady` saying
 how many more are needed — never a number that would read as a finding.
 The CLI imports the same Node-safe modules the app uses — `quotaCore.ts` (quota
 and Highlander rules), `parser.ts` (input syntax) and `recurrence.ts` (next
-occurrence on `done`) — so those behaviours match the app exactly. It does **not**
-run gamification (no XP or badges for a CLI completion) and does not touch
+occurrence on `done`) — so those behaviours match the app exactly. It does not touch
 `cycleState`; the app reconciles recurrence on next launch either way.
 
 **The CLI operates on the unit, not on the candidate pool.** It reads and writes
@@ -213,16 +210,16 @@ import TaskCard from '$lib/components/TaskCard.svelte';
 All types are centralized in `src/lib/types/index.ts`. Key types:
 
 - **Task** - Core task entity with priority, dates, pomodoros, recurrence, threshold dates, and a `trigger` (situational start cue)
-- **Priority** - `'A' | 'B' | 'C' | 'D' | 'E' | 'G' | 'H'` (A-E with quotas 1-5; G=completed, H=cancelled)
-- **ActivePriority** - `Exclude<Priority, 'G' | 'H'>` → the quota-bearing A–E tiers
+- **Priority** - `'A' | 'B' | 'C' | 'D' | 'E'` — the five quota-bearing tiers, and nothing else
+- **TaskStatus** - `'open' | 'completed' | 'cancelled'` — what happened to a task, on its own axis. A task keeps its priority through either ending, which is why this is separate; see `docs/EVIDENCE-REVIEW.md` §3
+- **PriorityCounts** - `Record<Priority, number>`
 - **TaskOrigin** - `'self' | 'assigned'` — proactive vs reactive, stored as an `@主` / `@被` context
 - **TaskSource** - where a pulled task's line lives in the todo.txt, for write-back
 - **AppData** - Combined in-memory data structure
 - **ActiveData** / **ArchiveData** / **PomodoroHistoryData** - Separated file structures
-- **Settings** - Application configuration (incl. `gamificationEnabled`, off by default, and `pomodoroWorkByPriority`)
+- **Settings** - Application configuration (incl. `pomodoroWorkByPriority`)
 - **FilterState** - Current filter criteria (includes priority and pomodoro filters)
 - **UnitReview** - Bi-daily unit review data
-- **Badge** / **BadgeId** - Gamification achievement types
 - **PomodoroSession** - Timer session with interruption tracking
 - **ViewMode** - `'today' | 'kanban' | 'list' | 'calendar'` (main view modes)
 - **Recurrence** - `{ n, unit: 'd'|'b'|'w'|'m'|'y', strict, customPattern?, nextDue }` — the todo.txt `rec:` grammar, one for one
@@ -247,9 +244,10 @@ createDefaultAppData(): AppData
 isThresholdPassed(task: Task): boolean     // Check if threshold date allows visibility
 isWithinRetentionPeriod(task: Task): boolean  // Check if completed task is in retention window
 getRetentionRemaining(task: Task): { hours, minutes } | null  // Remaining retention time
-isActivePriority(priority: Priority): boolean  // A-E
-isOperablePriority(priority: Priority): boolean  // may the user act on it (== isActivePriority now)
-isHiddenPriority(priority: Priority): boolean  // G or H
+isOpen(task): boolean                      // still owed
+isFinished(task): boolean                  // completed or cancelled
+emptyPriorityCounts(): PriorityCounts      // { A: 0, B: 0, C: 0, D: 0, E: 0 }
+asPriority(value: unknown): Priority       // narrow to a real tier; unknown → C
 taskOrigin(task: Task): TaskOrigin | null  // read the @主 / @被 marker
 withOrigin(contexts: string[], origin): string[]  // set/replace/clear it
 countOrigins(tasks: Task[]): OriginCounts  // proactive / reactive / unmarked
@@ -261,8 +259,8 @@ canAddTask(tasks: Task[], priority: Priority): boolean
 validateQuota(tasks: Task[], priority: Priority): string | null
 applyHighlanderRule(tasks: Task[], newTask: Task): HighlanderResult  // { tasks, demoted, evicted }
 isSingleSlotPriority(priority: Priority): boolean          // A, and only A
-demotionTargetFor(tasks: Task[]): ActivePriority | null    // first tier with room, null when full
-suggestPriority(tasks: Task[]): ActivePriority | null      // null when the unit is full
+demotionTargetFor(tasks: Task[]): Priority | null    // first tier with room, null when full
+suggestPriority(tasks: Task[]): Priority | null      // null when the unit is full
 ```
 
 ## Data Architecture
@@ -273,7 +271,7 @@ Data is split across three JSON files for performance:
 
 | File | Content | Update Frequency |
 |------|---------|------------------|
-| `active.json` | Active tasks, trash, settings, reviews, badges, pendingExport | High (hot data) |
+| `active.json` | Active tasks, trash, settings, reviews, pendingExport | High (hot data) |
 | `archive.json` | Completed/archived tasks | Low (cold data) |
 | `pomodoro_history.json` | Pomodoro session records | Medium |
 
@@ -355,8 +353,11 @@ are never written into a shared file:
 | C | 3 | Standard tasks (1-2.5 hours, 2-5 pomodoros) |
 | D | 4 | Temporary/unplanned tasks (25-75 min, 1-3 pomodoros) |
 | E | 5 | Quick tasks (<15 min, 0-1 pomodoros) |
-| G | ∞ | Completed tasks (hidden, moved here on completion) |
-| H | ∞ | Cancelled tasks (hidden, moved here on cancellation) |
+
+Completion is **not** a tier. `task.status` carries it, and `task.priority`
+survives untouched — an A that got finished is still an A, so a completed task
+renders in the zone it was completed from without anything having to look up
+where it came from.
 
 **A unit holds 15 tasks and nothing more.** There is no unbounded tier — the
 Idea Pool is a todo.txt now — so an add that does not fit cannot be absorbed.
@@ -471,47 +472,23 @@ Rules that hold across the module, and that new metrics must keep:
 - **None of these gets a target value in the UI.** A target is what turns a
   measure into something to perform. See `docs/EVIDENCE-REVIEW.md` §2.2.
 
-### Gamification / Badges
+### No scoring, by design
 
-**Off by default** (`settings.gamificationEnabled`, false for new and existing
-installs). Off means nothing is counted, not counted-and-hidden. The reason is
-in `docs/EVIDENCE-REVIEW.md` §2.1: scoring pays per completion, so the fastest
-way to earn is many small tasks — exactly what the quota exists to prevent, and
-when two mechanisms disagree the visible one wins.
+There is no XP, no levels, no badges and no completion animation. They were
+deleted, not switched off, and should not be reintroduced.
 
-Badge and leveling system defined in `src/lib/stores/gamification.svelte.ts`:
+A per-completion score pays you for finishing many small things, which is
+exactly what the quota exists to prevent — and when two mechanisms disagree,
+the visible one wins. Streaks were worse: a missed day is statistically
+invisible to habit automaticity, while a streak counter turns it into a reason
+to abandon the whole thing.
 
-| Badge ID | Name | Condition | XP Reward |
-|----------|------|-----------|-----------|
-| `first_step` | First Step | Complete first task | 50 |
-| `pomodoro_novice` | Focus Novice | Complete 5 pomodoros | 100 |
-| `pomodoro_master` | Focus Master | Complete 100 pomodoros | 1000 |
-| `challenge_crusher` | Challenge Crusher | Complete 5 A-priority tasks | 500 |
+`flowMetrics.ts` is what replaced it. Age, cycle time and calibration cannot be
+driven up except by actually finishing work. See `docs/EVIDENCE-REVIEW.md` §2.1.
 
-Streaks are gone and should not come back: a missed day is statistically
-invisible to the automaticity curve, while a streak counter turns it into a
-reason to abandon the whole thing. `migrateGamification()` in `storage.ts`
-drops the retired stat keys and the two deleted badges' unlock records on load
-— it has to live there rather than in the store, because the store only writes
-through its own persist callback and that never fires while scoring is off.
-
-**Level Progression:**
-
-| Level | Title | XP Required |
-|-------|-------|-------------|
-| 1 | Novice Planner | 0 |
-| 2 | Task Apprentice | 500 |
-| 3 | Focus Adept | 1500 |
-| 4 | Productivity Pro | 3000 |
-| 5 | Zen Master | 6000 |
-
-```typescript
-import { getGamificationStore } from '$lib/stores/gamification.svelte';
-const store = getGamificationStore();
-store.recordTaskCompletion(task);  // Record task completion (+10 XP)
-store.recordPomodoro();            // Record pomodoro completion (+5 XP)
-store.checkBadges();               // Check and unlock badges
-```
+`storage.ts` strips a leftover `gamification` block and the retired
+`gamificationEnabled` setting on load, so an upgraded file sheds them on its
+next ordinary save.
 
 ## Tauri IPC Commands
 
@@ -612,10 +589,18 @@ way. If you add date logic, never format via `toISOString()`; use
 
 Prefer testing the Node-safe modules (`quotaCore.ts`, `parser.ts`, `recurrence.ts`, `unitCalc.ts`) directly — they have no Svelte/Tauri dependencies. `src/lib/i18n/parity.test.ts` asserts the two locale files expose identical key sets; without it, a key missing from `en-US` silently renders Chinese, because components fall back with `t('x') || '中文'`.
 
-Not yet covered by tests: `storage.ts`'s IO paths and the Svelte stores. The
-logic that used to hide inside them has been pulled into Node-safe modules that
-are tested directly — `migrateV5.ts` (the whole 4.0 → 5.0 migration),
-`todotxt.ts` (parsing and write-back primitives), `quotaCore.ts`. For E2E,
+`storage.ts` IS covered (`storage.test.ts`), against the real localStorage
+branch: in a `node` environment `window` is undefined, so `isTauri()` picks that
+branch with no mocking of the module under test, and only `localStorage` itself
+is stubbed. That keeps key layout, migration chaining and the exact written
+shape under test. The Tauri branch is deliberately not covered — it is the same
+code with `invoke()` where `localStorage` is, so stubbing it would test the
+stub — and neither are `exportData` / `importData`, thin Blob and FileReader
+wrappers with no logic of their own.
+
+Not yet covered: the Svelte stores. Most of the logic that used to hide inside
+them now lives in Node-safe modules that are tested directly — `migrateV5.ts`,
+`migrateV6.ts`, `todotxt.ts`, `quotaCore.ts`, `flowMetrics.ts`. For E2E,
 Playwright remains the suggested future addition.
 
 ## Important Considerations
@@ -734,19 +719,6 @@ Theme is stored in settings and applied via CSS custom properties in `app.css`. 
 4. Add navigation in `Sidebar.svelte` (icon and click handler)
 5. Add i18n keys for view name in both `zh-CN.ts` and `en-US.ts`
 
-### Adding a New Badge
-
-1. Add badge definition to `BADGE_DEFINITIONS` array in `src/lib/stores/gamification.svelte.ts`:
-   - `id`: Unique badge identifier
-   - `name`: Display name
-   - `description`: Badge description
-   - `icon`: Emoji icon
-   - `condition`: Function that takes `GamificationStats` and returns boolean
-   - `xpReward`: XP reward when badge is unlocked
-2. Add any new stats to `GamificationStats` interface if needed
-3. Update `recordTaskCompletion()` or `recordPomodoro()` to track new stats
-4. Badge modal automatically displays from store state
-
 ## File Reference
 
 | File | Purpose | Approx Lines |
@@ -764,7 +736,8 @@ Theme is stored in settings and applied via CSS custom properties in `app.css`. 
 | `src/lib/utils/quotaCore.ts` | Node-safe quota core (shared with CLI) | ~220 |
 | `src/lib/utils/cycleEngine.ts` | Dynamic cycle / merge logic | ~175 |
 | `src/lib/utils/flowMetrics.ts` | Age / cycle time / estimation factor | ~200 |
-| `src/lib/utils/migrateV5.ts` | 4.0 → 5.0 data migration | ~170 |
+| `src/lib/utils/migrateV5.ts` | 4.0 → 5.0 data migration | ~185 |
+| `src/lib/utils/migrateV6.ts` | 5.0 → 6.0 migration (completion off the priority axis) | ~110 |
 | `src/lib/utils/motion.ts` | Animation tokens | ~135 |
 | `src/lib/utils/todoFile.ts` | Shared todo.txt file access | ~80 |
 | `src/lib/types/index.ts` | Type definitions | ~610 |
@@ -773,7 +746,6 @@ Theme is stored in settings and applied via CSS custom properties in `app.css`. 
 | `src/lib/components/InboxPanel.svelte` | Candidate pool / pull surface | ~480 |
 | `src/lib/components/CalendarView.svelte` | Monthly calendar view | ~375 |
 | `src/lib/components/HistoryModal.svelte` | Completed/cancelled tasks viewer | ~395 |
-| `src/lib/stores/gamification.svelte.ts` | Badge system | ~230 |
 | `cli/focusflow.ts` | Headless focusflow CLI | ~280 |
 | `src-tauri/src/commands.rs` | Backend IPC handlers | ~505 |
 | `src-tauri/src/watcher.rs` | File system watcher | ~80 |
