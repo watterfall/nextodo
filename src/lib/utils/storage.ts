@@ -190,25 +190,14 @@ function loadFromLocalStorage(): AppData {
     const active = activeStr ? JSON.parse(activeStr) as ActiveData : createDefaultActiveData();
     const pomodoro = pomodoroStr ? JSON.parse(pomodoroStr) as PomodoroHistoryData : createDefaultPomodoroHistoryData();
 
-    // Combine into AppData - migrate old trash/archive to G/H priorities
     let tasks = migrateTasks(active.tasks || []);
 
-    // Migrate old trash to H (cancelled) and old completed tasks to G (completed)
+    // An inline `trash` array is a pre-3.0 layout: fold it in as cancelled.
+    // The archive file is NOT folded in — see the note above archiveTasks.
     const oldTrash = (active as any).trash || [];
-    const oldArchive = localStorage.getItem(STORAGE_KEYS.archive);
     if (oldTrash.length > 0) {
       const migratedTrash = migrateTasks(oldTrash).map((t: any) => ({ ...t, priority: 'H' }));
       tasks = [...tasks, ...migratedTrash];
-    }
-    if (oldArchive) {
-      try {
-        const archiveData = JSON.parse(oldArchive);
-        const migratedArchive = migrateTasks(archiveData.tasks || []).map((t: any) => ({ ...t, priority: 'G', completed: true }));
-        tasks = [...tasks, ...migratedArchive];
-        localStorage.removeItem(STORAGE_KEYS.archive); // Clean up old archive
-      } catch (e) {
-        console.error('Failed to migrate archive:', e);
-      }
     }
 
     const upgraded = upgradeData(
@@ -291,25 +280,14 @@ async function loadFromTauri(): Promise<AppData> {
     const active = activeContent ? JSON.parse(activeContent) as ActiveData : createDefaultActiveData();
     const pomodoro = pomodoroContent ? JSON.parse(pomodoroContent) as PomodoroHistoryData : createDefaultPomodoroHistoryData();
 
-    // Migrate old trash/archive to G/H priorities
     let tasks = migrateTasks(active.tasks || []);
+
+    // An inline `trash` array is a pre-3.0 layout: fold it in as cancelled.
+    // archive.json is NOT read here — see the note above archiveTasks.
     const oldTrash = (active as any).trash || [];
     if (oldTrash.length > 0) {
       const migratedTrash = migrateTasks(oldTrash).map((t: any) => ({ ...t, priority: 'H' }));
       tasks = [...tasks, ...migratedTrash];
-    }
-
-    // Migrate old archive file if it exists
-    try {
-      const archiveContent = await invoke<string | null>('read_data_file', { fileType: 'archive' });
-      if (archiveContent) {
-        const archiveData = JSON.parse(archiveContent);
-        const migratedArchive = migrateTasks(archiveData.tasks || []).map((t: any) => ({ ...t, priority: 'G', completed: true }));
-        tasks = [...tasks, ...migratedArchive];
-        console.log('Migrated archive tasks to G priority');
-      }
-    } catch (e) {
-      // Archive file doesn't exist or failed to parse - that's fine
     }
 
     // Combine into AppData
@@ -687,8 +665,19 @@ export async function importData(file: File): Promise<AppData> {
 }
 
 /**
- * Append tasks to cold storage (archive). Used to move long-completed tasks out
- * of the hot active file so it doesn't grow unbounded.
+ * Append tasks to cold storage. `cleanupOldTasks` uses this to move
+ * long-completed tasks out of the hot active file so it does not grow unbounded.
+ *
+ * **Nothing on the load path reads this file.** That is the whole point of it
+ * being cold, and it used to be false: both load paths treated the archive as
+ * legacy data, folded every task in it back into the active set, and (on the
+ * localStorage side) deleted it. So the tasks cleanupOldTasks had just moved
+ * out came straight back on the next launch, got archived again, and the cycle
+ * repeated forever — on the Tauri side without even deleting the file, so
+ * archive.json grew by the full active set every time.
+ *
+ * If archived tasks ever need to be shown again, read this file deliberately
+ * from the History view; do not resurrect them into `active.json`.
  */
 export async function archiveTasks(tasksToArchive: Task[]): Promise<void> {
   if (tasksToArchive.length === 0) return;
