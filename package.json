@@ -14,10 +14,11 @@
     "cli:build": "esbuild cli/focusflow.ts --bundle --platform=node --format=esm '--alias:$lib=./src/lib' --outfile=dist-cli/focusflow.mjs --banner:js='#!/usr/bin/env node'",
     "cli": "node dist-cli/focusflow.mjs",
     "clean": "rm -rf node_modules package-lock.json",
-    "reinstall": "npm run clean && npm install",
+    "reinstall": "pnpm run clean && npm install",
     "test": "vitest run && TZ=Asia/Shanghai vitest run",
     "test:watch": "vitest",
-    "check": "svelte-check --tsconfig ./tsconfig.json"
+    "check": "svelte-check --tsconfig ./tsconfig.json",
+    "verify": "pnpm run typecheck && pnpm run check && pnpm run test"
   },
   "bin": {
     "focusflow": "./dist-cli/focusflow.mjs"
