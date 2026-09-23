@@ -128,18 +128,18 @@ record for this and is the authority for every format question.**
 ### Commands
 
 ```bash
-npm run dev              # Start Vite dev server (frontend only)
-npm run build            # Build frontend to /dist
-npm run tauri:dev        # Full development with Tauri (recommended)
-npm run tauri:build      # Production build
-npm run typecheck        # tsc --noEmit for src/ and cli/
-npm run check            # svelte-check (Svelte + TS diagnostics)
-npm test                 # Unit tests, run in two timezones (see Testing)
-npm run test:watch       # Run unit tests in watch mode
-npm run cli:build        # Bundle the focusflow CLI (esbuild → dist-cli/focusflow.mjs)
-npm run cli              # Run the built focusflow CLI
-npm run clean            # Remove node_modules and lock file
-npm run reinstall        # Clean reinstall
+pnpm run dev              # Start Vite dev server (frontend only)
+pnpm run build            # Build frontend to /dist
+pnpm run tauri:dev        # Full development with Tauri (recommended)
+pnpm run tauri:build      # Production build
+pnpm run typecheck        # tsc --noEmit for src/ and cli/
+pnpm run check            # svelte-check (Svelte + TS diagnostics)
+pnpm test                 # Unit tests, run in two timezones (see Testing)
+pnpm run test:watch       # Run unit tests in watch mode
+pnpm run cli:build        # Bundle the focusflow CLI (esbuild → dist-cli/focusflow.mjs)
+pnpm run cli              # Run the built focusflow CLI
+pnpm run clean            # Remove node_modules and lock file
+pnpm run reinstall        # Clean reinstall
 ```
 
 ### Dev Server
@@ -150,7 +150,7 @@ npm run reinstall        # Clean reinstall
 
 ### CLI (focusflow)
 
-A headless CLI lives at `cli/focusflow.ts` for scripting and agent-driven use. Build it with `npm run cli:build` (esbuild bundles it to `dist-cli/focusflow.mjs`) and run it with `npm run cli`.
+A headless CLI lives at `cli/focusflow.ts` for scripting and agent-driven use. Build it with `pnpm run cli:build` (esbuild bundles it to `dist-cli/focusflow.mjs`) and run it with `pnpm run cli`.
 
 Subcommands: `add`, `list`, `done`, `cancel`, `metrics`, `import-reminders`, `agent-guide`.
 
@@ -172,7 +172,7 @@ pool, edit the todo.txt directly: it is a text file, and that is the point.
 
 The CLI is covered by `cli/focusflow.test.ts`, which builds the bundle and drives
 it as a subprocess against a temp data file, and is type-checked via
-`tsc -p cli/tsconfig.json` (wired into `npm run typecheck`).
+`tsc -p cli/tsconfig.json` (wired into `pnpm run typecheck`).
 
 ## Code Conventions
 
@@ -573,17 +573,17 @@ areTaskArraysEqual(a, b); // DnD optimization helper
 Unit testing runs on **Vitest** (`vitest.config.ts` at the repo root, `node` environment, `$lib` alias). Tests are colocated as `*.test.ts` next to the code they cover — the include glob is `src/**/*.test.ts` and `cli/**/*.test.ts`, so the pure logic in `src/lib/utils/*.ts` (parser, quotaCore, recurrence, unitCalc, cycleEngine, …) is the primary target.
 
 ```bash
-npm test            # runs the suite twice: local zone, then TZ=Asia/Shanghai
-npm run test:watch  # vitest watch mode
-npm run typecheck   # tsc for src/ AND cli/
-npm run check       # svelte-check — Svelte + TypeScript diagnostics
+pnpm test            # runs the suite twice: local zone, then TZ=Asia/Shanghai
+pnpm run test:watch  # vitest watch mode
+pnpm run typecheck   # tsc for src/ AND cli/
+pnpm run check       # svelte-check — Svelte + TypeScript diagnostics
 ```
 
 **The timezone is deliberately not pinned.** `vitest.config.ts` used to force
 `TZ=UTC`, which was the one zone where the recurrence engine happened to be
 correct — east of UTC a `1d` recurrence returned the same date forever, and the
 tests passed anyway. All date handling now works on local calendar parts, and
-`npm test` runs the suite a second time under `TZ=Asia/Shanghai` to keep it that
+`pnpm test` runs the suite a second time under `TZ=Asia/Shanghai` to keep it that
 way. If you add date logic, never format via `toISOString()`; use
 `formatDateISO()` / `currentUnitStartLocal()`.
 

@@ -65,30 +65,30 @@ git clone https://github.com/watterfall/nextodo.git
 cd nextodo
 
 # Install dependencies
-npm install
+pnpm install
 
 # Start development server (frontend only)
-npm run dev
+pnpm run dev
 
 # Start full Tauri development (recommended)
-npm run tauri:dev
+pnpm run tauri:dev
 ```
 
 #### Build for Production
 
 ```bash
 # Build the desktop application
-npm run tauri:build
+pnpm run tauri:build
 ```
 
 ### Testing
 
 ```bash
 # Run unit tests (Vitest)
-npm test
+pnpm test
 
 # Type-check Svelte + TypeScript
-npm run check
+pnpm run check
 ```
 
 ### Task Input Syntax
@@ -204,30 +204,30 @@ git clone https://github.com/watterfall/nextodo.git
 cd nextodo
 
 # 安装依赖
-npm install
+pnpm install
 
 # 启动开发服务器（仅前端）
-npm run dev
+pnpm run dev
 
 # 启动完整 Tauri 开发环境（推荐）
-npm run tauri:dev
+pnpm run tauri:dev
 ```
 
 #### 生产构建
 
 ```bash
 # 构建桌面应用
-npm run tauri:build
+pnpm run tauri:build
 ```
 
 ### 测试
 
 ```bash
 # 运行单元测试（Vitest）
-npm test
+pnpm test
 
 # 类型检查 Svelte + TypeScript
-npm run check
+pnpm run check
 ```
 
 ### 任务输入语法

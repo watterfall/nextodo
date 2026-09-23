@@ -300,8 +300,8 @@ context 能进 sleek 的侧边栏，免费得到两个值的计数和点击筛�
 
 ## 9. 实施分期
 
-每一期结束时仓库都必须是绿的（`npm test` 双时区、`npm run typecheck`、
-`npm run check`、`npm run build`、`cargo check`），并单独提交。
+每一期结束时仓库都必须是绿的（`pnpm test` 双时区、`pnpm run typecheck`、
+`pnpm run check`、`pnpm run build`、`cargo check`），并单独提交。
 
 | 期 | 内容 | 依赖 |
 |----|------|------|
