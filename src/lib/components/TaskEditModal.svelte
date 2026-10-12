@@ -1,9 +1,11 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
+  import { requestTaskFocus } from '$lib/stores/focusActions.svelte';
+  import { normalizeMinutes } from '$lib/utils/capacity';
   import type { Task, Priority } from '$lib/types';
   import { PRIORITY_CONFIG } from '$lib/types';
   import { updateTask, getTasksStore, needsPriorityChangeConfirmation, changePriority } from '$lib/stores/tasks.svelte';
-  import { closeEditModal, showToast, showConfirmation } from '$lib/stores/ui.svelte';
+  import { closeEditModal, showToast, showConfirmation, getUIStore } from '$lib/stores/ui.svelte';
   import { getI18nStore } from '$lib/i18n';
   import { highlightSyntax } from '$lib/utils/parser';
   import { formatRecurrence, parseRecurrence } from '$lib/utils/recurrence';
@@ -19,19 +21,22 @@
   const tasks = getTasksStore();
 
   // Track if we already confirmed a priority change (to avoid re-prompting)
+  let saving = $state(false);
   let priorityChangeConfirmed = $state(false);
 
   // Form state - initialized from task
-  let content = $state(task.content);
-  let selectedPriority = $state<Priority>(task.priority);
-  let project = $state(task.projects.join(', '));
-  let context = $state(task.contexts.join(', '));
-  let tags = $state(task.customTags.filter(t => !['⚡高能量', '😴低能量', '☕中等'].includes(t)).join(', '));
-  let dueDate = $state(task.dueDate || '');
-  let thresholdDate = $state(task.thresholdDate || '');
-  let estimatedPomodoros = $state<number>(task.pomodoros.estimated);
-  let recurrence = $state(formatRecurrence(task.recurrence));
-  let trigger = $state(task.trigger || '');
+  let content = $state(untrack(() => task.content));
+  let selectedPriority = $state<Priority>(untrack(() => task.priority));
+  let project = $state(untrack(() => task.projects.join(', ')));
+  let context = $state(untrack(() => task.contexts.join(', ')));
+  let tags = $state(untrack(() => task.customTags.filter(t => !['⚡高能量', '😴低能量', '☕中等'].includes(t)).join(', ')));
+  let dueDate = $state(untrack(() => task.dueDate || ''));
+  let thresholdDate = $state(untrack(() => task.thresholdDate || ''));
+  let estimatedPomodoros = $state<number>(untrack(() => task.pomodoros.estimated));
+  let recurrence = $state(untrack(() => formatRecurrence(task.recurrence)));
+  let trigger = $state(untrack(() => task.trigger || ''));
+  let estimatedMinutes = $state<number | undefined>(untrack(() => task.estimatedMinutes ?? undefined));
+  let nextAction = $state(untrack(() => task.nextAction ?? ''));
   let contentInput: HTMLInputElement | null = null;
 
   onMount(() => {
@@ -153,7 +158,8 @@
     return highlightSyntax(preview);
   });
 
-  async function handleSave() {
+  async function handleSave(focusAfter = false) {
+    if (saving) return;
     if (!content.trim()) {
       showToast(t('error.saveFailed'), 'error');
       return;
@@ -204,19 +210,29 @@
         estimated: estimatedPomodoros || 0
       },
       recurrence: recurrenceObj,
+      estimatedMinutes: normalizeMinutes(estimatedMinutes),
+      nextAction: nextAction.trim() || null,
       trigger: trigger.trim() || null
     };
 
-    await updateTask(task.id, updates);
-    showToast(t('message.saved'), 'success');
-    closeEditModal();
+    saving = true;
+    try {
+      await updateTask(task.id, updates);
+      const savedTask = tasks.tasks.find(item => item.id === task.id);
+      showToast(t('message.saved'), 'success');
+      closeEditModal();
+      if (focusAfter && savedTask) requestTaskFocus(savedTask);
+    } catch { showToast(tasks.lastError ?? t('error.saveFailed'), 'error'); }
+    finally { saving = false; }
   }
 
   function handleCancel() {
+    if (saving) return;
     closeEditModal();
   }
 
   function handleKeydown(e: KeyboardEvent) {
+    if (e.isComposing || getUIStore().confirmationData) return;
     if (e.key === 'Escape') {
       handleCancel();
     } else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
@@ -358,6 +374,17 @@
         </div>
       </div>
 
+
+      <div class="form-row">
+        <div class="field-group">
+          <label class="field-label" for="edit-minutes">{t('planning.estimate')}</label>
+          <input id="edit-minutes" class="field-input" type="number" min="1" step="1" bind:value={estimatedMinutes} placeholder={t('planning.minutesPlaceholder')} />
+        </div>
+        <div class="field-group">
+          <label class="field-label" for="edit-next-action">{t('planning.nextAction')}</label>
+          <input id="edit-next-action" class="field-input" bind:value={nextAction} placeholder={t('planning.nextPlaceholder')} />
+        </div>
+      </div>
       <!-- The start cue gets a full-width row above the dates, because it is
            the thing that actually starts the task and the dates are not. Never
            required; a task without one is perfectly normal and nothing here
@@ -447,15 +474,19 @@
         <button class="btn btn-secondary" onclick={handleCancel}>
           {t('action.cancel')}
         </button>
-        <button class="btn btn-primary" onclick={handleSave} disabled={!content.trim()}>
-          {t('action.save')}
+        <button class="btn btn-primary" onclick={() => handleSave()} disabled={!content.trim() || saving}>
+          {saving ? t('design.saving') : t('action.save')}
         </button>
+        {#if task.status === 'open'}<button class="btn btn-primary" onclick={() => handleSave(true)} disabled={!content.trim() || saving}>{t('continuity.saveFocus')}</button>{/if}
       </div>
     </div>
   </div>
 </div>
 
 <style>
+  .footer-actions { flex-wrap: wrap; }
+  .modal-footer { flex-wrap: wrap; gap: 10px; }
+
   .modal-overlay {
     position: fixed;
     inset: 0;

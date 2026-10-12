@@ -1,10 +1,13 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount, onDestroy, tick } from 'svelte';
+  import ActiveFocusBar from '$lib/components/ActiveFocusBar.svelte';
+  import FilterContext from '$lib/components/FilterContext.svelte';
   import Sidebar from '$lib/components/Sidebar.svelte';
   import CalendarView from '$lib/components/CalendarView.svelte';
   import KanbanView from '$lib/components/KanbanView.svelte';
   import ListView from '$lib/components/ListView.svelte';
   import TodayView from '$lib/components/TodayView.svelte';
+  import CapacityStrip from '$lib/components/CapacityStrip.svelte';
   import TaskForm from '$lib/components/TaskForm.svelte';
   import LowCompletionBanner from '$lib/components/LowCompletionBanner.svelte';
   import QuotaMeter from '$lib/components/QuotaMeter.svelte';
@@ -25,7 +28,7 @@
     setSearchQuery,
     incrementPomodoro,
     reloadData,
-    setFilter
+    setFilter,
   } from '$lib/stores/tasks.svelte';
   import {
     getUIStore,
@@ -36,7 +39,8 @@
     closeSearch,
     exitImmersiveMode,
     setViewMode,
-    setDraggingTask
+    setDraggingTask,
+    openEditModal
   } from '$lib/stores/ui.svelte';
   import {
     initPomodoro,
@@ -62,6 +66,10 @@
   const pomodoro = getPomodoroStore();
   const settings = getSettingsStore();
 
+  let showPlanning = $state(true);
+  const sessionActive = $derived(pomodoro.state !== 'idle');
+  $effect(() => { showPlanning = !sessionActive; });
+  async function focusNewTask() { showPlanning = true; await tick(); document.getElementById('new-task-input')?.focus(); }
   let searchInput = $state('');
   let isInitialized = $state(false);
   let unlistenFileWatcher: (() => void) | null = null;
@@ -86,6 +94,11 @@
 
     showToast(message, notice.kind === 'error' ? 'error' : 'info', 6000);
     clearWriteBackNotice();
+  });
+
+  $effect(() => {
+    if (ui.isSearchOpen) tick().then(() => document.querySelector<HTMLInputElement>('.search-input')?.focus());
+    else { searchInput = ''; setSearchQuery(''); }
   });
 
   onMount(async () => {
@@ -120,9 +133,7 @@
 
     // Register keyboard callbacks
     registerKeyboardCallbacks({
-      focusNewTask: () => {
-        // Focus will be handled by TaskForm
-      },
+      focusNewTask,
       togglePomodoro: () => {
         togglePomodoro();
       }
@@ -151,7 +162,7 @@
 
     // Listen for pomodoro complete events
     window.addEventListener('pomodoro-complete', ((e: CustomEvent) => {
-      incrementPomodoro(e.detail.taskId);
+      incrementPomodoro(e.detail.taskId).catch(() => {});
     }) as EventListener);
 
     // Window-level safety net: guarantees the global drag flag is reset even
@@ -222,12 +233,12 @@
       </div>
 
       <div class="header-center">
-        <button class="search-trigger" onclick={() => ui.isSearchOpen = true}>
+        <button class="search-trigger" aria-label={t('filter.search')} onclick={() => ui.isSearchOpen = true}>
           <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="11" cy="11" r="8"></circle>
             <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
           </svg>
-          <span class="search-placeholder"></span>
+          <span class="search-placeholder">{t('filter.search')}</span>
           <kbd>⌘K</kbd>
         </button>
       </div>
@@ -240,6 +251,7 @@
           <button
             class="view-btn"
             class:active={ui.viewMode === 'today'}
+            aria-pressed={ui.viewMode === 'today'}
             onclick={() => setViewMode('today')}
             title={t('view.today') || 'Today'}
           >
@@ -254,10 +266,12 @@
               <path d="m6.34 17.66-1.41 1.41"></path>
               <path d="m19.07 4.93-1.41 1.41"></path>
             </svg>
+            <span>{t('view.today')}</span>
           </button>
           <button
             class="view-btn"
             class:active={ui.viewMode === 'list'}
+            aria-pressed={ui.viewMode === 'list'}
             onclick={() => setViewMode('list')}
             title={t('view.list')}
           >
@@ -269,10 +283,12 @@
               <line x1="3" y1="12" x2="3.01" y2="12"></line>
               <line x1="3" y1="18" x2="3.01" y2="18"></line>
             </svg>
+            <span>{t('view.list')}</span>
           </button>
           <button
             class="view-btn"
             class:active={ui.viewMode === 'kanban'}
+            aria-pressed={ui.viewMode === 'kanban'}
             onclick={() => setViewMode('kanban')}
             title={t('view.kanban')}
           >
@@ -281,10 +297,12 @@
               <rect x="10" y="3" width="5" height="18" rx="1"></rect>
               <rect x="17" y="3" width="5" height="18" rx="1"></rect>
             </svg>
+            <span>{t('view.kanban')}</span>
           </button>
           <button
             class="view-btn"
             class:active={ui.viewMode === 'calendar'}
+            aria-pressed={ui.viewMode === 'calendar'}
             onclick={() => setViewMode('calendar')}
             title={t('view.calendar') || 'Calendar'}
           >
@@ -294,6 +312,7 @@
               <line x1="8" y1="2" x2="8" y2="6"></line>
               <line x1="3" y1="10" x2="21" y2="10"></line>
             </svg>
+            <span>{t('view.calendar')}</span>
           </button>
         </div>
 
@@ -326,10 +345,20 @@
       </div>
     </header>
 
+    <ActiveFocusBar />
+    {#if sessionActive}<button class="planning-toggle" aria-expanded={showPlanning} onclick={() => showPlanning = !showPlanning}>{showPlanning ? t('continuity.hidePlan') : t('continuity.showPlan')}</button>{/if}
+    <div class="planning-area" hidden={!showPlanning}>
+      <CapacityStrip />
+
     <!-- Task Form at Top (Always visible except in Review maybe?) -->
     <div class="task-form-container">
       <TaskForm />
     </div>
+    </div>
+
+    {#if tasks.lastError}
+      <div class="save-error-banner" role="alert">{tasks.lastError}</div>
+    {/if}
 
     <!-- Low-completion micro-review prompt (W4b) -->
     <LowCompletionBanner />
@@ -350,6 +379,7 @@
          change tabs to stop seeing it. -->
     <OldestOpenRow />
 
+    {#if ui.viewMode === 'list' || ui.viewMode === 'kanban'}<FilterContext />{/if}
     <!-- Main Layout Switcher - Views fill available space -->
     <div class="content-layout">
       {#key ui.viewMode}
@@ -404,7 +434,7 @@
           {#each tasks.filteredTasks.slice(0, 10) as task (task.id)}
             <button
               class="search-result-item"
-              onclick={() => { closeSearch(); searchInput = ''; setSearchQuery(''); }}
+              onclick={() => { closeSearch(); searchInput = ''; setSearchQuery(''); openEditModal(task); }}
               role="option"
               aria-selected="false"
             >
@@ -512,6 +542,21 @@
 {/if}
 
 <style>
+  .planning-area[hidden] { display: none; }
+  .planning-toggle { align-self: flex-start; margin: 0 24px 12px; color: var(--text-secondary); background: none; border: none; cursor: pointer; padding: 5px 0; font: inherit; font-size: 12px; text-decoration: underline; text-underline-offset: 3px; }
+
+  .planning-area { flex-shrink: 0; max-height: 48vh; overflow-y: auto; padding: 18px 24px 0; }
+  .task-form-container { padding: 0 0 14px !important; }
+  .header { flex-wrap: wrap; gap: 10px 16px !important; }
+  .header-center { min-width: 120px; }
+  .view-toggle { background: var(--input-bg); border: 1px solid var(--border-subtle); padding: 3px !important; border-radius: 9px; }
+  .view-btn { width: auto !important; min-width: 34px; height: 32px !important; padding: 0 8px; gap: 5px; opacity: 1 !important; font-size: 12px; }
+  .view-btn.active { background: var(--card-bg) !important; box-shadow: var(--shadow-sm); }
+  @media (max-width: 1150px) { .header-right { width: 100%; justify-content: space-between; } .header-center { max-width: none !important; } }
+  @media (max-width: 700px) { .planning-area { padding: 12px 12px 0; } .view-btn { padding: 0 6px; } .view-btn svg { display: none; } }
+
+  .save-error-banner { margin: 12px 20px; padding: 12px 16px; border: 1px solid var(--color-error, #c95555); border-radius: 8px; color: var(--text-primary); overflow-wrap: anywhere; }
+
   .loading-screen {
     display: flex;
     align-items: center;
@@ -547,6 +592,7 @@
   }
 
   .main-content {
+    min-width: 0;
     flex: 1;
     display: flex;
     flex-direction: column;
@@ -899,5 +945,15 @@
     flex-shrink: 0;
     font-weight: 600;
     color: var(--priority-b-color, #ff922b);
+  }
+  @media (max-width: 700px) {
+    .header { padding: 10px 12px; }
+    .header-left { flex: 1; }
+    .header-center { order: 0; width: 36px; min-width: 36px; flex: none; margin: 0; }
+    .search-placeholder, .search-trigger kbd { display: none; }
+    .search-trigger { width: 36px; padding: 9px; }
+    .header-right { order: 3; flex-wrap: wrap; gap: 6px; }
+    .header-right :global(.quota-meter) { width: 100%; order: -1; }
+    .content-layout { padding: 0 12px 12px; }
   }
 </style>

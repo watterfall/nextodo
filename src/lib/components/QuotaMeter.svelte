@@ -1,135 +1,77 @@
 <script lang="ts">
-  import { PRIORITY_CONFIG } from '$lib/types';
+  import { PRIORITY_CONFIG, type Priority } from '$lib/types';
   import { getQuotaSummary } from '$lib/utils/quota';
   import { getTasksStore } from '$lib/stores/tasks.svelte';
+  import { getI18nStore } from '$lib/i18n';
 
   const tasks = getTasksStore();
+  const t = getI18nStore().t;
   const summary = $derived(getQuotaSummary(tasks.tasks));
+  let expanded = $state<Priority | null>(null);
+  let container = $state<HTMLDivElement>();
+  const selected = $derived(summary.find(item => item.priority === expanded));
 
-  /**
-   * Capacity-as-container: render the quota as discrete cells.
-   * A=1 slot, B=2, C=3, D=4, E=5. Filled cells communicate "this much used" —
-   * empty cells communicate "this much remaining capacity". When at capacity,
-   * the row gets a soft pulse signalling "stop here, you have no more room".
-   *
-   * F is infinity — render an ∞ symbol instead of cells.
-   */
+  function closeOutside(event: PointerEvent) {
+    if (event.target instanceof Node && !container?.contains(event.target)) expanded = null;
+  }
+
+  function handleKeydown(event: KeyboardEvent) {
+    if (event.key !== 'Escape' || !expanded || event.isComposing) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const priority = expanded;
+    expanded = null;
+    container?.querySelector<HTMLButtonElement>(`[data-priority="${priority}"]`)?.focus();
+  }
 </script>
 
-<div class="quota-meter">
-  {#each summary as item}
-    {@const config = PRIORITY_CONFIG[item.priority]}
-    {@const isInfinite = item.quota === Infinity}
-    {@const cellCount = isInfinite ? 0 : (item.quota as number)}
-    <div
-      class="quota-item"
-      class:full={item.isFull}
-      class:at-capacity={!isInfinite && item.used >= item.quota}
-      title={`${item.priority} · ${item.used}/${isInfinite ? '∞' : item.quota}`}
-    >
-      <span class="priority-label" style:color={config.color}>
-        {item.priority}
-      </span>
-      {#if isInfinite}
-        <div class="cells infinity">
-          <span class="cell-infinity font-num" style:color={config.color}>
-            ∞ {item.used > 0 ? item.used : ''}
-          </span>
-        </div>
-      {:else}
-        <div class="cells" style:--cell-color={config.color}>
-          {#each Array(cellCount) as _, i}
-            <span class="cell" class:filled={i < item.used} aria-hidden="true"></span>
-          {/each}
-        </div>
-      {/if}
-    </div>
-  {/each}
+<svelte:window onpointerdown={closeOutside} />
+
+<div class="quota-meter" bind:this={container} role="group" aria-label={t('design.quotaSummary')}
+  onfocusout={(event) => { if (!(event.relatedTarget instanceof Node) || !container?.contains(event.relatedTarget)) expanded = null; }}>
+  <div class="quota-rings">
+    {#each summary as item (item.priority)}
+      <button class="quota-ring" data-priority={item.priority}
+        style:--tier-color={PRIORITY_CONFIG[item.priority].color}
+        aria-expanded={expanded === item.priority}
+        aria-controls="quota-details"
+        onkeydown={handleKeydown}
+        aria-label={t('design.quotaDetail', { priority: item.priority, name: t(`priority.${item.priority}`), used: item.used, quota: item.quota })}
+        onclick={() => expanded = expanded === item.priority ? null : item.priority}>
+        <svg viewBox="0 0 36 36" aria-hidden="true">
+          <circle class="track" cx="18" cy="18" r="15.9155" />
+          {#if item.used > 0}
+            <circle class="progress" cx="18" cy="18" r="15.9155" pathLength="100"
+              stroke-dasharray={`${Math.min(100, item.used / item.quota * 100)} 100`} />
+          {/if}
+        </svg>
+        <span>{item.priority}</span>
+      </button>
+    {/each}
+  </div>
+  <div class="quota-details" id="quota-details" hidden={!selected} role="region" aria-labelledby="quota-detail-title">
+    {#if selected}
+      <div class="detail-heading">
+        <strong id="quota-detail-title" style:--tier-color={PRIORITY_CONFIG[selected.priority].color}>{selected.priority} · {t(`priority.${selected.priority}`)}</strong>
+        <span>{t('design.quotaOpen', { n: selected.used })}</span>
+      </div>
+      <p>{t('design.quotaLimit', { n: selected.quota })}{#if selected.isFull}<span> · {t('design.quotaFull')}</span>{/if}</p>
+    {/if}
+  </div>
 </div>
 
 <style>
-  .quota-meter {
-    display: flex;
-    align-items: center;
-    gap: var(--space-md);
-    padding: var(--space-md) var(--space-lg);
-    background: var(--card-bg);
-    border-radius: var(--radius-lg);
-    border: 1px solid var(--border-hairline);
-    box-shadow: var(--elevation-1);
-  }
-
-  .quota-item {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    /* Items naturally size to their cell count — no `flex: 1` stretching */
-    transition: opacity 0.3s var(--ease-out-expo);
-  }
-
-  /* At capacity = soft hint that there's no more room (philosophically:
-     this is good, not bad — your quota protects your focus) */
-  .quota-item.at-capacity {
-    animation: capacity-breathe 3s ease-in-out infinite;
-  }
-
-  @keyframes capacity-breathe {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.7; }
-  }
-
-  .priority-label {
-    font-weight: 600;
-    font-size: var(--text-sm);
-    font-family: var(--font-mono);
-    width: 11px;
-    text-align: center;
-    letter-spacing: -0.02em;
-  }
-
-  .cells {
-    display: inline-flex;
-    gap: 3px;
-  }
-
-  /* A cell: tiny rounded rectangle. Empty = hairline outline.
-     Filled = solid priority color. */
-  .cell {
-    width: 7px;
-    height: 12px;
-    border-radius: 2px;
-    background: transparent;
-    box-shadow: inset 0 0 0 1px var(--border-strong);
-    transition: background 0.25s var(--ease-out-expo),
-                box-shadow 0.25s var(--ease-out-expo);
-  }
-
-  .cell.filled {
-    background: var(--cell-color);
-    box-shadow: inset 0 0 0 1px var(--cell-color);
-  }
-
-  /* Infinite quota (F = Idea Pool) — show ∞ + active count */
-  .cells.infinity {
-    display: inline-flex;
-    align-items: center;
-  }
-
-  .cell-infinity {
-    font-size: var(--text-sm);
-    font-weight: 500;
-    letter-spacing: 0.04em;
-    opacity: 0.75;
-  }
-
-  /* Compact mode: tighter cells */
-  :global(.density-compact) .cell {
-    width: 6px;
-    height: 10px;
-  }
-
-  :global(.density-compact) .quota-meter {
-    gap: var(--space-sm);
-    padding: 6px 10px;
-  }
+  .quota-meter { position: relative; flex-shrink: 0; }
+  .quota-rings { display: flex; justify-content: flex-end; align-items: center; gap: 8px; }
+  .quota-ring { position: relative; display: grid; place-items: center; flex: 0 0 40px; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--text-primary); font: inherit; font-size: 11px; font-weight: 650; cursor: pointer; }
+  .quota-ring:hover, .quota-ring[aria-expanded="true"] { background: var(--hover-bg); }
+  .quota-ring:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+  svg { position: absolute; inset: 4px; width: 32px; height: 32px; transform: rotate(-90deg); pointer-events: none; }
+  circle { fill: none; stroke-width: 2; }
+  .track { stroke: var(--border-color); }
+  .progress { stroke: var(--tier-color); stroke-linecap: round; }
+  .quota-details { position: absolute; top: calc(100% + 8px); right: 0; z-index: 50; width: 250px; max-width: calc(100vw - 24px); padding: 13px 15px; color: var(--text-primary); background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 10px; box-shadow: 0 8px 28px #0002; font-size: 12px; }
+  .detail-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  strong { border-left: 2px solid var(--tier-color); padding-left: 7px; font-weight: 550; }
+  p { margin: 6px 0 0; color: var(--text-secondary); }
 </style>

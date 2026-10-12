@@ -404,7 +404,7 @@ a tier here. `docs/SLEEK-INTEROP.md` is the authority; the rules that bite in co
 
 ### Completed Task Retention
 
-Completed tasks (G priority) stay visible, struck through, until **the end of the
+Completed tasks (`status: completed`) stay visible, struck through, until **the end of the
 2-day unit they were completed in** — not for a per-priority number of hours. A
 task finished on the Monday of a Mon–Tue unit stays visible through Tuesday
 23:59, regardless of whether it was an A or an E.
@@ -413,9 +413,9 @@ Use `isWithinRetentionPeriod()` and `getRetentionRemaining()` from types to chec
 retention status; they delegate to `isCompletedInCurrentUnit()` and
 `getUnitRetentionRemaining()` in `unitCalc.ts`.
 
-Separately, `cleanupOldTasks()` in `tasks.svelte.ts` moves G tasks out of
+Separately, `cleanupOldTasks()` in `tasks.svelte.ts` moves completed tasks out of
 `active.json` into cold storage 14 days after completion, and hard-deletes
-cancelled (H) tasks after 2 days.
+cancelled tasks after 2 days.
 
 ### Bi-Daily Units
 
@@ -573,7 +573,7 @@ areTaskArraysEqual(a, b); // DnD optimization helper
 Unit testing runs on **Vitest** (`vitest.config.ts` at the repo root, `node` environment, `$lib` alias). Tests are colocated as `*.test.ts` next to the code they cover — the include glob is `src/**/*.test.ts` and `cli/**/*.test.ts`, so the pure logic in `src/lib/utils/*.ts` (parser, quotaCore, recurrence, unitCalc, cycleEngine, …) is the primary target.
 
 ```bash
-pnpm test            # runs the suite twice: local zone, then TZ=Asia/Shanghai
+pnpm test            # runs the suite twice: TZ=UTC, then TZ=Asia/Shanghai
 pnpm run test:watch  # vitest watch mode
 pnpm run typecheck   # tsc for src/ AND cli/
 pnpm run check       # svelte-check — Svelte + TypeScript diagnostics
@@ -583,7 +583,7 @@ pnpm run check       # svelte-check — Svelte + TypeScript diagnostics
 `TZ=UTC`, which was the one zone where the recurrence engine happened to be
 correct — east of UTC a `1d` recurrence returned the same date forever, and the
 tests passed anyway. All date handling now works on local calendar parts, and
-`pnpm test` runs the suite a second time under `TZ=Asia/Shanghai` to keep it that
+`pnpm test` runs the suite under `TZ=UTC` and `TZ=Asia/Shanghai` to keep it that
 way. If you add date logic, never format via `toISOString()`; use
 `formatDateISO()` / `currentUnitStartLocal()`.
 
@@ -598,7 +598,7 @@ code with `invoke()` where `localStorage` is, so stubbing it would test the
 stub — and neither are `exportData` / `importData`, thin Blob and FileReader
 wrappers with no logic of their own.
 
-Not yet covered: the Svelte stores. Most of the logic that used to hide inside
+The task store is now covered by `src/lib/stores/tasks.test.ts`, including failed saves, interrupted archival, pending export retries, and status transitions. Focus switching and session-local resumption drafts are covered in `src/lib/stores/focusActions.test.ts`; the remaining stores are not yet covered. Most of the logic that used to hide inside
 them now lives in Node-safe modules that are tested directly — `migrateV5.ts`,
 `migrateV6.ts`, `todotxt.ts`, `quotaCore.ts`, `flowMetrics.ts`. For E2E,
 Playwright remains the suggested future addition.

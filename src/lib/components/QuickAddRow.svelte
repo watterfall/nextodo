@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import type { Priority } from '$lib/types';
   import { PRIORITY_CONFIG } from '$lib/types';
   import { addTask } from '$lib/stores/tasks.svelte';
@@ -16,34 +17,35 @@
 
   let isOpen = $state(false);
   let content = $state('');
+  let saving = $state(false);
+  let quotaWarning = $state('');
+  let warnedText = '';
+  let error = $state('');
   let isComposing = $state(false);
   let inputEl = $state<HTMLInputElement | null>(null);
 
   const accent = $derived(PRIORITY_CONFIG[priority].color);
 
-  async function submit() {
+  async function submit(force = false) {
     const text = content.trim();
-    if (!text) return;
-
-    // Append the column priority as a default. The parser uses the FIRST `!X`
-    // token, so an explicit priority typed by the user still wins.
+    if (!text || saving || isComposing) return;
     const taskString = `${text} !${priority}`;
-    let result = await addTask(taskString);
-
-    // addTask only fails on a quota violation — offer to add anyway.
-    if (!result.success && result.error) {
-      if (confirm(result.error + '\n' + t('action.continueAnyway') + '?')) {
-        result = await addTask(taskString, true);
+    const confirmed = force && warnedText === taskString;
+    saving = true; error = '';
+    try {
+      const result = await addTask(taskString, confirmed);
+      if (result.success) {
+        content = ''; quotaWarning = ''; warnedText = '';
+        showToast(t('message.taskAdded'), 'success');
+      } else if (result.quotaExceeded) {
+        quotaWarning = result.error ?? ''; warnedText = taskString;
+      } else {
+        error = result.error ?? t('error.saveFailed');
       }
-    }
-
-    if (result.success) {
-      content = '';
-      showToast(t('message.taskAdded'), 'success');
-      inputEl?.focus(); // keep the row open for rapid successive entry
-    } else if (result.error) {
-      showToast(result.error, 'error');
-    }
+    } catch { error = t('error.saveFailed'); }
+    finally { saving = false; }
+    await tick();
+    inputEl?.focus();
   }
 
   function onKeydown(e: KeyboardEvent) {
@@ -53,7 +55,8 @@
       submit();
     } else if (e.key === 'Escape') {
       e.preventDefault();
-      content = '';
+      e.stopPropagation();
+      quotaWarning = ''; error = '';
       isOpen = false;
       inputEl?.blur();
     }
@@ -63,11 +66,6 @@
     isOpen = true;
   }
 
-  function onBlur() {
-    // Collapse only when nothing is being typed, so a half-typed task isn't lost.
-    if (!content.trim()) isOpen = false;
-  }
-
   function focusOnMount(node: HTMLInputElement) {
     node.focus();
   }
@@ -75,28 +73,44 @@
 
 <div class="quick-add" style:--qa-accent={accent}>
   {#if isOpen}
+    <form onsubmit={(e) => { e.preventDefault(); submit(); }}>
     <input
       class="quick-add-input"
       bind:this={inputEl}
       bind:value={content}
+      disabled={saving}
+      aria-label={`${priority} · ${t('quickAdd.add')}`}
+      oninput={() => { quotaWarning = ''; error = ''; }}
       placeholder={t('quickAdd.placeholder')}
       oncompositionstart={() => (isComposing = true)}
       oncompositionend={() => (isComposing = false)}
       onkeydown={onKeydown}
-      onblur={onBlur}
       use:focusOnMount
     />
+    <button class="submit" disabled={saving || !content.trim()} aria-label={t('quickAdd.add')} title={t('quickAdd.add')}>＋</button>
+    <button class="dismiss" type="button" disabled={saving} aria-label={t('action.close')} title={t('action.close')} onclick={() => isOpen = false}>×</button>
+    </form>
+    {#if quotaWarning}<div class="feedback" role="status">{quotaWarning}<button disabled={saving} onclick={() => submit(true)}>{t('action.continueAnyway')}</button></div>{/if}
+    {#if error}<div class="feedback" role="alert">{error}</div>{/if}
   {:else}
     <button class="quick-add-trigger" onclick={open} title={t('quickAdd.add')}>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
         <path d="M12 5v14M5 12h14" />
       </svg>
-      <span>{t('quickAdd.add')}</span>
+      <span>{content.trim() || t('quickAdd.add')}</span>
     </button>
   {/if}
 </div>
 
 <style>
+  form { display: flex; gap: 4px; }
+  .quick-add-input { min-width: 0; flex: 1; }
+  .submit, .dismiss { flex-shrink: 0; width: 30px; border: 1px solid var(--border-subtle); border-radius: 6px; background: var(--card-bg); color: var(--text-secondary); cursor: pointer; font-size: 18px; }
+  .submit { color: var(--primary); }
+  .feedback { font-size: 12px; color: var(--text-secondary); margin-top: 6px; overflow-wrap: anywhere; }
+  .feedback button { font: inherit; color: var(--primary); background: var(--card-bg); border: 1px solid var(--border-subtle); border-radius: 5px; padding: 4px 6px; margin-top: 4px; cursor: pointer; }
+  .quick-add-trigger span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
   .quick-add {
     flex-shrink: 0;
   }

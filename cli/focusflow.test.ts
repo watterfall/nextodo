@@ -61,6 +61,16 @@ function seed(tasks: Task[]): void {
 }
 
 describe('focusflow CLI', () => {
+  it('retains a full-board incumbent without a source in pending export', () => {
+    const tasks: Task[] = [];
+    for (const [priority, count] of Object.entries({ A: 1, B: 2, C: 3, D: 4, E: 5 })) {
+      for (let i = 0; i < count; i++) tasks.push(createEmptyTask(priority as Task['priority']));
+    }
+    seed(tasks); run('add', 'replacement !A');
+    expect(read().pendingExport?.map(t => t.id)).toContain(tasks[0].id);
+    expect(read().tasks).toHaveLength(15);
+  });
+
   it('adds a task and reads it back through list', () => {
     run('add', 'write the report !C +work ~2026-03-15');
 

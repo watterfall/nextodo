@@ -1,25 +1,6 @@
 <script lang="ts">
-  /**
-   * The oldest thing still owed, always on screen.
-   *
-   * This is the highest-diagnostic-value number the app has, and it is not a
-   * queue measurement. A task that has sat for seven weeks in a system with a
-   * hard 15-task cap is not waiting for capacity — it is being avoided, and
-   * avoidance tracks task aversiveness, which comes from vagueness and from
-   * feeling unable rather than from laziness.
-   *
-   * That is why "do it" here does not just raise the priority. It asks for a
-   * situational cue to start from, which is the intervention with the largest
-   * effect size in this area and the one that works without depending on the
-   * user feeling motivated at the time.
-   *
-   * Two rules for the copy and layout, both load-bearing:
-   *
-   * 1. **Neutral wording.** Self-blame is not a correction mechanism; it is
-   *    fuel for more avoidance. The row states a number, it does not judge.
-   * 2. **"Drop it" is equal in weight to "do it."** If dropping looks like
-   *    failing, nobody drops anything, and the queue never clears.
-   */
+  // Surface an older commitment without labelling its cause. Same-day tasks
+  // do not need a resident age reminder; they remain in the ordinary list.
   import { getTasksStore, updateTask, cancelTask } from '$lib/stores/tasks.svelte';
   import { getI18nStore } from '$lib/i18n';
   import { currentUnitStartLocal } from '$lib/utils/unitCalc';
@@ -61,22 +42,26 @@
     if (!oldest) return;
     const cue = triggerDraft.trim();
     if (!cue) return;
-    await updateTask(oldest.task.id, {
-      trigger: cue,
-      // Bring it into the unit that is running now, so it stops being carried.
-      unitStart: currentUnitStartLocal()
-    });
-    asking = false;
-    triggerDraft = '';
-    showToast(t('flow.revived') || '已设定启动线索', 'success');
+    try {
+      await updateTask(oldest.task.id, {
+        trigger: cue,
+        // Bring it into the unit that is running now, so it stops being carried.
+        unitStart: currentUnitStartLocal()
+      });
+      asking = false;
+      triggerDraft = '';
+      showToast(t('flow.revived') || '已设定启动线索', 'success');
+    } catch { showToast(t('error.saveFailed'), 'error'); }
   }
 
   async function drop() {
     if (!oldest) return;
-    await cancelTask(oldest.task.id);
-    // Deliberately plain. No "are you sure", no consolation, no streak lost:
-    // dropping a task is a decision, not a lapse.
-    showToast(t('flow.dropped') || '已取消', 'info');
+    try {
+      await cancelTask(oldest.task.id);
+      // Deliberately plain. No "are you sure", no consolation, no streak lost:
+      // dropping a task is a decision, not a lapse.
+      showToast(t('flow.dropped') || '已取消', 'info');
+    } catch { showToast(t('error.saveFailed'), 'error'); }
   }
 
   function onKeydown(e: KeyboardEvent) {
@@ -85,7 +70,7 @@
   }
 </script>
 
-{#if oldest}
+{#if oldest && oldest.days > 0}
   <div class="oldest-row" class:stale={isStale}>
     <div class="oldest-main">
       <span class="oldest-age font-num" class:stale={isStale}>

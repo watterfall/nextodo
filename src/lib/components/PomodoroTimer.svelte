@@ -1,4 +1,5 @@
 <script lang="ts">
+  import FocusContinuation from './FocusContinuation.svelte';
   import {
     getPomodoroStore,
     pausePomodoro,
@@ -33,7 +34,7 @@
   const stateColor = $derived(getStateColor());
 </script>
 
-<div class="pomodoro-timer" class:active={pomodoro.state !== 'idle'}>
+<div class="pomodoro-timer" class:active={pomodoro.state !== 'idle'} class:idle={pomodoro.state === 'idle'}>
   <div class="timer-display">
     <svg class="progress-ring" viewBox="0 0 200 200">
       <circle
@@ -77,6 +78,7 @@
     </div>
   </div>
 
+  {#if pomodoro.state === 'idle'}<p class="idle-hint">{i18n.t('design.idleHint')}</p>{/if}
   <div class="timer-controls">
     {#if pomodoro.state !== 'idle'}
       {#if pomodoro.isRunning}
@@ -109,6 +111,8 @@
     {/if}
   </div>
 
+    <FocusContinuation />
+
   <div class="session-count">
     <span class="count-label">{i18n.t('pomodoro.todayCount')}</span>
     <span class="count-value">🍅 ×{pomodoro.todayCount}</span>
@@ -125,6 +129,12 @@
 </div>
 
 <style>
+  .pomodoro-timer.idle { padding: 16px; gap: 8px; }
+  .idle .progress-ring, .idle .timer-controls, .idle .session-count { display: none; }
+  .idle .timer-display { width: 100%; height: 60px; }
+  .idle .time { font-size: 30px; }
+  .idle-hint { font-size: 12px; text-align: center; color: var(--text-secondary); line-height: 1.6; }
+
   .pomodoro-timer {
     display: flex;
     flex-direction: column;

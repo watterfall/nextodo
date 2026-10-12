@@ -219,6 +219,8 @@ html.density-compact .task-text {
   --border-hairline: rgba(0, 0, 0, 0.05);
   --border-strong: rgba(0, 0, 0, 0.14);
 
+  --warning: #946200;
+  --warning-bg: rgba(148, 98, 0, 0.08);
   --primary: #7950f2;
   --primary-hover: #6741d9;
   --primary-bg: rgba(121, 80, 242, 0.1);
@@ -1203,15 +1205,6 @@ body.dnd-active {
    ENHANCED FOCUS MODE
    =========================================== */
 
-/* Dimmed state for non-active elements during focus mode */
-.focus-dimmed {
-  opacity: 0.3;
-  filter: grayscale(0.4) blur(0.5px);
-  transform: scale(0.98);
-  pointer-events: none;
-  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
 /* Active/highlighted element during focus mode */
 .focus-active {
   opacity: 1;
@@ -1302,4 +1295,10 @@ body.dnd-active {
 .language-selector:hover {
   background: var(--action-btn-hover-bg);
   color: var(--text-primary);
+}
+
+/* Shared, visible keyboard focus for the primary workflow. */
+:where(button, summary, select, input, textarea, [tabindex="0"]):focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 3px;
 }

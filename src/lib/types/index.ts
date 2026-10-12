@@ -172,6 +172,11 @@ export interface Task {
    * ("how will I start this in the next two days"), not to the backlog entry.
    */
   trigger?: string | null;
+  // Separate pool creation from acceptance into the working set.
+  committedAt?: string | null;
+  estimatedMinutes?: number | null;
+  nextAction?: string | null;
+  resumeNote?: string | null;
   // Set when this task was pulled from a todo.txt candidate pool.
   source?: TaskSource;
   // NEW: Unit override for flexible unit control
@@ -331,6 +336,7 @@ export interface ActiveData {
   // F / N tiers can never destroy data just because no todo.txt was configured
   // at migration time.
   pendingExport?: Task[];
+  unitPlans?: Record<string, { availableMinutes: number }>;
 }
 
 // Archive data file structure (cold data) - DEPRECATED, kept for migration
@@ -363,6 +369,7 @@ export interface AppData {
   // F / N tiers can never destroy data just because no todo.txt was configured
   // at migration time.
   pendingExport?: Task[];
+  unitPlans?: Record<string, { availableMinutes: number }>;
 }
 
 // Priority configuration
@@ -496,7 +503,7 @@ export function createEmptyTask(priority: Priority = DEFAULT_PRIORITY): Task {
 // Create default settings
 export function createDefaultSettings(): Settings {
   return {
-    theme: 'dark',
+    theme: 'light',
     language: 'zh-CN',
     pomodoroWork: 25,
     pomodoroShortBreak: 5,

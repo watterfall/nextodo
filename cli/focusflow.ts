@@ -102,6 +102,7 @@ function cmdAdd(positional: string[], flags: Record<string, string | boolean>, p
 
   const data = load(path);
   const task = createTaskFromInput(text);
+  task.committedAt = new Date().toISOString();
 
   // The single-slot tier is exempt — Highlander unseats the incumbent, so
   // there is always room.
@@ -110,12 +111,16 @@ function cmdAdd(positional: string[], flags: Record<string, string | boolean>, p
   }
   const result = applyHighlanderRule(data.tasks, task);
   data.tasks = [...result.tasks, task];
+  const pending = data.pendingExport ?? [];
+  const ids = new Set(pending.map(item => item.id));
+  const unsourced = result.evicted.filter(item => !item.source && !ids.has(item.id));
+  if (unsourced.length) data.pendingExport = [...pending, ...unsourced];
   save(path, data);
 
   // An unseated incumbent with nowhere to go leaves the unit entirely. Saying
   // so matters: otherwise it just looks like the task disappeared.
   for (const gone of result.evicted) {
-    console.error(`focusflow: "${gone.content}" left the unit — no tier had room.`);
+    console.error(`focusflow: "${gone.content}" left the unit — retained in its source file or pending export.`);
   }
 
   if (flags.json) console.log(JSON.stringify({ ok: true, id: task.id, priority: task.priority, content: task.content }));
@@ -298,6 +303,7 @@ return out`;
     let input = `${title} !${priority}`;
     if (dueStr && /^\d{4}-\d{2}-\d{2}$/.test(dueStr.trim())) input += ` ~${dueStr.trim()}`;
     const task = createTaskFromInput(input);
+    task.committedAt = new Date().toISOString();
     data.tasks.push(task);
     existing.add(title);
     added++;

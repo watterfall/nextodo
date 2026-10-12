@@ -105,6 +105,9 @@
         {t('inbox.exportNow')}
       </button>
     </div>
+    <ul class="pending-tasks">
+      {#each tasks.pendingExport as task (task.id)}<li>{task.content}</li>{/each}
+    </ul>
   {/if}
 
   {#if !tasks.settings.todoFilePath}

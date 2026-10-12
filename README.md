@@ -22,6 +22,10 @@ two days. Completing one marks it `x` in that same file.
 - **Proactive vs reactive** - Mark whether you chose the work or were handed it (`@主` / `@被`), and see the ratio at review time
 - **Highlander Rule** - Only one A-priority task at a time; a second one unseats the first rather than being refused
 - **Bi-Daily Work Units** - Mon-Tue, Wed-Thu, Fri-Sat cycles with Sunday reviews
+- **Time planning** - Compare your two-day time budget with explicit task estimates; unestimated tasks remain visible rather than counting as zero. This is a plan, not a live balance of working time
+- **Next actions and resumption notes** - Capture a concrete next step and save a note before resuming. Unsaved notes follow you between the sidebar and immersive view during the current app session
+- **Stable A–E layout** - Empty groups keep their add controls. Compact priority rings reveal counts and limits on demand
+- **Connected focus controls** - Save an edit and start focusing, confirm a task switch, and access pause/resume even with the sidebar collapsed
 - **Flow metrics, not scoreboards** - How much is open, how long the oldest unfinished task has waited, how long things actually take. No targets, because a target is what turns a measure into something to perform
 - **If-then start cues** - `when:after I sit down and open the laptop`. A due date is a time trigger and vanishes when the schedule slips; a situational cue still shows up
 - **Pomodoro Timer** - Integrated focus sessions, with the block length set per tier (25 minutes was the inventor's kitchen timer, not a finding)
@@ -53,7 +57,7 @@ two days. Completing one marks it `x` in that same file.
 
 #### Prerequisites
 
-- Node.js 18+
+- Node.js 22.12+
 - Rust (latest stable)
 - Platform-specific dependencies for [Tauri](https://tauri.app/start/prerequisites/)
 
@@ -84,11 +88,14 @@ pnpm run tauri:build
 ### Testing
 
 ```bash
-# Run unit tests (Vitest)
-pnpm test
+# Quick checks: types, Svelte diagnostics, tests in UTC and Asia/Shanghai
+pnpm verify
 
 # Type-check Svelte + TypeScript
 pnpm run check
+
+# Major-release checks, including frontend/CLI builds and Rust tests
+pnpm verify:full
 ```
 
 ### Task Input Syntax
@@ -161,6 +168,10 @@ MIT
 - **主动 / 被动** - 标记这件事是自己规划的还是别人交办的（`@主` / `@被`），复盘时看比例
 - **高地人规则** - 同时只能有一个 A 级任务；再加一个会挤掉旧的，而不是拒绝
 - **双日工作单元** - 周一-周二、周三-周四、周五-周六循环，周日复盘
+- **时间计划对照** - 自行设置本轮可用分钟，与任务估时对照；未估时任务单列，不等同于实际剩余工时
+- **下一步与恢复提示** - 可选下一步动作，暂停时保存「回来先做什么」；侧栏与沉浸模式共享本次打开期间的草稿
+- **固定 A–E 分区** - 空分区也保留添加入口；顶部环形概览点击后查看数量与上限
+- **连续专注操作** - 编辑后直接专注，切换任务前确认，侧栏收起后仍可暂停和继续
 - **流动指标，不是计分板** - 在办多少、最老的未完成项等了多久、事情实际要多久。三个数都不设目标值，因为一设目标它就变成了可以表演的东西
 - **启动线索（if-then）** - `when:明早坐下打开电脑后`。截止日是时间触发，日程一滑线索就没了；情境线索照样会出现
 - **番茄钟计时器** - 集成专注时段与休息管理，每个优先级档位可设不同时长（25 分钟来自发明者的厨房计时器，不是研究结论）
@@ -192,7 +203,7 @@ MIT
 
 #### 前置要求
 
-- Node.js 18+
+- Node.js 22.12+
 - Rust（最新稳定版）
 - [Tauri](https://tauri.app/start/prerequisites/) 的平台特定依赖
 
@@ -223,11 +234,14 @@ pnpm run tauri:build
 ### 测试
 
 ```bash
-# 运行单元测试（Vitest）
-pnpm test
+# 快速检查：类型、Svelte 诊断、UTC 与 Asia/Shanghai 双时区测试
+pnpm verify
 
 # 类型检查 Svelte + TypeScript
 pnpm run check
+
+# 大版本全量检查，含前端/CLI 构建与 Rust 测试
+pnpm verify:full
 ```
 
 ### 任务输入语法

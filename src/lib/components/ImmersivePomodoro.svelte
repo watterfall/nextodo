@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { getUIStore } from '$lib/stores/ui.svelte';
+  import FocusContinuation from './FocusContinuation.svelte';
   import { getPomodoroStore, pausePomodoro, resumePomodoro, stopPomodoro, skipSession, recordInterruption } from '$lib/stores/pomodoro.svelte';
   import { getI18nStore } from '$lib/i18n';
   import { tick } from 'svelte';
@@ -56,7 +58,9 @@
   }
 
   function handleKeydown(e: KeyboardEvent) {
-    if (showInterruptionInput) return;
+    if (e.defaultPrevented || getUIStore().confirmationData) return;
+    const target = e.target as HTMLElement;
+    if (showInterruptionInput || e.isComposing || target.closest('input, textarea, select, button, [contenteditable="true"]')) return;
     if (e.key === 'Escape') {
       onClose();
     } else if (e.key === ' ') {
@@ -99,6 +103,7 @@
   class="immersive-overlay"
   data-state={pomodoro.state}
   class:break={isBreak}
+  class:paused={!pomodoro.isRunning}
   class:mouse-active={mouseActive}
   onmousemove={handleMouseMove}
   role="dialog"
@@ -183,7 +188,7 @@
           </div>
         {:else}
           <span class="time-text font-num">{pomodoro.formattedTime}</span>
-          <span class="state-text">{pomodoro.stateLabel}</span>
+          <span class="state-text">{pomodoro.isRunning ? pomodoro.stateLabel : t('continuity.paused')}</span>
           {#if isBreak}
             <span class="break-hint" in:fade={{ duration: 400, delay: 300 }}>
               {t('pomodoro.immersive.breakHint')}
@@ -205,6 +210,8 @@
     </div>
 
     <!-- Controls (hover-reveal) -->
+    <FocusContinuation />
+
     <div class="controls reveal-group" role="group" aria-label={t('pomodoro.immersive.timerControls')}>
       {#if pomodoro.isRunning}
         <button class="control-btn pause" onclick={pausePomodoro} aria-label={t('pomodoro.pause')} title={t('pomodoro.pause')}>
@@ -751,6 +758,24 @@
 
   .btn-confirm:hover {
     background: var(--primary-hover);
+  }
+
+  /* A pause reminder must never push the controls outside a short window. */
+  .immersive-overlay { overflow-y: auto; justify-content: flex-start; }
+  .immersive-overlay.paused { cursor: default; }
+  .immersive-overlay.paused .reveal-group, .immersive-overlay:focus-within .reveal-group { opacity: 1; }
+  .immersive-content { box-sizing: border-box; width: min(100%, 600px); margin: auto; flex-shrink: 0; }
+  @media (max-height: 800px), (max-width: 600px) {
+    .immersive-content { gap: 12px; padding: 48px 20px 24px; }
+    .timer-container { width: 220px; height: 220px; flex-shrink: 0; }
+    .time-text { font-size: 60px; }
+    .keyboard-hint { display: none; }
+  }
+
+  @media (max-height: 650px) {
+    .immersive-content { gap: 8px; padding: 32px 20px 16px; }
+    .timer-container { width: 180px; height: 180px; }
+    .time-text { font-size: 52px; }
   }
 
   /* Respect reduced motion */

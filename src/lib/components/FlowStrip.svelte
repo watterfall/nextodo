@@ -1,19 +1,5 @@
 <script lang="ts">
-  /**
-   * Three numbers about how work is moving, in place of the completion
-   * sparkline that used to sit here.
-   *
-   * The sparkline showed completion rate per cycle — a stock measure, and one
-   * that improves when you promise less and finish the little you promised.
-   * These three cannot be moved that way:
-   *
-   *   commitment   how much is currently owed (the quota, made visible)
-   *   oldest       how long the most-avoided thing has been waiting
-   *   cycle time   how long things actually take, creation to completion
-   *
-   * None of them has a target value, and none should ever be given one. A
-   * target is what turns a measure into something to perform.
-   */
+  // Descriptive measures only; neither age nor sample size diagnoses performance.
   import { getTasksStore } from '$lib/stores/tasks.svelte';
   import { getI18nStore } from '$lib/i18n';
   import { MIN_SAMPLE } from '$lib/utils/flowMetrics';
@@ -58,17 +44,14 @@
            printing it would manufacture confidence rather than report any. -->
       <span class="flow-value flow-empty font-num">{t('flow.needMore', { n: needed || MIN_SAMPLE })}</span>
     {/if}
-    <span class="flow-label">{t('flow.cycleTime') || '周期'}</span>
+    <span class="flow-label">{t('flow.cycleTime') || '周期'}{cycle ? ` · n=${cycle.sampleSize}` : ''}</span>
   </div>
 
   {#if estimation}
     <span class="flow-sep" aria-hidden="true"></span>
-    <!-- Reference-class forecasting, computed rather than asked for: how long
-         things like this have actually taken, versus how long they were
-         predicted to take. -->
     <div class="flow-item" title={t('flow.estimationHint')}>
       <span class="flow-value font-num">×{estimation.value.toFixed(1)}</span>
-      <span class="flow-label">{t('flow.estimation') || '估计'}</span>
+      <span class="flow-label">{t('flow.estimation') || '估计'} · n={estimation.sampleSize}</span>
     </div>
   {/if}
 </div>

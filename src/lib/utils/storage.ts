@@ -84,7 +84,7 @@ export async function saveAppData(data: AppData, filesToSave: PersistedFileType[
   if (isTauri()) {
     await saveToTauri(data, filesToSave);
   } else {
-    saveToLocalStorage(data);
+    saveToLocalStorage(data, filesToSave);
   }
 }
 
@@ -218,6 +218,7 @@ function loadFromLocalStorage(): AppData {
       },
       pomodoroHistory: pomodoro.sessions || [],
       settings: upgraded.settings,
+      unitPlans: active.unitPlans,
       cycleState: active.cycleState,
       cycleHistory: active.cycleHistory,
       pendingExport: upgraded.pendingExport
@@ -231,7 +232,7 @@ function loadFromLocalStorage(): AppData {
 /**
  * Save to localStorage (web/dev mode)
  */
-function saveToLocalStorage(data: AppData): void {
+function saveToLocalStorage(data: AppData, filesToSave: PersistedFileType[] = ['active', 'pomodoro_history']): void {
   try {
     // Separate into different files
     const active: ActiveData = {
@@ -241,6 +242,7 @@ function saveToLocalStorage(data: AppData): void {
       reviews: data.reviews,
       customTagGroups: data.customTagGroups,
       settings: data.settings,
+      unitPlans: data.unitPlans,
       cycleState: data.cycleState,
       cycleHistory: data.cycleHistory,
       pendingExport: data.pendingExport
@@ -252,8 +254,8 @@ function saveToLocalStorage(data: AppData): void {
       sessions: data.pomodoroHistory
     };
 
-    localStorage.setItem(STORAGE_KEYS.active, JSON.stringify(active));
-    localStorage.setItem(STORAGE_KEYS.pomodoroHistory, JSON.stringify(pomodoroHistory));
+    if (filesToSave.includes('active')) localStorage.setItem(STORAGE_KEYS.active, JSON.stringify(active));
+    if (filesToSave.includes('pomodoro_history')) localStorage.setItem(STORAGE_KEYS.pomodoroHistory, JSON.stringify(pomodoroHistory));
   } catch (error) {
     console.error('Failed to save to localStorage:', error);
     throw error;
@@ -309,6 +311,7 @@ async function loadFromTauri(): Promise<AppData> {
       },
       pomodoroHistory: pomodoro.sessions || [],
       settings: upgraded.settings,
+      unitPlans: active.unitPlans,
       cycleState: active.cycleState,
       cycleHistory: active.cycleHistory,
       pendingExport: upgraded.pendingExport
@@ -337,6 +340,7 @@ async function saveToTauri(data: AppData, filesToSave: PersistedFileType[] = ['a
       reviews: data.reviews,
       customTagGroups: data.customTagGroups,
       settings: data.settings,
+      unitPlans: data.unitPlans,
       cycleState: data.cycleState,
       cycleHistory: data.cycleHistory,
       pendingExport: data.pendingExport
@@ -555,6 +559,7 @@ function migrateData(data: any): AppData {
     customTagGroups: data.customTagGroups,
     pomodoroHistory: data.pomodoroHistory,
     settings: data.settings,
+    unitPlans: data.unitPlans,
     cycleState: data.cycleState,
     cycleHistory: data.cycleHistory,
     pendingExport: pendingExport.length > 0 ? pendingExport : undefined
@@ -686,14 +691,13 @@ export async function archiveTasks(tasksToArchive: Task[]): Promise<void> {
     const { invoke } = await import('@tauri-apps/api/core');
     await invoke('append_archive_tasks', { newTasksJson: JSON.stringify(tasksToArchive) });
   } else {
-    let archive: { version: string; lastModified: string; tasks: Task[] };
-    try {
-      const existing = localStorage.getItem(STORAGE_KEYS.archive);
-      archive = existing ? JSON.parse(existing) : { version: '3.0', lastModified: '', tasks: [] };
-    } catch {
-      archive = { version: '3.0', lastModified: '', tasks: [] };
+    const existing = localStorage.getItem(STORAGE_KEYS.archive);
+    const archive = existing ? JSON.parse(existing) : { version: '6.0', lastModified: '', tasks: [] };
+    if (!Array.isArray(archive.tasks)) throw new Error('Invalid archive: tasks must be an array');
+    const ids = new Set(archive.tasks.map((task: Task) => task.id));
+    for (const task of tasksToArchive) {
+      if (!ids.has(task.id)) { archive.tasks.push(task); ids.add(task.id); }
     }
-    archive.tasks = [...(archive.tasks || []), ...tasksToArchive];
     archive.lastModified = new Date().toISOString();
     localStorage.setItem(STORAGE_KEYS.archive, JSON.stringify(archive));
   }

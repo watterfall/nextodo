@@ -1,10 +1,23 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import { getUIStore, handleConfirmationConfirm, handleConfirmationCancel } from '$lib/stores/ui.svelte';
   import { getI18nStore } from '$lib/i18n';
 
   const ui = getUIStore();
   const i18n = getI18nStore();
   const t = i18n.t;
+
+  let panel = $state<HTMLDivElement>();
+  let returnFocus: HTMLElement | null = null;
+  $effect(() => {
+    if (ui.confirmationData) {
+      returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      tick().then(() => panel?.querySelector<HTMLButtonElement>('button')?.focus());
+    } else if (returnFocus) {
+      const previous = returnFocus; returnFocus = null;
+      tick().then(() => { if (previous.isConnected) previous.focus(); });
+    }
+  });
 
   function handleBackdropClick(e: MouseEvent) {
     if (e.target === e.currentTarget) {
@@ -13,11 +26,17 @@
   }
 
   function handleKeydown(e: KeyboardEvent) {
+    if (!ui.confirmationData || e.isComposing) return;
     if (e.key === 'Escape') {
+      e.preventDefault(); e.stopImmediatePropagation();
       handleConfirmationCancel();
-    } else if (e.key === 'Enter') {
-      handleConfirmationConfirm();
+    } else if (e.key === 'Tab' && panel) {
+      const buttons = [...panel.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')];
+      const first = buttons[0], last = buttons.at(-1);
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last?.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); }
     }
+    // Enter activates the focused native button, never an unrelated input.
   }
 </script>
 
@@ -27,7 +46,7 @@
   <!-- svelte-ignore a11y_click_events_have_key_events -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div class="modal-overlay" onclick={handleBackdropClick}>
-    <div class="modal-content">
+    <div class="modal-content" bind:this={panel} role="dialog" aria-modal="true" aria-labelledby="confirmation-title" tabindex="-1">
       <div class="modal-header">
         <div class="warning-icon">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -36,7 +55,7 @@
             <line x1="12" y1="17" x2="12.01" y2="17"></line>
           </svg>
         </div>
-        <h3>{ui.confirmationData.title}</h3>
+        <h3 id="confirmation-title">{ui.confirmationData.title}</h3>
       </div>
 
       <div class="modal-body">

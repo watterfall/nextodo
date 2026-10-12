@@ -13,12 +13,13 @@
     "tauri:build": "tauri build",
     "cli:build": "esbuild cli/focusflow.ts --bundle --platform=node --format=esm '--alias:$lib=./src/lib' --outfile=dist-cli/focusflow.mjs --banner:js='#!/usr/bin/env node'",
     "cli": "node dist-cli/focusflow.mjs",
-    "clean": "rm -rf node_modules package-lock.json",
-    "reinstall": "pnpm run clean && npm install",
-    "test": "vitest run && TZ=Asia/Shanghai vitest run",
+    "clean": "rm -rf node_modules",
+    "reinstall": "pnpm install --force",
+    "test": "TZ=UTC vitest run && TZ=Asia/Shanghai vitest run",
     "test:watch": "vitest",
     "check": "svelte-check --tsconfig ./tsconfig.json",
-    "verify": "pnpm run typecheck && pnpm run check && pnpm run test"
+    "verify": "pnpm run typecheck && pnpm run check && pnpm run test",
+    "verify:full": "pnpm verify && pnpm build && pnpm cli:build && cargo test --manifest-path src-tauri/Cargo.toml"
   },
   "bin": {
     "focusflow": "./dist-cli/focusflow.mjs"
@@ -41,5 +42,9 @@
     "typescript": "^5.9.3",
     "vite": "^8.1.3",
     "vitest": "^4.1.9"
+  },
+  "packageManager": "pnpm@12.4.1",
+  "engines": {
+    "node": ">=22.12.0"
   }
 }

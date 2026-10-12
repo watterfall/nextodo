@@ -74,7 +74,17 @@ export async function appendTodoLines(path: string, lines: string[]): Promise<vo
 
   const existing = (await readTodoFile(path)) ?? '';
   const trimmed = existing.replace(/\s+$/, '');
-  const body = trimmed ? `${trimmed}\n${lines.join('\n')}` : lines.join('\n');
+  // Retrying after the shared file was saved but active.json failed must not
+  // duplicate exported lines. Count occurrences so identical pending tasks survive.
+  const counts = new Map<string, number>();
+  for (const line of existing.split(/\r?\n/)) counts.set(line, (counts.get(line) ?? 0) + 1);
+  const missing = lines.filter(line => {
+    const count = counts.get(line) ?? 0;
+    if (count > 0) { counts.set(line, count - 1); return false; }
+    return true;
+  });
+  if (missing.length === 0) return;
+  const body = trimmed ? `${trimmed}\n${missing.join('\n')}` : missing.join('\n');
 
   await writeTodoFile(path, `${body}\n`);
 }

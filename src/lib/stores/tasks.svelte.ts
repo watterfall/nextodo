@@ -44,7 +44,7 @@ let filter = $state<FilterState>({
 let searchQuery = $state('');
 
 // Helper to cleanup old tasks
-function cleanupOldTasks(): void {
+async function cleanupOldTasks(): Promise<void> {
   const now = Date.now();
   const twoDaysMs = 2 * 24 * 60 * 60 * 1000;
   // Completed (G) tasks older than this move to cold storage. Kept >= the 14-day
@@ -54,7 +54,7 @@ function cleanupOldTasks(): void {
   const originalCount = appData.tasks.length;
   const toArchive: Task[] = [];
 
-  appData.tasks = appData.tasks.filter(task => {
+  const retained = appData.tasks.filter(task => {
     // Cancelled: hard-delete after 2 days
     if (task.status === 'cancelled') {
       if (!task.completedAt) return true; // Keep if no timestamp (shouldn't happen but safe)
@@ -76,12 +76,12 @@ function cleanupOldTasks(): void {
     return true;
   });
 
-  if (toArchive.length > 0) {
-    archiveTasks(toArchive).catch(err => console.error('Failed to archive old completed tasks:', err));
-  }
-  if (appData.tasks.length !== originalCount) {
-    // Don't await save here to avoid blocking init, but trigger it
-    saveAppData(appData).catch(err => console.error('Failed to save after cleanup:', err));
+  // Keep active records until the archive is confirmed. A retry is idempotent.
+  if (toArchive.length > 0) await archiveTasks(toArchive);
+  if (retained.length !== originalCount) {
+    const next = { ...appData, tasks: retained };
+    await saveAppData(next, ['active']);
+    appData = next;
   }
 }
 
@@ -106,7 +106,7 @@ export async function initializeData(): Promise<void> {
     });
 
     // Cleanup old tasks (Cancelled > 2 days)
-    cleanupOldTasks();
+    await cleanupOldTasks();
 
     // Evaluate the dynamic 2-day cycle: advance to the new period, and merge
     // (roll unfinished A-E tasks forward) when the prior period was under-completed.
@@ -167,6 +167,8 @@ export async function reloadData(fileType: string): Promise<void> {
           customTagGroups: activeData.customTagGroups || appData.customTagGroups,
           settings: activeData.settings || appData.settings,
           cycleState: activeData.cycleState ?? appData.cycleState,
+          pendingExport: activeData.pendingExport,
+          unitPlans: activeData.unitPlans,
           cycleHistory: activeData.cycleHistory ?? appData.cycleHistory
         };
         break;
@@ -192,7 +194,27 @@ async function persist(filesToSave: ('active' | 'pomodoro_history')[] = ['active
   } catch (error) {
     lastError = error instanceof Error ? error.message : 'Failed to save data';
     console.error('Failed to persist data:', error);
+    throw error;
   }
+}
+
+// Serialize task mutations so a failed write cannot roll back a later edit.
+let mutationQueue: Promise<unknown> = Promise.resolve();
+function taskMutation<T>(operation: () => Promise<T>): Promise<T> {
+  const next = mutationQueue.then(async () => {
+    const before = JSON.parse(JSON.stringify(appData)) as AppData;
+    try {
+      const result = await operation();
+      lastError = null;
+      return result;
+    } catch (error) {
+      appData = before;
+      lastError = `${t('error.saveFailed')}: ${error instanceof Error ? error.message : String(error)}`;
+      throw error;
+    }
+  });
+  mutationQueue = next.catch(() => {});
+  return next;
 }
 
 // Task operations
@@ -227,6 +249,10 @@ interface HighlanderOutcome {
  */
 function runHighlander(tasks: Task[], newTask: Task): HighlanderOutcome {
   const result = applyHighlanderRule(tasks, newTask);
+  const pending = appData.pendingExport ?? [];
+  const ids = new Set(pending.map(task => task.id));
+  const unsourced = result.evicted.filter(task => !task.source && !ids.has(task.id));
+  if (unsourced.length) appData.pendingExport = [...pending, ...unsourced];
   const demoted = result.demoted[0];
   const evicted = result.evicted[0];
   return {
@@ -236,11 +262,11 @@ function runHighlander(tasks: Task[], newTask: Task): HighlanderOutcome {
   };
 }
 
-export async function addTask(input: string, force = false): Promise<AddTaskResult> {
-  return addTaskDirect(createTaskFromInput(input), force);
+export async function addTask(input: string, force = false, details: Pick<Task, 'nextAction' | 'estimatedMinutes'> = {}): Promise<AddTaskResult> {
+  return addTaskDirect({ ...createTaskFromInput(input), ...details }, force);
 }
 
-export async function addTaskDirect(task: Task, force = false): Promise<AddTaskResult> {
+async function addTaskDirectMutation(task: Task, force = false): Promise<AddTaskResult> {
   // A single-slot tier is exempt from the quota check: Highlander unseats the
   // incumbent instead of refusing the add.
   const quotaError = isSingleSlotPriority(task.priority) ? null : validateQuota(appData.tasks, task.priority);
@@ -248,6 +274,7 @@ export async function addTaskDirect(task: Task, force = false): Promise<AddTaskR
     return { success: false, error: quotaError, quotaExceeded: true };
   }
 
+  task = { ...task, committedAt: new Date().toISOString() };
   const outcome = runHighlander(appData.tasks, task);
   appData.tasks = [...outcome.tasks, task];
   await persist();
@@ -255,7 +282,7 @@ export async function addTaskDirect(task: Task, force = false): Promise<AddTaskR
   return { success: true, demoted: outcome.demoted, evicted: outcome.evicted };
 }
 
-export async function updateTask(taskId: string, updates: Partial<Task>): Promise<void> {
+async function updateTaskMutation(taskId: string, updates: Partial<Task>): Promise<void> {
   const existingTask = appData.tasks.find(task => task.id === taskId);
   let nextTasks = appData.tasks.map(task => {
     if (task.id === taskId) {
@@ -278,12 +305,12 @@ export async function updateTask(taskId: string, updates: Partial<Task>): Promis
 }
 
 // Cancel a task (move to H priority)
-export async function cancelTask(taskId: string): Promise<void> {
+async function cancelTaskMutation(taskId: string): Promise<void> {
   appData.tasks = appData.tasks.map(task => {
     if (task.id === taskId && isOpen(task)) {
       return {
         ...task,
-        priority: 'H' as Priority,
+        status: 'cancelled' as const,
         completedAt: new Date().toISOString()
       };
     }
@@ -297,7 +324,7 @@ export async function deleteTask(taskId: string): Promise<void> {
   return cancelTask(taskId);
 }
 
-export async function completeTask(taskId: string): Promise<void> {
+async function completeTaskMutation(taskId: string): Promise<void> {
   // Find the task first to check for recurrence
   const taskToComplete = appData.tasks.find(t => t.id === taskId && isOpen(t));
   let nextRecurringTask: Task | null = null;
@@ -544,35 +571,31 @@ async function markOriginOnSourceLine(
  * `pendingExport` is only cleared once the write succeeds, so a failure here
  * leaves the data exactly where it was rather than dropping it.
  */
-export async function exportPendingTasks(): Promise<{ exported: number; error?: string }> {
+async function exportPendingTasksMutation(): Promise<{ exported: number; error?: string }> {
   const path = appData.settings.todoFilePath;
   if (!path) return { exported: 0, error: t('inbox.noFileConfigured') };
 
   const pending = appData.pendingExport ?? [];
   if (pending.length === 0) return { exported: 0 };
 
-  try {
-    const lines = pending.map(task => {
-      const line = todoTxtFromTask(task);
-      // A task with no threshold date was a "not now" item with no date
-      // attached; h:1 is how todo.txt says that.
-      return task.thresholdDate || task.status === 'completed' ? line : `${line} h:1`;
-    });
+  const lines = pending.map(task => {
+    const line = todoTxtFromTask(task);
+    // A task with no threshold date was a "not now" item with no date
+    // attached; h:1 is how todo.txt says that.
+    return task.thresholdDate || task.status === 'completed' ? line : `${line} h:1`;
+  });
 
-    await appendTodoLines(path, lines);
+  await appendTodoLines(path, lines);
 
-    appData.pendingExport = undefined;
-    await persist();
+  appData.pendingExport = undefined;
+  await persist();
 
-    return { exported: lines.length };
-  } catch (error) {
-    return { exported: 0, error: String(error) };
-  }
+  return { exported: lines.length };
 }
 
 // Evolve a task: complete the original and create a new evolved task
 // The new task inherits priority, projects, contexts, tags, and pomodoro estimates
-export async function evolveTask(taskId: string, newContent?: string): Promise<{ success: boolean; newTaskId?: string; error?: string }> {
+async function evolveTaskMutation(taskId: string, newContent?: string): Promise<{ success: boolean; newTaskId?: string; error?: string }> {
   const originalTask = appData.tasks.find(t => t.id === taskId && isOpen(t));
   if (!originalTask) {
     return { success: false, error: 'Task not found or already completed' };
@@ -587,6 +610,7 @@ export async function evolveTask(taskId: string, newContent?: string): Promise<{
     status: 'open',
     completedAt: null,
     createdAt: now,
+    committedAt: now,
     unitStart: currentUnitStartLocal(),
     projects: [...originalTask.projects],
     contexts: [...originalTask.contexts],
@@ -607,9 +631,7 @@ export async function evolveTask(taskId: string, newContent?: string): Promise<{
     if (task.id === taskId) {
       return {
         ...task,
-        originalPriority: task.priority,
-        priority: 'G' as Priority,
-        completed: true,
+        status: 'completed' as const,
         completedAt: now
       };
     }
@@ -621,6 +643,10 @@ export async function evolveTask(taskId: string, newContent?: string): Promise<{
 
   await persist();
 
+  if (originalTask.source) {
+    const notice = await writeBackCompletion(originalTask, new Date(now));
+    if (notice) lastWriteBackNotice = notice;
+  }
   return { success: true, newTaskId: evolvedTask.id };
 }
 
@@ -646,7 +672,7 @@ export async function uncompleteTask(taskId: string): Promise<void> {
  * exception is A, where Highlander still applies: the restored task takes the
  * slot and the incumbent moves down.
  */
-export async function restoreTask(taskId: string, targetPriority: Priority = DEFAULT_PRIORITY): Promise<void> {
+async function restoreTaskMutation(taskId: string, targetPriority: Priority = DEFAULT_PRIORITY): Promise<void> {
   appData.tasks = appData.tasks.map(task => {
     if (task.id === taskId && isFinished(task)) {
       return {
@@ -663,14 +689,14 @@ export async function restoreTask(taskId: string, targetPriority: Priority = DEF
 }
 
 // Permanently delete a task (remove from G/H)
-export async function permanentlyDeleteTask(taskId: string): Promise<void> {
+async function permanentlyDeleteTaskMutation(taskId: string): Promise<void> {
   appData.tasks = appData.tasks.filter(t => t.id !== taskId);
   await persist();
 }
 
 // Replace the entire dataset (used by import). Persists to storage; callers
 // should reload the app afterwards so all stores re-init from the new data.
-export async function replaceAllData(newData: AppData): Promise<void> {
+async function replaceAllDataMutation(newData: AppData): Promise<void> {
   appData = newData;
   await persist();
 }
@@ -678,7 +704,7 @@ export async function replaceAllData(newData: AppData): Promise<void> {
 // Resolve a pending low-completion micro-review (W4b). 'rollover' carries the
 // under-completed period's unfinished A-E tasks into the current window and
 // marks it merged; 'dismiss' leaves tasks where they are. Either clears the prompt.
-export async function resolvePendingReview(action: 'rollover' | 'dismiss'): Promise<void> {
+async function resolvePendingReviewMutation(action: 'rollover' | 'dismiss'): Promise<void> {
   const cs = appData.cycleState;
   if (!cs?.pendingReview) return;
 
@@ -757,7 +783,7 @@ export interface ChangePriorityResult {
   evictedIncumbent?: { name: string } | null;
 }
 
-export async function changePriority(taskId: string, newPriority: Priority, skipConfirmation = false): Promise<ChangePriorityResult> {
+async function changePriorityMutation(taskId: string, newPriority: Priority, skipConfirmation = false): Promise<ChangePriorityResult> {
   const task = appData.tasks.find(t => t.id === taskId);
   if (!task) {
     return { success: false, error: 'Task not found' };
@@ -798,7 +824,7 @@ export async function changePriority(taskId: string, newPriority: Priority, skip
   return { success: true, demotedIncumbent: outcome.demoted, evictedIncumbent: outcome.evicted };
 }
 
-export async function incrementPomodoro(taskId: string): Promise<void> {
+async function incrementPomodoroMutation(taskId: string): Promise<void> {
   appData.tasks = appData.tasks.map(task => {
     if (task.id === taskId) {
       return {
@@ -816,7 +842,7 @@ export async function incrementPomodoro(taskId: string): Promise<void> {
 }
 
 // Reorder tasks within a priority zone (for drag-and-drop) or move between zones
-export async function reorderTask(priority: Priority, newOrderedTasks: Task[], promotedTaskId?: string): Promise<void> {
+async function reorderTaskMutation(priority: Priority, newOrderedTasks: Task[], promotedTaskId?: string): Promise<void> {
   const newIds = new Set(newOrderedTasks.map(t => t.id));
 
   // Get all tasks that are NOT in the new list
@@ -1159,6 +1185,7 @@ export function getTasksStore() {
     get cancelledTasks() { return cancelledTasks; },
     get focusProjectTasks() { return focusProjectTasks; },
     get focusProjectProgress() { return focusProjectProgress; },
+    get unitPlans() { return appData.unitPlans ?? {}; },
     get pendingExport() { return appData.pendingExport ?? []; },
     get lastWriteBackNotice() { return lastWriteBackNotice; },
     get isLoading() { return isLoading; },
@@ -1189,4 +1216,71 @@ export function getTasksStore() {
     get flowEstimation() { return flowEstimation; },
     get flowSamplesNeeded() { return flowSamplesNeeded; }
   };
+}
+
+export async function addTaskDirect(task: Task, force = false): Promise<AddTaskResult> {
+  try { return await taskMutation(() => addTaskDirectMutation(task, force)); }
+  catch { return { success: false, error: lastError ?? t('error.saveFailed') }; }
+}
+
+export async function updateTask(taskId: string, updates: Partial<Task>): Promise<void> {
+  return taskMutation(() => updateTaskMutation(taskId, updates));
+}
+
+export async function cancelTask(taskId: string): Promise<void> {
+  return taskMutation(() => cancelTaskMutation(taskId));
+}
+
+export async function completeTask(taskId: string): Promise<void> {
+  return taskMutation(() => completeTaskMutation(taskId));
+}
+
+export async function evolveTask(taskId: string, newContent?: string): Promise<{ success: boolean; newTaskId?: string; error?: string }> {
+  try { return await taskMutation(() => evolveTaskMutation(taskId, newContent)); }
+  catch { return { success: false, error: lastError ?? t('error.saveFailed') }; }
+}
+
+export async function restoreTask(taskId: string, targetPriority: Priority = DEFAULT_PRIORITY): Promise<void> {
+  return taskMutation(() => restoreTaskMutation(taskId, targetPriority));
+}
+
+export async function permanentlyDeleteTask(taskId: string): Promise<void> {
+  return taskMutation(() => permanentlyDeleteTaskMutation(taskId));
+}
+
+export async function replaceAllData(newData: AppData): Promise<void> {
+  return taskMutation(() => replaceAllDataMutation(newData));
+}
+
+export async function resolvePendingReview(action: 'rollover' | 'dismiss'): Promise<void> {
+  return taskMutation(() => resolvePendingReviewMutation(action));
+}
+
+export async function changePriority(taskId: string, newPriority: Priority, skipConfirmation = false): Promise<ChangePriorityResult> {
+  try { return await taskMutation(() => changePriorityMutation(taskId, newPriority, skipConfirmation)); }
+  catch { return { success: false, error: lastError ?? t('error.saveFailed') }; }
+}
+
+export async function incrementPomodoro(taskId: string): Promise<void> {
+  return taskMutation(() => incrementPomodoroMutation(taskId));
+}
+
+export async function reorderTask(priority: Priority, newOrderedTasks: Task[], promotedTaskId?: string): Promise<void> {
+  return taskMutation(() => reorderTaskMutation(priority, newOrderedTasks, promotedTaskId));
+}
+
+export async function exportPendingTasks(): Promise<{ exported: number; error?: string }> {
+  try { return await taskMutation(exportPendingTasksMutation); }
+  catch { return { exported: 0, error: lastError ?? t('error.saveFailed') }; }
+}
+
+// Plans belong to calendar units, not to global preferences or list filters.
+export function setUnitCapacity(unitStart: string, availableMinutes: number): Promise<void> {
+  return taskMutation(async () => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(unitStart) || !Number.isFinite(availableMinutes) || availableMinutes < 0 || availableMinutes > 2880) {
+      throw new Error('Invalid unit capacity');
+    }
+    appData.unitPlans = { ...appData.unitPlans, [unitStart]: { availableMinutes: Math.round(availableMinutes) } };
+    await persist();
+  });
 }

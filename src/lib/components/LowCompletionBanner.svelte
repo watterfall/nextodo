@@ -16,10 +16,10 @@
     <span class="lcb-icon" aria-hidden="true">🌀</span>
     <span class="lcb-text">{t('lowCompletion.banner', { pct })}</span>
     <div class="lcb-actions">
-      <button class="lcb-btn primary" onclick={() => resolvePendingReview('rollover')}>
+      <button class="lcb-btn primary" onclick={() => resolvePendingReview('rollover').catch(() => {})}>
         {t('lowCompletion.rollover')}
       </button>
-      <button class="lcb-btn" onclick={() => resolvePendingReview('dismiss')}>
+      <button class="lcb-btn" onclick={() => resolvePendingReview('dismiss').catch(() => {})}>
         {t('lowCompletion.dismiss')}
       </button>
     </div>

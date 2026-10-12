@@ -1,5 +1,6 @@
 <script lang="ts">
   import { changePriority, getTasksStore } from '$lib/stores/tasks.svelte';
+  import { getUIStore } from '$lib/stores/ui.svelte';
   import { getI18nStore } from '$lib/i18n';
   import { slide } from 'svelte/transition';
   import { PRIORITY_CONFIG, type Priority, type Task, isOpen } from '$lib/types';
@@ -13,6 +14,7 @@
   type SortDir = 'asc' | 'desc';
 
   const tasks = getTasksStore();
+  const ui = getUIStore();
   const i18n = getI18nStore();
   const t = i18n.t;
 
@@ -22,7 +24,7 @@
   let collapsed = $state<Record<string, boolean>>({});
 
   // ===== Source list (active tasks only by default) =====
-  const sourceTasks = $derived(tasks.tasks);
+  const sourceTasks = $derived(tasks.filteredTasks);
 
   // ===== Group key derivation =====
   function getDueBucket(task: Task): string {
@@ -175,29 +177,33 @@
   }
 
   function toggleCollapsed(key: string) {
-    collapsed[key] = !collapsed[key];
+    collapsed[key] = !(collapsed[key] ?? false);
   }
 
-  const groupByOptions: Array<{ value: GroupBy; label: string; icon: string }> = [
+  const groupByOptions: Array<{ value: GroupBy; label: string; icon: string }> = $derived([
     { value: 'priority', label: t('list.groupBy.priority') || '优先级', icon: '⚡' },
     { value: 'project', label: t('list.groupBy.project') || '项目', icon: '+' },
     { value: 'context', label: t('list.groupBy.context') || '情境', icon: '@' },
     { value: 'tag', label: t('list.groupBy.tag') || '标签', icon: '#' },
     { value: 'due', label: t('list.groupBy.due') || '截止日', icon: '📅' },
     { value: 'none', label: t('list.groupBy.none') || '无分组', icon: '≡' }
-  ];
+  ]);
 </script>
 
 <div class="list-view">
-  <!-- 2-column layout: A-E groups on left, S/F/N zone rail on right -->
+  <!-- Grouping controls -->
   <div class="list-toolbar">
     <div class="toolbar-left">
       <span class="toolbar-label">{t('list.groupByLabel') || '分组方式'}</span>
+      <select class="group-select" aria-label={t('list.groupByLabel')} bind:value={groupBy}>
+        {#each groupByOptions as opt}<option value={opt.value}>{opt.label}</option>{/each}
+      </select>
       <div class="group-by-pills">
         {#each groupByOptions as opt}
           <button
             class="group-by-pill"
             class:active={groupBy === opt.value}
+            aria-pressed={groupBy === opt.value}
             onclick={() => (groupBy = opt.value)}
             title={opt.label}
           >
@@ -228,7 +234,7 @@
     </div>
   </div>
 
-  <!-- Two-column body: A-E groups (left) + S/F/N zone rail (right) -->
+  <!-- Full-width task groups -->
   <div class="list-body">
     <div class="groups-scroll">
       {#if groupBy !== 'priority' && (groups.length === 0 || totalTasks === 0)}
@@ -249,12 +255,13 @@
                 class="group-header"
                 role="button"
                 tabindex="0"
+                aria-expanded={!(collapsed[group.key] ?? false)}
                 onclick={() => toggleCollapsed(group.key)}
-                onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && toggleCollapsed(group.key)}
+                onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); toggleCollapsed(group.key); } }}
               >
                 <svg
                   class="chevron"
-                  class:collapsed={collapsed[group.key]}
+                  class:collapsed={collapsed[group.key] ?? false}
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
@@ -268,12 +275,12 @@
                 <span class="group-count font-num">{group.tasks.length}</span>
               </header>
 
-              {#if !collapsed[group.key]}
+              {#if !(collapsed[group.key] ?? false)}
                 <div class="group-body" transition:slide={{ duration: 180 }}>
                   {#each group.tasks as task (task.id)}
                     <TaskCard {task} showPriority={false} />
                   {:else}
-                    <div class="group-empty-drop">{t('message.dropHere')}</div>
+                    {#if ui.isDraggingTask}<div class="group-empty-drop">{t('message.dropHere')}</div>{/if}
                   {/each}
                   <QuickAddRow {priority} />
                 </div>
@@ -285,12 +292,13 @@
                 class="group-header"
                 role="button"
                 tabindex="0"
+                aria-expanded={!(collapsed[group.key] ?? false)}
                 onclick={() => toggleCollapsed(group.key)}
-                onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && toggleCollapsed(group.key)}
+                onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); toggleCollapsed(group.key); } }}
               >
                 <svg
                   class="chevron"
-                  class:collapsed={collapsed[group.key]}
+                  class:collapsed={collapsed[group.key] ?? false}
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
@@ -306,7 +314,7 @@
                 <span class="group-count font-num">{group.tasks.length}</span>
               </header>
 
-              {#if !collapsed[group.key]}
+              {#if !(collapsed[group.key] ?? false)}
                 <div class="group-body" transition:slide={{ duration: 180 }}>
                   {#each group.tasks as task (task.id)}
                     <TaskCard {task} showPriority={groupBy !== 'priority'} />
@@ -319,9 +327,7 @@
       {/if}
     </div>
 
-    <!-- S/F/N rail on the right — vertical stack, spatially adjacent for easy DnD -->
-    <aside class="rail-column">
-    </aside>
+
   </div>
 </div>
 
@@ -334,33 +340,14 @@
     min-width: 0;
   }
 
-  /* Two-column body: groups (left) + S/F/N rail (right) */
+  /* One reading column, without the retired priority rail. */
   .list-body {
     flex: 1;
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 320px;
+    grid-template-columns: minmax(0, 1fr);
     gap: var(--space-md);
     overflow: hidden;
     min-height: 0;
-  }
-
-  .rail-column {
-    height: 100%;
-    overflow: hidden;
-    border-radius: var(--radius-lg);
-    background: var(--bg-secondary);
-    border: 1px solid var(--border-hairline);
-    padding: 8px;
-  }
-
-  @media (max-width: 900px) {
-    .list-body {
-      grid-template-columns: 1fr;
-      grid-template-rows: 1fr auto;
-    }
-    .rail-column {
-      max-height: 50vh;
-    }
   }
 
   /* ===== Toolbar ===== */
@@ -394,6 +381,7 @@
   }
 
   .group-by-pills {
+    flex-wrap: wrap;
     display: flex;
     gap: 4px;
     background: var(--bg-secondary);
@@ -487,11 +475,11 @@
   }
 
   .group {
-    margin-bottom: var(--space-lg);
+    margin-bottom: var(--list-group-gap, var(--space-lg));
   }
 
   :global(.list-priority-drop-zone) {
-    margin-bottom: var(--space-lg);
+    margin-bottom: var(--list-group-gap, var(--space-lg));
     border-radius: var(--radius-md);
   }
 
@@ -604,5 +592,11 @@
     gap: 3px;
     padding-top: 3px;
     padding-left: 14px;
+  }
+  .group-select { display: none; font: inherit; padding: 7px 10px; border-radius: 7px; border: 1px solid var(--border-color); color: var(--text-primary); background: var(--card-bg); }
+  @media (max-width: 700px) {
+    .group-select { display: block; }
+    .group-by-pills, .toolbar-label { display: none; }
+    .list-toolbar { padding: 8px 10px; }
   }
 </style>

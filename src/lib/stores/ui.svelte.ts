@@ -181,6 +181,7 @@ export function initKeyboardShortcuts(): void {
   if (typeof window === 'undefined') return;
 
   window.addEventListener('keydown', (e) => {
+    if (e.defaultPrevented || confirmationData) return;
     // Don't handle shortcuts when typing in input fields (except for specific keys)
     const target = e.target as HTMLElement;
     const isInInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
@@ -221,7 +222,7 @@ export function initKeyboardShortcuts(): void {
     if (isInInput) return;
 
     // Space to toggle pomodoro (only when not typing)
-    if (e.key === ' ') {
+    if (e.key === ' ' && !isImmersiveMode && target.tagName !== 'BUTTON' && target.tagName !== 'SELECT') {
       e.preventDefault();
       if (togglePomodoroCallback) {
         togglePomodoroCallback();

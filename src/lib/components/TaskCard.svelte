@@ -1,10 +1,11 @@
 <script lang="ts">
+  import { requestTaskFocus } from '$lib/stores/focusActions.svelte';
   import type { Task, Priority } from '$lib/types';
   import { PRIORITY_CONFIG, ORIGIN_CONTEXT, isThresholdPassed, isOpen, taskOrigin } from '$lib/types';
   import { getTasksStore, completeTask, uncompleteTask, cancelTask, changePriority, evolveTask, toggleFilterAttribute, isFilterActive } from '$lib/stores/tasks.svelte';
   import { openEditModal, getUIStore, showToast, setDraggingTask } from '$lib/stores/ui.svelte';
   import { clearDragPayload, startTaskDrag } from '$lib/utils/dnd';
-  import { startPomodoro, getPomodoroStore } from '$lib/stores/pomodoro.svelte';
+  import { getPomodoroStore } from '$lib/stores/pomodoro.svelte';
   import { recurrenceLabel } from '$lib/utils/recurrence';
   import { isOverdue, parseISODate } from '$lib/utils/unitCalc';
   import { getI18nStore } from '$lib/i18n';
@@ -33,7 +34,6 @@
 
   let isActive = $derived(pomodoro.activeTaskId === task.id);
   let isFocusMode = $derived(pomodoro.state === 'work' && pomodoro.activeTaskId !== null);
-  let isFocusDimmed = $derived(isFocusMode && !isActive);
   let isHovered = $state(false);
   let justCompleted = $state(false);
 
@@ -45,8 +45,9 @@
 
   function handleContextMenu(e: MouseEvent) {
     e.preventDefault();
-    ctxMenuX = e.clientX;
-    ctxMenuY = e.clientY;
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    ctxMenuX = Math.max(8, Math.min(e.clientX || rect.left, window.innerWidth - 260));
+    ctxMenuY = Math.max(8, Math.min(e.clientY || rect.bottom, window.innerHeight - 300));
     ctxMenuOpen = true;
   }
 
@@ -94,38 +95,42 @@
     return { display: text, isEmoji: false };
   }
 
-  function handleCheck() {
-    if (task.status === 'completed') {
-      // Task is completed, restore it
-      uncompleteTask(task.id);
-    } else if (isOpen(task)) {
-      const wasAPriority = task.priority === 'A';
-      // Trigger press micro-interaction
-      justCompleted = true;
-      setTimeout(() => { justCompleted = false; }, 400);
-      completeTask(task.id);
-      // Sacred A-completion moment — the most important thing of the day is done
-      if (wasAPriority) {
-        showToast(
-          i18n.t('task.aCompleteCelebration') || '🌿 今日的最重要的事完成了 · 该休息片刻了',
-          'success',
-          4500
-        );
+  async function handleCheck() {
+    try {
+      if (task.status === 'completed') {
+        // Task is completed, restore it
+        await uncompleteTask(task.id);
+      } else if (isOpen(task)) {
+        const wasAPriority = task.priority === 'A';
+        // Trigger press micro-interaction
+        justCompleted = true;
+        setTimeout(() => { justCompleted = false; }, 400);
+        await completeTask(task.id);
+        // Sacred A-completion moment — the most important thing of the day is done
+        if (wasAPriority) {
+          showToast(
+            i18n.t('task.aCompleteCelebration') || '🌿 今日的最重要的事完成了 · 该休息片刻了',
+            'success',
+            4500
+          );
+        }
       }
-    }
+    } catch { showToast(tasks.lastError ?? i18n.t('error.saveFailed'), 'error'); }
   }
 
   function handleStartPomodoro() {
-    startPomodoro(task);
+    requestTaskFocus(task);
   }
 
   function handleEdit() {
     openEditModal(task);
   }
 
-  function handleCancel() {
-    cancelTask(task.id);
-    showToast(i18n.t('message.taskCancelled') || '任务已取消', 'info');
+  async function handleCancel() {
+    try {
+      await cancelTask(task.id);
+      showToast(i18n.t('message.taskCancelled'), 'info');
+    } catch { showToast(tasks.lastError ?? i18n.t('error.saveFailed'), 'error'); }
   }
 
   async function handleEvolve() {
@@ -197,7 +202,6 @@
   class:overdue={isTaskOverdue}
   class:dormant={isDormant}
   class:scheduled-too-far={isScheduledTooFar}
-  class:focus-dimmed={isFocusDimmed}
   class:focus-spotlight={isActive && isFocusMode}
   class:hovered={isHovered}
   class:keyboard-focused={isFocused}
@@ -286,8 +290,12 @@
         {task.content}
       </span>
 
+      {#if task.nextAction && !compact}
+        <span class="task-trigger next-action">{i18n.t('planning.nextAction')}: {task.nextAction}</span>
+      {/if}
       {#if !compact}
         <div class="task-meta">
+          {#if task.estimatedMinutes && task.estimatedMinutes > 0}<span>{i18n.t('planning.taskMinutes', { n: task.estimatedMinutes })}</span>{/if}
           {#each task.projects as project}
             {@const displayInfo = getDisplayText(project)}
             <button
@@ -365,54 +373,20 @@
     </div>
   {/if}
 
-  <!-- Action buttons - hover reveal (hidden in compact mode as parent provides its own actions) -->
-  {#if !compact}
-    <div class="task-actions" class:visible={isHovered || isFocused}>
+    <div class="task-actions">
       {#if isOpen(task)}
-        <button
-          class="action-btn play"
-          onclick={handleStartPomodoro}
-          title={i18n.t('task.startFocus')}
-          disabled={isActive}
-        >
-          {#if kanbanMode && task.pomodoros.estimated > 0}
-            <span style="font-size: 12px; margin-right: 2px;">🍅</span>
-            {@const remaining = Math.max(0, task.pomodoros.estimated - task.pomodoros.completed)}
-            {#if remaining > 0}
-               <span style="font-size: 10px; font-weight: 700;">{remaining}</span>
-            {/if}
-          {:else}
-            <svg viewBox="0 0 24 24" fill="currentColor">
-              <polygon points="5 3 19 12 5 21 5 3"></polygon>
-            </svg>
-          {/if}
+        <button class="action-btn play" onclick={handleStartPomodoro} title={i18n.t('task.startFocus')} disabled={isActive}>
+          <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+          <span>{isActive ? i18n.t('design.focusing') : i18n.t('design.focus')}</span>
         </button>
       {/if}
       <button class="action-btn edit" onclick={handleEdit} title={i18n.t('action.edit')}>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-        </svg>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 3l5 5L8 21H3v-5z"></path></svg>
       </button>
-      {#if isOpen(task)}
-        <button class="action-btn evolve" onclick={handleEvolve} title={i18n.t('message.evolveTaskHint') || '完成并演化'}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M12 5v14"></path>
-            <path d="M5 12h14"></path>
-            <circle cx="12" cy="12" r="3"></circle>
-          </svg>
-        </button>
-      {/if}
-      {#if isOpen(task)}
-        <button class="action-btn cancel" onclick={handleCancel} title={i18n.t('action.cancel') || '取消任务'}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="18" y1="6" x2="6" y2="18"></line>
-            <line x1="6" y1="6" x2="18" y2="18"></line>
-          </svg>
-        </button>
-      {/if}
+      <button class="action-btn" aria-expanded={ctxMenuOpen} onclick={handleContextMenu} title={i18n.t('design.moreActions')}>
+        <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+      </button>
     </div>
-  {/if}
 
   {#if showPriority}
     <div class="priority-badge">
@@ -461,6 +435,7 @@
         </svg>
         {i18n.t('taskCard.markComplete')}
       </button>
+      <button class="ctx-action" onclick={() => { ctxMenuOpen = false; handleEvolve(); }}>{i18n.t('message.evolveTaskHint')}</button>
       <button class="ctx-action danger" onclick={() => { ctxMenuOpen = false; handleCancel(); }}>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -475,10 +450,12 @@
 <svelte:window onpointerdown={closeCtxMenu} onkeydown={(e) => e.key === 'Escape' && (ctxMenuOpen = false)} />
 
 <style>
+  .task-trigger.next-action { color: var(--text-secondary); font-size: 12px; opacity: 1; white-space: normal; overflow-wrap: anywhere; }
+
   .task-card {
     display: flex;
     flex-direction: column;
-    padding: 11px 14px 11px 16px;
+    padding: var(--task-card-y, 11px) 14px var(--task-card-y, 11px) 16px;
     background: var(--card-bg);
     border: 1px solid var(--border-hairline);
     border-radius: var(--radius-md);
@@ -613,15 +590,6 @@
     font-style: italic;
   }
 
-  /* Focus mode dimming */
-  .task-card.focus-dimmed {
-    opacity: 0.25;
-    filter: grayscale(0.5) blur(0.5px);
-    pointer-events: none;
-    transform: scale(0.98);
-    transition: all 0.4s ease;
-  }
-
   /* Overdue — dot turns red, due-date label also red (no animated side-strip) */
   .task-card.overdue::before {
     background: var(--error);
@@ -686,11 +654,9 @@
     padding: 8px 10px;
   }
 
-  /* Kanban mode - consistent card heights and hover-reveal pomodoro */
+  /* Keep actions visible without changing card height on hover. */
   .task-card.kanban-mode {
     min-height: 60px;
-    max-height: 60px;
-    overflow: hidden;
   }
 
   .task-card.kanban-mode .pomodoro-btn-left {
@@ -707,17 +673,7 @@
     font-size: 10px;
   }
 
-  .task-card.kanban-mode:hover,
-  .task-card.kanban-mode.keyboard-focused {
-    max-height: none;
-  }
-
   .task-card.kanban-mode .task-meta {
-    display: none;
-  }
-
-  .task-card.kanban-mode:hover .task-meta,
-  .task-card.kanban-mode.keyboard-focused .task-meta {
     display: flex;
   }
 
@@ -830,7 +786,7 @@
 
   .task-text {
     display: block;
-    font-size: 14px;
+    font-size: var(--task-title-size, 14px);
     font-weight: 450;
     color: var(--text-primary);
     line-height: 1.5;
@@ -1075,33 +1031,18 @@
     font-size: 10px;
   }
 
-  /* Action buttons - progressive disclosure */
-  .task-actions {
-    position: absolute;
-    right: 10px;
-    top: 50%;
-    transform: translateY(-50%);
-    display: flex;
-    gap: 3px;
-    opacity: 0;
-    transform: translateY(-50%) translateX(4px);
-    transition: opacity var(--transition-fast), transform var(--transition-fast);
-    background: var(--card-bg);
-    padding: 2px;
-    border-radius: var(--radius-sm);
-    pointer-events: none;
-    z-index: 20;
-  }
-
-  .task-actions.visible {
-    opacity: 1;
-    transform: translateY(-50%) translateX(0);
-    pointer-events: auto;
-  }
+  /* Main actions stay reachable without hover and do not cover task text. */
+  .task-actions { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); display: flex; gap: 4px; align-items: center; }
+  .task-card:not(.compact):not(.kanban-mode) .task-main { padding-right: 140px; }
+  .task-card:not(.compact) { max-height: none; }
+  .task-card:hover { transform: none; filter: none; box-shadow: var(--elevation-1); }
+  .task-card.compact .task-actions, .task-card.kanban-mode .task-actions { position: static; transform: none; justify-content: flex-end; margin-top: 10px; }
+  .action-btn.play { width: auto; padding: 0 8px; gap: 4px; color: var(--primary); background: var(--primary-bg); font-size: 12px; }
+  @media (max-width: 850px) { .task-card:not(.compact):not(.kanban-mode) .task-main { padding-right: 0; } .task-actions { position: static; transform: none; margin-top: 8px; justify-content: flex-end; } }
 
   .action-btn {
-    width: 26px;
-    height: 26px;
+    width: 30px;
+    height: 30px;
     border: none;
     border-radius: var(--radius-sm);
     background: transparent;

@@ -362,10 +362,10 @@ describe('archiveTasks', () => {
     expect(store.has(KEYS.archive)).toBe(false);
   });
 
-  it('starts a fresh archive when the existing one is corrupt', async () => {
+  it('rejects a corrupt archive without overwriting it', async () => {
     store.set(KEYS.archive, 'not json');
-    await archiveTasks([oldCompletion('a1')]);
-    expect(JSON.parse(store.get(KEYS.archive)!).tasks).toHaveLength(1);
+    await expect(archiveTasks([oldCompletion('a1')])).rejects.toThrow();
+    expect(store.get(KEYS.archive)).toBe('not json');
   });
 
   it('leaves archived tasks in cold storage across a reload', async () => {

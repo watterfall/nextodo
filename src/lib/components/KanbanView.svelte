@@ -6,7 +6,6 @@
   import QuickAddRow from './QuickAddRow.svelte';
   import type { TaskDragPayload } from '$lib/utils/dnd';
   import { getTasksStore, reorderTask, changePriority } from '$lib/stores/tasks.svelte';
-  import { getPomodoroStore } from '$lib/stores/pomodoro.svelte';
   import { getUIStore, openEditModal } from '$lib/stores/ui.svelte';
   import { countActiveByPriority } from '$lib/utils/quota';
   import { getI18nStore } from '$lib/i18n';
@@ -18,7 +17,6 @@
   import { showToast } from '$lib/stores/ui.svelte';
 
   const tasks = getTasksStore();
-  const pomodoro = getPomodoroStore();
   const ui = getUIStore();
   const i18n = getI18nStore();
   const t = i18n.t;
@@ -30,9 +28,6 @@
   type ColumnPriority = (typeof priorities)[number];
 
   const counts = $derived(countActiveByPriority(tasks.tasks));
-
-  // Focus mode check
-  const isFocusMode = $derived(pomodoro.state === 'work' && pomodoro.activeTaskId !== null);
 
   // Derived view onto tasks per priority (no local mirror needed —
   // native DnD doesn't require items array bookkeeping).
@@ -99,12 +94,12 @@
     return tasks.tasksByPriority[priority].filter(task => task.status === 'completed');
   }
 
-  function hasActiveTaskInColumn(priority: Priority) {
-    return tasks.tasksByPriority[priority].some(task => task.id === pomodoro.activeTaskId);
-  }
+
 
   // Keyboard Navigation
   function handleKeyDown(e: KeyboardEvent) {
+    if (e.defaultPrevented || e.isComposing || ui.confirmationData || ui.isImmersiveMode) return;
+    if (e.target instanceof Element && e.target.closest('input, textarea, select, button, [contenteditable="true"]')) return;
     // Only handle if no modal is open and not editing
     if (ui.editingTaskId || ui.editingTask || document.querySelector('.modal-overlay')) return;
 
@@ -227,12 +222,11 @@
       {@const activeTasks = tasks.tasksByPriority[priority].filter(t => t.status === 'open')}
       {@const completedTasks = getCompletedForPriority(priority)}
       {@const isFull = counts[priority] >= config.quota}
-      {@const isDimmed = isFocusMode && !hasActiveTaskInColumn(priority)}
       {@const recentlyCompletedTasks = getRecentlyCompletedForPriority(priority)}
 
       <DropZone
         color={config.color}
-        class="priority-column drop-zone-column {isFull ? 'is-full' : ''} {isDimmed ? 'focus-dimmed' : ''}"
+        class="priority-column drop-zone-column {isFull ? 'is-full' : ''}"
         onTaskDrop={(p) => handleDropTaskInColumn(priority, p)}
       >
         <div class="column-header" title={t(`priority.tooltip.${priority}`)} style:--card-color={config.color}>
@@ -262,7 +256,7 @@
               />
             </div>
           {/each}
-          {#if activeTasks.length === 0}
+          {#if activeTasks.length === 0 && ui.isDraggingTask}
             <div class="empty-column-hint">
               {t('message.dropHere')} ↓
             </div>
@@ -306,11 +300,6 @@
     {/each}
   </div>
 
-  <!-- Bottom rail: S / F / N as a horizontal 3-zone strip below A-E.
-       Spatially adjacent for short-distance DnD. -->
-  <div class="kanban-rail">
-  </div>
-
   <!-- Priority change confirmation dialog -->
   {#if pendingPriorityChange}
     <div class="modal-overlay" onclick={cancelPriorityChange}>
@@ -333,7 +322,7 @@
 </div>
 
 <style>
-  /* Two-row layout: A-E top, S/F/N rail bottom */
+  /* Priority columns use the full available task area. */
   .kanban-container {
     display: flex;
     flex-direction: column;
@@ -346,20 +335,12 @@
 
   /* Main area with A/B/C/D/E as horizontal columns */
   .kanban-main {
-    flex: 1.7;
+    flex: 1;
     min-height: 0;
     display: flex;
     gap: 12px;
     overflow-x: auto;
     transition: all 0.3s ease;
-  }
-
-  /* Bottom rail — S/F/N strip */
-  .kanban-rail {
-    flex: 1;
-    min-height: 180px;
-    max-height: 38%;
-    overflow: hidden;
   }
 
   /* Priority Column (A/B/C/D) - vertical kanban columns */
@@ -384,13 +365,6 @@
 
   :global(.priority-column.is-full) {
     opacity: 0.7;
-  }
-
-  :global(.priority-column.focus-dimmed) {
-    opacity: 0.3;
-    filter: grayscale(0.4) blur(0.5px);
-    pointer-events: none;
-    transition: all 0.4s ease;
   }
 
   .column-header {

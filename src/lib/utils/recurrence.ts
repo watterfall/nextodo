@@ -285,6 +285,8 @@ export function createNextOccurrence(task: Task, completedOn: Date = new Date())
     status: 'open',
     completedAt: null,
     createdAt: new Date().toISOString(),
+    committedAt: new Date().toISOString(),
+    resumeNote: null,
     unitStart: nextDue,
     dueDate: nextDue,
     recurrence: {

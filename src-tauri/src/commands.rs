@@ -351,25 +351,18 @@ pub fn append_archive_tasks(
         })
     };
 
-    // Update last modified
-    if let Some(obj) = archive_data.as_object_mut() {
-        obj.insert("lastModified".to_string(), serde_json::json!(Local::now().to_rfc3339()));
-        
-        // Append tasks
-        if let Some(tasks) = obj.get_mut("tasks").and_then(|t| t.as_array_mut()) {
-            tasks.extend(new_tasks);
-        } else {
-            // Tasks array doesn't exist, create it
-            obj.insert("tasks".to_string(), serde_json::json!(new_tasks));
-        }
-    } else {
-        // Root is not an object? Re-initialize
-        archive_data = serde_json::json!({
-            "version": "2.0",
-            "lastModified": Local::now().to_rfc3339(),
-            "tasks": new_tasks
-        });
+    let obj = archive_data.as_object_mut()
+        .ok_or_else(|| "Invalid archive: expected an object".to_string())?;
+    let tasks = obj.get_mut("tasks").and_then(|t| t.as_array_mut())
+        .ok_or_else(|| "Invalid archive: tasks must be an array".to_string())?;
+    let mut ids: std::collections::HashSet<String> = tasks.iter()
+        .filter_map(|t| t.get("id").and_then(|id| id.as_str()).map(str::to_owned)).collect();
+    for task in new_tasks {
+        let id = task.get("id").and_then(|id| id.as_str())
+            .ok_or_else(|| "Invalid task: missing id".to_string())?.to_owned();
+        if ids.insert(id) { tasks.push(task); }
     }
+    obj.insert("lastModified".to_string(), serde_json::json!(Local::now().to_rfc3339()));
 
     // Write to temp file
     {

@@ -1,25 +1,7 @@
-/**
- * Flow metrics — measures of movement, not of accumulation.
- *
- * Every number here answers "how is work flowing?" rather than "how much have
- * you done?". That distinction is the whole point: a cumulative counter can be
- * driven up by splitting tasks or by picking easy ones, so it stops measuring
- * the thing it was meant to measure as soon as anybody looks at it. Age,
- * cycle time and in-progress count cannot be gamed that way — the only way to
- * improve them is to actually finish things.
- *
- * Node-safe on purpose: no Svelte, no Tauri, no i18n. The CLI imports this, and
- * so do the tests.
- *
- * Two rules hold everywhere in this file:
- *
- * 1. **Dates are local calendar days.** Never `toISOString()`; a task created
- *    at 23:00 and looked at the next morning is one day old, not zero.
- * 2. **Too little data returns null, never a number.** A median over three
- *    samples is noise wearing a decimal point, and showing it would invite
- *    exactly the false confidence this module exists to avoid.
+/** Descriptive commitment metrics, not performance targets or causal diagnoses.
+ * The five-sample threshold controls display only; it does not establish reliability.
+ * Local calendar days are used throughout. Legacy counts are not elapsed minutes.
  */
-
 import type { Task, Priority } from '$lib/types';
 import { isOpen } from '$lib/types';
 
@@ -34,7 +16,7 @@ export interface AgeDistribution {
   count: number;
   /** Median age in days, or null when there is nothing to measure. */
   p50: number | null;
-  /** 90th percentile age in days — the tail is where avoidance hides. */
+  /** 90th percentile commitment age in days; not a diagnosis of avoidance. */
   p90: number | null;
   /** The single oldest unfinished task, which is the one worth acting on. */
   oldest: { task: Task; days: number } | null;
@@ -89,24 +71,19 @@ function deliveredTier(task: Task): Priority | null {
   return task.status === 'completed' ? task.priority : null;
 }
 
-/**
- * Age distribution of everything still owed.
- *
- * `createdAt` is the clock. For a task pulled out of a todo.txt this is the
- * line's own creation date when it has one, so pulling does not reset the
- * clock — which matters, because a line that has sat in the file for seven
- * weeks is exactly what this metric exists to surface. When the line carries no
- * creation date the age starts at the pull, making the number a lower bound.
- * That is the safe direction to be wrong in: it under-reports debt rather than
- * inventing it.
- */
+/** Old records retain their dates: source acceptance when known, otherwise creation. */
+export function commitmentDate(task: Task): string {
+  return task.committedAt ?? task.source?.pulledAt ?? task.createdAt;
+}
+
+/** Age since acceptance, not time spent waiting in the candidate pool. */
 export function ageDistribution(tasks: Task[], now: Date = new Date()): AgeDistribution {
   const open = tasks.filter(isOpen);
   if (open.length === 0) {
     return { count: 0, p50: null, p90: null, oldest: null };
   }
 
-  const aged = open.map((task) => ({ task, days: ageInDays(task.createdAt, now) }));
+  const aged = open.map((task) => ({ task, days: ageInDays(commitmentDate(task), now) }));
   const days = aged.map((a) => a.days).sort((a, b) => a - b);
   const oldest = aged.reduce((a, b) => (b.days > a.days ? b : a));
 
@@ -119,7 +96,7 @@ export function ageDistribution(tasks: Task[], now: Date = new Date()): AgeDistr
 }
 
 /**
- * Median days from creation to completion, over the most recent completions.
+ * Median days from commitment to completion, over the most recent completions.
  *
  * This is the one number that says whether work is moving. It has no target
  * value and must never be given one — the moment it becomes a goal, the way to
@@ -136,24 +113,12 @@ export function cycleTimeMedian(
 
   if (done.length < MIN_SAMPLE) return null;
 
-  const spans = done.map((t) => ageInDays(t.createdAt, new Date(t.completedAt as string)));
+  const spans = done.map((t) => ageInDays(commitmentDate(t), new Date(t.completedAt as string)));
   return { value: median(spans), sampleSize: spans.length };
 }
 
-/**
- * How far off your pomodoro estimates run — the automated form of
- * reference-class forecasting.
- *
- * 1.0 means calibrated; 1.8 means the things you finish take almost twice the
- * effort you predicted. Asking "how long will this take?" is the question
- * people are reliably bad at; "how long did things like this actually take?"
- * is the one that has an answer, and this computes it from data already on
- * every task.
- *
- * Only tasks with both a non-zero estimate and non-zero recorded effort count.
- * A task with zero completed pomodoros means the timer was never started, not
- * that the work took no time, and folding those in would drag the factor toward
- * zero and tell the user they over-estimate everything.
+/** Median completed/estimated block counts. Block lengths vary, so this is
+ * not a time or effort calibration factor. Zero-count records are excluded.
  */
 export function estimationFactor(
   tasks: Task[],

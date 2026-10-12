@@ -1,6 +1,7 @@
 <script lang="ts">
+  import { requestTaskFocus } from '$lib/stores/focusActions.svelte';
   import { getTasksStore } from '$lib/stores/tasks.svelte';
-  import { getPomodoroStore, startPomodoro } from '$lib/stores/pomodoro.svelte';
+  import { getPomodoroStore } from '$lib/stores/pomodoro.svelte';
   import TaskCard from './TaskCard.svelte';
   import FlowStrip from './FlowStrip.svelte';
   import { getI18nStore } from '$lib/i18n';
@@ -63,7 +64,7 @@
   }
 
   function handleStartHero() {
-    if (heroTask) startPomodoro(heroTask);
+    if (heroTask) requestTaskFocus(heroTask);
   }
 
   // Progress ring math (SVG)

@@ -1,10 +1,10 @@
 <script lang="ts">
+  import { normalizeMinutes } from '$lib/utils/capacity';
   import type { Priority } from '$lib/types';
   import { PRIORITY_CONFIG, DEFAULT_PRIORITY } from '$lib/types';
   import { addTask, getTasksStore } from '$lib/stores/tasks.svelte';
   import { showToast } from '$lib/stores/ui.svelte';
   import { getI18nStore } from '$lib/i18n';
-  import { validateQuota } from '$lib/utils/quota';
   import { slide } from 'svelte/transition';
 
   interface Props {
@@ -17,6 +17,10 @@
   const tasks = getTasksStore();
   const t = i18n.t;
 
+  let isSubmitting = $state(false);
+  let quotaWarning = $state('');
+  let quotaSignature = '';
+  let contentInput = $state<HTMLInputElement>();
   let content = $state('');
   let project = $state('');
   let mood = $state('');
@@ -24,6 +28,8 @@
   let dueDate = $state('');
   let thresholdDate = $state('');
   let estimatedPomodoros = $state<number | null>(null);
+  let estimatedMinutes = $state<number | undefined>();
+  let nextAction = $state('');
   let recurrence = $state('');
   let selectedPriority = $state<Priority>(DEFAULT_PRIORITY);
   let isExpanded = $state(false);
@@ -99,62 +105,32 @@
     }
 
     // Add selected priority
-    parts.push(`!${selectedPriority}`);
+    if (!/(?:^|\s)![A-E](?=\s|$)/i.test(content)) parts.push(`!${selectedPriority}`);
 
     return parts.join(' ');
   }
 
-  async function handleSubmit() {
-    if (!content.trim()) return;
-
-    // Check quota for selected priority (pre-emptive check for UI selection)
-    const quotaError = validateQuota(tasks.tasks, selectedPriority);
-    if (quotaError) {
-      // Soft warning - show toast but allow adding?
-      // User request: "have feedback, can skip execution (special case), allowed but shouldn't happen often"
-      // We will show a confirm dialog or just a warning toast. 
-      // For a form submission, a confirm dialog is better.
-      if (!confirm(quotaError + '\n' + t('action.continueAnyway') + '?')) {
-        return;
-      }
-    }
-
-    // Check for syntax patterns or if form is expanded
-    if (!isExpanded) {
-      // Check for syntax (priority, project, context, tag, due date, etc.)
-      const hasSyntax = /[!+@#~]/.test(content) || 
-                        content.includes('due:') || 
-                        content.includes('thr:') || 
-                        content.includes('rec:') || 
-                        content.includes('🍅') ||
-                        content.includes('p:');
-      
-      if (!hasSyntax) {
-        // Not comprehensive enough, expand to encourage adding details
-        isExpanded = true;
-        // Keep focus on input
-        const input = document.querySelector('.content-input') as HTMLInputElement;
-        if (input) input.focus();
-        return;
-      }
-    }
-
+  async function handleSubmit(force = false) {
+    if (!content.trim() || isSubmitting) return;
     const taskString = buildTaskString();
-    let result = await addTask(taskString);
-
-    // If failed due to quota (e.g. typed !A explicitly), prompt and retry force
-    if (!result.success && result.error && result.quotaExceeded) {
-        if (confirm(result.error + '\n' + t('action.continueAnyway') + '?')) {
-             result = await addTask(taskString, true);
-        }
-    }
-
-    if (result.success) {
-      resetForm();
-      showToast(t('message.taskAdded'), 'success');
-      onSubmit?.();
-    } else if (result.error) {
-      showToast(result.error, 'error');
+    const details = { estimatedMinutes: normalizeMinutes(estimatedMinutes), nextAction: nextAction.trim() || null };
+    const signature = JSON.stringify({ taskString, details });
+    // An override applies only to the exact draft the user was warned about.
+    isSubmitting = true;
+    try {
+      const result = await addTask(taskString, force && quotaSignature === signature, details);
+      if (result.success) {
+        resetForm(); quotaWarning = ''; isExpanded = false;
+        showToast(t('message.taskAdded'), 'success');
+        onSubmit?.();
+      } else if (result.quotaExceeded && result.error) {
+        quotaWarning = result.error; quotaSignature = signature;
+      } else if (result.error) {
+        showToast(result.error, 'error');
+      }
+    } finally {
+      isSubmitting = false;
+      requestAnimationFrame(() => contentInput?.focus());
     }
   }
 
@@ -167,6 +143,8 @@
     thresholdDate = '';
     estimatedPomodoros = null;
     recurrence = '';
+    estimatedMinutes = undefined;
+    nextAction = '';
     selectedPriority = DEFAULT_PRIORITY;
     hasStartedTyping = false;
   }
@@ -196,7 +174,7 @@
       }
     }
 
-    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+    if (e.key === 'Enter') {
       e.preventDefault();
       handleSubmit();
     }
@@ -360,13 +338,15 @@
   );
 </script>
 
-<div class="task-form" class:expanded={isExpanded}>
+<fieldset class="task-form" class:expanded={isExpanded} disabled={isSubmitting}>
   <div class="form-main">
     <div class="input-wrapper">
       <input
         aria-label={t('taskForm.placeholder')}
         type="text"
         class="content-input"
+        id="new-task-input"
+        bind:this={contentInput}
         value={content}
         oninput={handleContentInput}
         onkeydown={handleKeydown}
@@ -409,9 +389,15 @@
       {/if}
     </div>
 
+    <select class="quick-priority" aria-label={t('syntax.priority')} bind:value={selectedPriority}>
+      {#each priorityOptions as p}<option value={p}>{p} · {t(`priority.${p}`)}</option>{/each}
+    </select>
+
     <button
       class="expand-btn"
       onclick={() => isExpanded = !isExpanded}
+      aria-expanded={isExpanded}
+      aria-controls="task-details"
       title={isExpanded ? t('action.close') : t('action.expand')}
     >
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class:rotated={isExpanded}>
@@ -421,15 +407,19 @@
 
     <button
       class="submit-btn"
-      onclick={handleSubmit}
+      onclick={() => handleSubmit()}
       disabled={!content.trim()}
-      title={t('taskForm.addToInbox')}
+      title={t('design.addTask')}
     >
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M12 5v14M5 12h14"></path>
       </svg>
+      <span>{t('design.addTask')}</span>
     </button>
   </div>
+  {#if quotaWarning}
+    <div class="quota-feedback" role="alert"><span>{quotaWarning}</span><button onclick={() => handleSubmit(true)}>{t('action.continueAnyway')}</button><button onclick={() => quotaWarning = ''}>{t('action.cancel')}</button></div>
+  {/if}
 
   <!-- Syntax Hint Bar -->
   {#if showSyntaxHint && !isExpanded}
@@ -447,7 +437,20 @@
   {/if}
 
   {#if isExpanded}
-    <div class="form-details">
+    <div class="form-details" id="task-details">
+      <div class="form-row">
+        <div class="field-group">
+          <label class="field-label" for="task-minutes">{t('planning.estimate')}</label>
+          <input id="task-minutes" class="field-input" type="number" min="1" step="1" bind:value={estimatedMinutes} placeholder={t('planning.minutesPlaceholder')} />
+        </div>
+        <div class="field-group">
+          <label class="field-label" for="task-next-action">{t('planning.nextAction')}</label>
+          <input id="task-next-action" class="field-input" bind:value={nextAction} placeholder={t('planning.nextPlaceholder')} />
+        </div>
+      </div>
+
+      <details class="advanced-fields">
+        <summary>{t('design.moreDetails')}</summary>
       <div class="form-row">
         <!-- Project & Context -->
         <div class="field-group">
@@ -578,26 +581,36 @@
                 title={PRIORITY_CONFIG[p].description}
               >
                 <span class="priority-letter">{p}</span>
-                <span class="priority-name">{PRIORITY_CONFIG[p].name}</span>
+                <span class="priority-name">{t(`priority.${p}`)}</span>
               </button>
             {/each}
           </div>
         </div>
       </div>
 
+      </details>
       <div class="form-footer">
         <span class="keyboard-hint">
-          <kbd>Ctrl</kbd>+<kbd>Enter</kbd> {t('taskForm.keyboardHintAction')}
+          <kbd>Enter</kbd> {t('taskForm.keyboardHintAction')}
         </span>
         <span class="destination-hint">
-          → {PRIORITY_CONFIG[selectedPriority].name}
+          → {t(`priority.${selectedPriority}`)}
         </span>
       </div>
     </div>
   {/if}
-</div>
+</fieldset>
 
 <style>
+  .task-form { min-width: 0; margin: 0; padding: 0; }
+  .quick-priority { max-width: 160px; border: none; border-radius: 6px; padding: 7px; color: var(--text-secondary); background: var(--bg-secondary); font: inherit; font-size: 12px; }
+  .submit-btn { width: auto !important; padding: 0 12px; gap: 6px; font-weight: 600; }
+  .advanced-fields summary { cursor: pointer; color: var(--text-secondary); font-size: 12px; padding: 10px 0; }
+  .advanced-fields[open] { border-top: 1px solid var(--border-subtle); }
+  .quota-feedback { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 14px; background: var(--warning-bg); font-size: 12px; }
+  .quota-feedback button { border: 1px solid var(--border-color); padding: 5px 9px; border-radius: 6px; background: var(--card-bg); color: var(--text-primary); cursor: pointer; }
+  @media (max-width: 700px) { .quick-priority { max-width: 70px; } .submit-btn span { display: none; } }
+
   .task-form {
     background: var(--card-bg);
     border: 1px solid var(--border-subtle);
@@ -619,6 +632,7 @@
   }
 
   .input-wrapper {
+    min-width: 0;
     flex: 1;
     position: relative;
     display: flex;
@@ -671,6 +685,8 @@
   }
 
   .content-input {
+    width: 100%;
+    min-width: 0;
     flex: 1;
     padding: 10px 12px;
     font-size: 14px;

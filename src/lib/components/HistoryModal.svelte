@@ -26,7 +26,7 @@
   }));
 
   function handleRestore(taskId: string) {
-    uncompleteTask(taskId);
+    uncompleteTask(taskId).catch(() => showToast(i18n.t('error.saveFailed'), 'error'));
   }
 
   function handlePermanentDelete(taskId: string) {
@@ -36,8 +36,10 @@
       confirmText: i18n.t('action.delete') || '删除',
       cancelText: i18n.t('action.cancel') || '取消',
       onConfirm: async () => {
-        await permanentlyDeleteTask(taskId);
-        showToast(i18n.t('message.taskPermanentlyDeleted'), 'success');
+        try {
+          await permanentlyDeleteTask(taskId);
+          showToast(i18n.t('message.taskPermanentlyDeleted'), 'success');
+        } catch { showToast(i18n.t('error.saveFailed'), 'error'); }
       }
     });
   }
